@@ -6,6 +6,8 @@ from necpp import *
 import math
 import numpy as np
 
+import matplotlib.pyplot as plt
+
 from scipy.optimize import minimize_scalar, minimize
 
 
@@ -52,19 +54,50 @@ def impedance(freq, slope, base, length):
 def objective(independent_variables, freq, base):
     (length, slope) = independent_variables
     z = impedance(freq, slope, base, length)
-    print("Impedance at freq = %0.2f, slope=%0.2f, base=%0.2f, length=%0.2f : (%6.1f,%+6.1fI) Ohms" % (freq, slope, base, length, z.real, z.imag))
-    return (z - 50).real**2 + (z-50).imag**2
+#    print("Impedance at freq = %0.2f, slope=%0.2f, base=%0.2f, length=%0.2f : (%6.1f,%+6.1fI) Ohms" % (freq, slope, base, length, z.real, z.imag))
+    return abs(z - 50)
 
-if __name__ == '__main__':
-  freq, slope, base, length = 14.3, .5, 10, 10.5
+def length_slope_at_height(base):
+  freq, slope, length = 14.3, .5, 10.5
 
-  result = minimize(objective, x0=(length, slope), method='Powell', bounds=((9,11),(0,1)), args=(freq, base), options={'xtol': 0.01})
-  print(result)
+  result = minimize(objective, x0=(length, slope), method='Powell', bounds=((9,11),(0,1)), args=(freq, base), options={'xtol': 0.0001})
+#  print(result)
   length, slope = result.x
 
   z = impedance(freq = freq, slope=slope, base = base, length = length)
   print("Impedance at freq = %0.2f, slope=%0.2f, base=%0.2f, length=%0.2f : (%6.1f,%+6.1fI) Ohms" % (freq, slope, base, length, z.real, z.imag))
 
+  return length, slope
+
+if __name__ == '__main__':
+
+  xs = []
+  y0s = []
+  y1s = []
+
+  for base in np.linspace(3,18,21):
+    xs.append(base)
+    length, slope = length_slope_at_height(base)
+    y0s.append(length)
+    y1s.append(math.atan(slope)*180/math.pi)
+
+  fig, ax0 = plt.subplots()
+  color = 'tab:red'
+  ax0.set_xlabel('base')
+  ax0.set_ylabel('length', color=color)
+  ax0.plot(xs, y0s, color=color)
+  ax0.tick_params(axis='y', labelcolor=color)
+
+  color = 'tab:blue'
+  ax1 = ax0.twinx()
+  ax1.set_ylabel('slope (degrees)', color=color)
+  ax1.plot(xs, y1s, color=color)
+  ax1.tick_params(axis='y', labelcolor=color)
+
+  fig.tight_layout()
+  plt.show()
+
+    
 
 
 
