@@ -10,6 +10,7 @@ from scipy.optimize import minimize_scalar, minimize
 
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
+from mpl_toolkits.mplot3d import axes3d
 
 def handle_nec(result):
   if (result != 0):
@@ -66,7 +67,6 @@ def geometry(freq, slope, base, length):
   nec = nec_create()
 
   for idx, (p0, p1, n_seg) in enumerate(tups, start=1):
-    print(idx, (p0, p1))
     handle_nec(nec_wire(nec, idx, n_seg, 0, p0[0], p0[1], 0, p1[0], p1[1], 0.002, 1.0, 1.0))
 
   handle_nec(nec_geometry_complete(nec, 1))
@@ -76,6 +76,106 @@ def geometry(freq, slope, base, length):
   handle_nec(nec_ex_card(nec, 0, len(tups), (n_seg1+1)//2, 0, 1.0, 0, 0, 0, 0, 0)) 
 
   return nec
+
+def pattern():
+  freq, slope, base, length = 28.57, .3761, 5, 5.2085
+  nec = geometry(freq, slope, base, length)
+
+  del_theta = 3
+  del_phi = 6
+  n_theta = 30
+  n_phi = 60
+
+  assert 90 % n_theta == 0 and 90 == del_theta * n_theta
+  assert 360 % n_phi == 0 and 360 == del_phi * n_phi
+
+
+  handle_nec(nec_rp_card(nec, 0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0))
+
+  thetas = np.linspace(0,90-del_theta,n_theta)
+  phis = np.linspace(0,360,n_phi+1)
+
+  rings = []
+
+  for theta_index, theta in enumerate(thetas):
+    ring = [nec_gain(nec, 0, theta_index, phi_index) for phi_index, phi in enumerate(phis)]
+    rings.append(ring)
+             
+  max_gain = nec_gain_max(nec, 0)
+  min_gain = nec_gain_min(nec, 0)
+
+  nec_delete(nec)
+
+  elevation = [ring[0] for ring in rings]
+
+  fig, axes = plt.subplots(ncols=2, subplot_kw={'projection': 'polar'})
+
+#  ax = fig.add_subplot()
+
+  X = np.cos(np.deg2rad(phis))
+  Y = np.sin(np.deg2rad(phis))
+
+  #R = 10**(np.array(rings[-5])/10)
+
+
+  axes[0].set_aspect(1)
+
+  for i in range(len(rings)):
+    R = np.maximum(np.array(rings[i]) - min_gain, 0)
+    #ax.plot(R*X, R*Y)
+
+  R = max_gain-min_gain
+  #ax.plot(R*X, R*Y)
+
+
+  for theta, ring in list(zip(thetas, rings))[-11:-8]:
+    print(90-theta, np.max(ring))
+    axes[0].plot(np.deg2rad(phis),ring,marker='',label=f"{(90-theta):.0f}")
+
+  axes[0].legend(loc="lower left")
+
+  axes[1].set_aspect(1)
+  axes[1].plot(np.deg2rad(90-thetas),elevation,marker='')
+
+  plt.show()
+
+def pattern3d():
+  freq, slope, base, length = 28.57, .3761, 5, 5.2085
+  nec = geometry(freq, slope, base, length)
+  handle_nec(nec_rp_card(nec, 0, 15, 61, 0, 0, 0, 0, 0, 0, 6, 6, 0, 0))
+
+  thetas = np.linspace(0,90,15)
+  phis = np.linspace(0,360,61)
+
+  rhos = []
+
+  for phi_index, phi in enumerate(phis):
+    rho = [nec_gain(nec, 0, theta_index, phi_index) for theta_index, theta in enumerate(thetas)]
+    rhos.append(rho)
+             
+  nec_delete(nec)
+
+  fig = plt.figure()
+  ax = fig.add_subplot(111, projection='3d')
+
+
+  Theta, Phi = np.meshgrid(np.deg2rad(thetas),np.deg2rad(phis))
+  Rho = 10**(np.array(rhos)/10)
+
+  X = Rho * np.sin(Theta)*np.cos(Phi)
+  Y = Rho * np.sin(Theta)*np.sin(Phi)
+  Z = Rho * np.cos(Theta)
+
+  ax.plot_wireframe(X, Y, Z, rstride=1, cstride=1)
+  ax.set_aspect('equal')
+
+  ax.set_xlabel('X')
+  ax.set_ylabel('Y')
+  ax.set_zlabel('Z')
+
+  plt.show()
+
+
 
 def impedance(freq, slope, base, length):
   nec = geometry(freq, slope, base, length)
@@ -99,10 +199,20 @@ def objective(independent_variables, freq, base):
     return rho_db
 
 def sweep_freq():
-  freq, slope, base, length = 14.3, .4740, 10, 10.6931
+  freq, slope, base, length = 28.57, .3761, 7, 5.2085
 
-  xs = np.linspace(14.150,14.350,101)
-  zs = np.array([impedance(freq, slope, base, length) for freq in xs])
+  xs = np.linspace(28.000,29.000,101)
+
+  nec = geometry(freq, slope, base, length)
+
+  handle_nec(nec_fr_card(nec, 0, 101, 28.000, 1/100))
+  handle_nec(nec_xq_card(nec, 0)) # Execute simulation
+  
+  zs = [complex(nec_impedance_real(nec,index), nec_impedance_imag(nec,index)) for index in range(101)]
+
+  nec_delete(nec)
+
+  zs = np.array(zs)
 
   z0 = 200
 
@@ -130,7 +240,7 @@ def sweep_freq():
 
 
 def sweep_length():
-  freq, slope, base, length = 14.3, .47, 10, 10.69
+  freq, slope, base, length = 28.57, .3761, 7, 5.2085
 
   xs = np.linspace(10,12,21)
   zs = [impedance(freq, slope, base, length) for length in xs]
@@ -158,15 +268,20 @@ def sweep_length():
 
 
 if __name__ == '__main__':
-  #sweep_freq()
-  #exit()
+
+  pattern()
+  #pattern3d()
+  exit()
+
+  sweep_freq()
+  exit()
   #sweep_length()
 
-  freq, slope, base, length = 14.3, .47, 10, 10.69
+  freq, slope, base, length = 28.57, .3761, 7, 5.2085
 
   #'Nelder-Mead'
   #'Powell'
-  result = minimize(objective, x0=(length, slope), method='Nelder-Mead', bounds=((10,12),(.3,1)), args=(freq, base), options={'xtol': 0.0001})
+  result = minimize(objective, x0=(length, slope), method='Nelder-Mead', bounds=((4,6),(.3,1)), args=(freq, base), options={'xtol': 0.01})
   print(result)
   length, slope = result.x
 
