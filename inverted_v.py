@@ -69,8 +69,40 @@ def length_slope_at_height(base):
 
   return length, slope
 
-if __name__ == '__main__':
+def sweep_freq():
+  freq, slope, base, length = 14.3, .81, 10, 10.35
 
+  #length, slope = length_slope_at_height(base)
+
+  xs = np.linspace(14.150,14.350,101)
+  zs = np.array([impedance(freq, slope, base, length) for freq in xs])
+
+  z0 = 50
+
+  reflection_coefficient = (zs - z0) / (zs + z0)
+  rho = np.abs(reflection_coefficient)
+  swr = (1+rho)/(1-rho)
+
+  rho_db = np.log10(rho)*10.0
+
+  fig, ax0 = plt.subplots()
+  color = 'tab:red'
+  ax0.set_xlabel('freq')
+  ax0.set_ylabel('rho_db', color=color)
+  ax0.plot(xs, rho_db, color=color)
+  ax0.tick_params(axis='y', labelcolor=color)
+
+  color = 'tab:blue'
+  ax1 = ax0.twinx()
+  ax1.set_ylabel('swr', color=color)
+  ax1.plot(xs, swr, color=color)
+  ax1.tick_params(axis='y', labelcolor=color)
+
+  fig.tight_layout()
+  plt.show()
+
+
+def sweep_length():
   xs = []
   y0s = []
   y1s = []
@@ -96,6 +128,11 @@ if __name__ == '__main__':
 
   fig.tight_layout()
   plt.show()
+
+
+if __name__ == '__main__':
+  sweep_freq()
+  exit()
 
     
 
