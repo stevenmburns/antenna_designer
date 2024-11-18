@@ -9,8 +9,68 @@ from matplotlib.collections import LineCollection
 from mpl_toolkits.mplot3d import axes3d
 
 class Bowtie:
-  def __init__(self):
-    self.freq, self.slope, self.base, self.length = 28.57, .6608, 7, 5.7913    
+  def __init__(self, freq=28.57, slope=.6608, base=7, length=5.7913):
+    self.freq, self.slope, self.base, self.length = freq, slope, base, length
+    self.excitation_pairs = None
+
+  def geometry(self):
+
+    conductivity = 5.8e7 # Copper
+    ground_conductivity = 0.002
+    ground_dielectric = 10
+
+    eps = 0.05
+
+    # diag = sqrt(x^2 + (x*slope)^2) = x*sqrt(1+slope^2)
+    # length/2 = diag + x*slope = x*(slope + sqrt(1+slope^2))
+
+    x = 0.5*self.length/(self.slope + math.sqrt(1+self.slope**2))
+    z = self.slope*x
+
+    n_seg0 = 21
+    n_seg1 = 3
+
+    tups = []
+    tups.extend([((-x,    0),   (-x,   z),    n_seg0)])
+    tups.extend([((-x,    z),   (-eps, eps),  n_seg0)])
+    tups.extend([((-eps,  eps), ( eps, eps),  n_seg1)])
+    tups.extend([(( eps,  eps), ( x,   z),    n_seg0)])
+    tups.extend([(( x,    z),   ( x,   0),    n_seg0)])
+    tups.extend([((-x,    0),   (-x,   -z),   n_seg0)])
+    tups.extend([((-x,   -z),   (-eps, -eps), n_seg0)])
+    tups.extend([(( eps, -eps), ( x,   -z),   n_seg0)])
+    tups.extend([(( x,   -z),   ( x,    0),    n_seg0)])
+    tups.extend([((-eps, -eps), ( eps, -eps), n_seg1)])    # excited
+
+    new_tups = []
+    for (xoff, yoff) in [(-4, self.base+2), (-4, self.base-2), (4, self.base+2), (4, self.base-2)]:
+      new_tups.extend([((x0+xoff, y0+yoff), (x1+xoff, y1+yoff), ns) for ((x0, y0), (x1, y1), ns) in tups])
+
+    self.excitation_pairs = []
+    for i in range(len(tups), len(new_tups)+len(tups), len(tups)):
+      self.excitation_pairs.append((i, (n_seg1+1)//2))
+
+    #draw(new_tups)
+
+    context = nec_context()
+
+    geo = context.get_geometry()
+
+    for idx, (p0, p1, n_seg) in enumerate(new_tups, start=1):
+      geo.wire(idx, n_seg, 0, p0[0], p0[1], 0, p1[0], p1[1], 0.002, 1.0, 1.0)
+
+    context.geometry_complete(0)
+
+    context.ld_card(5, 0, 0, 0, conductivity, 0.0, 0.0)
+    context.gn_card(0, 0, ground_dielectric, ground_conductivity, 0, 0, 0, 0)
+    context.fr_card(0, 1, self.freq, 0)
+
+
+    for tag, sub_index in self.excitation_pairs:
+      context.ex_card(0, tag, sub_index, 0, 1.0, 0, 0, 0, 0, 0)
+
+    return context
+
 
 
 def draw(tups):
@@ -29,65 +89,11 @@ def draw(tups):
   exit()
 
 
-def geometry(freq, slope, base, length):
-  
-  conductivity = 5.8e7 # Copper
-  ground_conductivity = 0.002
-  ground_dielectric = 10
-
-  eps = 0.05
-
-  # diag = sqrt(x^2 + (x*slope)^2) = x*sqrt(1+slope^2)
-  # length/2 = diag + x*slope = x*(slope + sqrt(1+slope^2))
-
-  x = 0.5*length/(slope + math.sqrt(1+slope**2))
-  z = slope*x
-
-  n_seg0 = 21
-  n_seg1 = 3
-
-  tups = []
-  tups.extend([((-x,    0),   (-x,   z),    n_seg0)])
-  tups.extend([((-x,    z),   (-eps, eps),  n_seg0)])
-  tups.extend([((-eps,  eps), ( eps, eps),  n_seg1)])
-  tups.extend([(( eps,  eps), ( x,   z),    n_seg0)])
-  tups.extend([(( x,    z),   ( x,   0),    n_seg0)])
-  tups.extend([((-x,    0),   (-x,   -z),   n_seg0)])
-  tups.extend([((-x,   -z),   (-eps, -eps), n_seg0)])
-  tups.extend([(( eps, -eps), ( x,   -z),   n_seg0)])
-  tups.extend([(( x,   -z),   ( x,    0),    n_seg0)])
-  tups.extend([((-eps, -eps), ( eps, -eps), n_seg1)])    # excited
-
-  new_tups = []
-  for (xoff, yoff) in [(-4, base+2), (-4, base-2), (4, base+2), (4, base-2)]:
-    new_tups.extend([((x0+xoff, y0+yoff), (x1+xoff, y1+yoff), ns) for ((x0, y0), (x1, y1), ns) in tups])
-
-  #draw(new_tups)
-
-  context = nec_context()
-
-  geo = context.get_geometry()
-
-  for idx, (p0, p1, n_seg) in enumerate(new_tups, start=1):
-    geo.wire(idx, n_seg, 0, p0[0], p0[1], 0, p1[0], p1[1], 0.002, 1.0, 1.0)
-
-  context.geometry_complete(0)
-
-  context.ld_card(5, 0, 0, 0, conductivity, 0.0, 0.0)
-  context.gn_card(0, 0, ground_dielectric, ground_conductivity, 0, 0, 0, 0)
-  context.fr_card(0, 1, freq, 0)
-
-  for i in range(0, len(new_tups), len(tups)):
-    #print(len(tups), len(new_tups), i)
-    context.ex_card(0, i+len(tups), (n_seg1+1)//2, 0, 1.0, 0, 0, 0, 0, 0)
-    #handle_nec(nec_excitation_voltage(nec, i, (n_seg1+1)//2, 1.0, 0.0))
-
-  return context
 
 def pattern():
   freq, slope, base, length = get_data()
 
-  context = geometry(freq, slope, base, length)
+  context = Bowtie(freq, slope, base, length).geometry()
 
   del_theta = 3
   del_phi = 6
@@ -150,7 +156,7 @@ def pattern():
 def pattern3d():
   freq, slope, base, length = get_data()
 
-  context = geometry(freq, slope, base, length)
+  context = Bowtie(freq, slope, base, length).geometry()
 
   del_theta = 3
   del_phi = 6
@@ -194,7 +200,8 @@ def pattern3d():
   plt.show()
 
 def impedance(freq, slope, base, length):
-  context = geometry(freq, slope, base, length)
+  bt = Bowtie(freq, slope, base, length)
+  context = bt.geometry()
   context.xq_card(0) # Execute simulation
   index = 0
   zs = [complex(context.get_impedance_real(index), context.get_impedance_imag(index))]
@@ -203,19 +210,16 @@ def impedance(freq, slope, base, length):
 
     sc = context.get_structure_currents(0)
 
-    nsegs = sc.get_n() 
-    assert nsegs % 4 == 0
-    stride = nsegs // 4
-    #print(nsegs, stride)
+    indices = []
+    for tag, tag_index in bt.excitation_pairs:
+      matches = [(i, t) for (i, t) in enumerate(sc.get_current_segment_tag()) if t == tag]
+      index = matches[tag_index-1][0]
+      print(tag, tag_index, matches, index)
+      indices.append(index)
 
     currents = sc.get_current()
-    for i in range(nsegs):
-      pass
-      #print(i, f"{currents[i]:.06f}")
 
-    zs = [1/currents[idx+stride-2] for idx in range(0, nsegs, stride)]
-
-    #print(zs, z)
+    zs = [1/currents[idx] for idx in indices]
 
   del context
   return zs
@@ -245,7 +249,7 @@ def sweep_freq():
 
   xs = np.linspace(min_freq, max_freq, n_freq+1)
 
-  context = geometry(freq, slope, base, length)
+  context = Bowtie(freq, slope, base, length).geometry()
 
   context.fr_card(0, n_freq+1, min_freq, del_freq)
   context.xq_card(0) # Execute simulation
@@ -336,18 +340,16 @@ def get_data():
 
 if __name__ == '__main__':
 
-  pattern()
-
-  pattern3d()
-  exit()
+  #pattern()
+  #pattern3d()
   #sweep_freq()
   #sweep_slope()
   #sweep_length()
 
   freq, slope, base, length = get_data()
 
-  #print(objective((length, slope), freq, base))
-  #exit()
+  print(objective((length, slope), freq, base))
+  exit()
 
   #'Nelder-Mead'
   #'Powell', options={'xtol': 0.01}
