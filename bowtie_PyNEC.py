@@ -8,6 +8,11 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 from mpl_toolkits.mplot3d import axes3d
 
+class Bowtie:
+  def __init__(self):
+    self.freq, self.slope, self.base, self.length = 28.57, .6608, 7, 5.7913    
+
+
 def draw(tups):
 
   pairs = [(p0,p1) for p0, p1, _ in tups]
@@ -51,10 +56,10 @@ def geometry(freq, slope, base, length):
   tups.extend([((-x,   -z),   (-eps, -eps), n_seg0)])
   tups.extend([(( eps, -eps), ( x,   -z),   n_seg0)])
   tups.extend([(( x,   -z),   ( x,    0),    n_seg0)])
-  tups.extend([((-eps, -eps), ( eps, -eps), n_seg1)])
+  tups.extend([((-eps, -eps), ( eps, -eps), n_seg1)])    # excited
 
   new_tups = []
-  for (xoff, yoff) in [(-4, base), (-4, base-3), (4, base), (4, base-3)]:
+  for (xoff, yoff) in [(-4, base+2), (-4, base-2), (4, base+2), (4, base-2)]:
     new_tups.extend([((x0+xoff, y0+yoff), (x1+xoff, y1+yoff), ns) for ((x0, y0), (x1, y1), ns) in tups])
 
   #draw(new_tups)
@@ -73,13 +78,14 @@ def geometry(freq, slope, base, length):
   context.fr_card(0, 1, freq, 0)
 
   for i in range(0, len(new_tups), len(tups)):
-    context.ex_card(0, i, (n_seg1+1)//2, 0, 1.0, 0, 0, 0, 0, 0)
+    #print(len(tups), len(new_tups), i)
+    context.ex_card(0, i+len(tups), (n_seg1+1)//2, 0, 1.0, 0, 0, 0, 0, 0)
     #handle_nec(nec_excitation_voltage(nec, i, (n_seg1+1)//2, 1.0, 0.0))
 
   return context
 
 def pattern():
-  freq, slope, base, length = 28.57, .3397, 7, 5.0015
+  freq, slope, base, length = get_data()
 
   context = geometry(freq, slope, base, length)
 
@@ -142,7 +148,7 @@ def pattern():
   plt.show()
 
 def pattern3d():
-  freq, slope, base, length = 28.57, .3397, 7, 5.0015
+  freq, slope, base, length = get_data()
 
   context = geometry(freq, slope, base, length)
 
@@ -178,7 +184,7 @@ def pattern3d():
   Y = Rho * np.sin(Theta)*np.sin(Phi)
   Z = Rho * np.cos(Theta)
 
-  ax.plot_wireframe(X, Y, Z, rstride=5, cstride=5)
+  ax.plot_wireframe(X, Y, Z, rstride=2, cstride=2)
   ax.set_aspect('equal')
 
   ax.set_xlabel('X')
@@ -191,26 +197,46 @@ def impedance(freq, slope, base, length):
   context = geometry(freq, slope, base, length)
   context.xq_card(0) # Execute simulation
   index = 0
-  z = complex(context.get_impedance_real(index), context.get_impedance_imag(index))
-  print(length, slope, z)
+  zs = [complex(context.get_impedance_real(index), context.get_impedance_imag(index))]
+  if True:
+    #print(length, slope, z)
+
+    sc = context.get_structure_currents(0)
+
+    nsegs = sc.get_n() 
+    assert nsegs % 4 == 0
+    stride = nsegs // 4
+    #print(nsegs, stride)
+
+    currents = sc.get_current()
+    for i in range(nsegs):
+      pass
+      #print(i, f"{currents[i]:.06f}")
+
+    zs = [1/currents[idx+stride-2] for idx in range(0, nsegs, stride)]
+
+    #print(zs, z)
+
   del context
-  return z
+  return zs
 
 def objective(independent_variables, freq, base):
     (length,slope) = independent_variables
-    z = impedance(freq, slope, base, length)
+    zs = impedance(freq, slope, base, length)
 
     z0 = 200
-    reflection_coefficient = (z - z0) / (z + z0)
-    rho = abs(reflection_coefficient)
-    swr = (1+rho)/(1-rho)
-    rho_db = np.log10(rho)*10.0
+    for z in zs:
+      reflection_coefficient = (z - z0) / (z + z0)
+      rho = abs(reflection_coefficient)
+      swr = (1+rho)/(1-rho)
+      rho_db = np.log10(rho)*10.0
 
-    print("Impedance at freq = %0.3f, slope=%0.4f, base=%0.4f, length=%0.4f : (%.3f,%+.3fj) Ohms rho=%.4f swr=%.4f, rho_db=%.3f" % (freq, slope, base, length, z.real, z.imag, rho, swr, rho_db))
-    return swr
+      print("Impedance at freq = %0.3f, slope=%0.4f, base=%0.4f, length=%0.4f : (%.3f,%+.3fj) Ohms rho=%.4f swr=%.4f, rho_db=%.3f" % (freq, slope, base, length, z.real, z.imag, rho, swr, rho_db))
+
+    return sum([abs(z - z0) for z in zs])
 
 def sweep_freq():
-  freq, slope, base, length = 28.57, .3397, 7, 5.0015
+  freq, slope, base, length = get_data()
 
   min_freq = 28.0
   max_freq = 28.6
@@ -256,7 +282,8 @@ def sweep_freq():
 
 
 def sweep_length():
-  freq, slope, base, length = 28.57, .3397, 7, 5.0015
+  "broken"
+  freq, slope, base, length = get_data()
 
   xs = np.linspace(4.9,5.2,21)
   zs = [impedance(freq, slope, base, length) for length in xs]
@@ -280,7 +307,8 @@ def sweep_length():
   plt.show()
 
 def sweep_slope():
-  freq, slope, base, length = 28.57, .3397, 7, 5.0015
+  "broken"
+  freq, slope, base, length = get_data()
 
   xs = np.linspace(.2,.4,21)
   zs = np.array([impedance(freq, slope, base, length) for slope in xs])
@@ -302,18 +330,24 @@ def sweep_slope():
   plt.show()
 
 
-
-
+def get_data():
+  freq, slope, base, length = 28.57, .6608, 7, 5.7913
+  return freq, slope, base, length
 
 if __name__ == '__main__':
 
-  #pattern()
-  #pattern3d()
+  pattern()
+
+  pattern3d()
+  exit()
   #sweep_freq()
   #sweep_slope()
   #sweep_length()
 
-  freq, slope, base, length = 28.57, .3397, 7, 5.0015
+  freq, slope, base, length = get_data()
+
+  #print(objective((length, slope), freq, base))
+  #exit()
 
   #'Nelder-Mead'
   #'Powell', options={'xtol': 0.01}
