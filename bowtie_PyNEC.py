@@ -1,8 +1,4 @@
-#
-#  Simple vertical monopole antenna simulation using python-necpp
-#  pip install necpp
-#
-from necpp import *
+from PyNEC import *
 import math
 import numpy as np
 
@@ -11,10 +7,6 @@ from scipy.optimize import minimize_scalar, minimize
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 from mpl_toolkits.mplot3d import axes3d
-
-def handle_nec(result):
-  if (result != 0):
-    print(nec_error_message())
 
 def draw(tups):
 
@@ -67,28 +59,29 @@ def geometry(freq, slope, base, length):
 
   #draw(new_tups)
 
-  nec = nec_create()
+  context = nec_context()
+
+  geo = context.get_geometry()
 
   for idx, (p0, p1, n_seg) in enumerate(new_tups, start=1):
-    handle_nec(nec_wire(nec, idx, n_seg, 0, p0[0], p0[1], 0, p1[0], p1[1], 0.002, 1.0, 1.0))
+    geo.wire(idx, n_seg, 0, p0[0], p0[1], 0, p1[0], p1[1], 0.002, 1.0, 1.0)
 
-  handle_nec(nec_geometry_complete(nec, 1))
-  handle_nec(nec_ld_card(nec, 5, 0, 0, 0, conductivity, 0.0, 0.0))
-  handle_nec(nec_gn_card(nec, 0, 0, ground_dielectric, ground_conductivity, 0, 0, 0, 0))
-  handle_nec(nec_fr_card(nec, 0, 1, freq, 0))
+  context.geometry_complete(0)
+
+  context.ld_card(5, 0, 0, 0, conductivity, 0.0, 0.0)
+  context.gn_card(0, 0, ground_dielectric, ground_conductivity, 0, 0, 0, 0)
+  context.fr_card(0, 1, freq, 0)
 
   for i in range(0, len(new_tups), len(tups)):
-    #handle_nec(nec_ex_card(nec, 0, i, (n_seg1+1)//2, 0, 1.0, 0, 0, 0, 0, 0)) 
-    handle_nec(nec_excitation_voltage(nec, i, (n_seg1+1)//2, 1.0, 0.0))
+    context.ex_card(0, i, (n_seg1+1)//2, 0, 1.0, 0, 0, 0, 0, 0)
+    #handle_nec(nec_excitation_voltage(nec, i, (n_seg1+1)//2, 1.0, 0.0))
 
-  handle_nec(nec_pt_card(nec, -1, 0, 0, 0))
-
-  return nec
+  return context
 
 def pattern():
   freq, slope, base, length = 28.57, .3397, 7, 5.0015
 
-  nec = geometry(freq, slope, base, length)
+  context = geometry(freq, slope, base, length)
 
   del_theta = 3
   del_phi = 6
@@ -99,7 +92,7 @@ def pattern():
   assert 360 % n_phi == 0 and 360 == del_phi * n_phi
 
 
-  handle_nec(nec_rp_card(nec, 0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0))
+  context.rp_card(0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0)
 
   thetas = np.linspace(0,90-del_theta,n_theta)
   phis = np.linspace(0,360,n_phi+1)
@@ -107,13 +100,13 @@ def pattern():
   rings = []
 
   for theta_index, theta in enumerate(thetas):
-    ring = [nec_gain(nec, 0, theta_index, phi_index) for phi_index, phi in enumerate(phis)]
+    ring = [context.get_gain(0, theta_index, phi_index) for phi_index, phi in enumerate(phis)]
     rings.append(ring)
              
-  max_gain = nec_gain_max(nec, 0)
-  min_gain = nec_gain_min(nec, 0)
+  max_gain = context.get_gain_max(0)
+  min_gain = context.get_gain_min(0)
 
-  nec_delete(nec)
+  del context
 
   elevation = [ring[0] for ring in rings]
 
@@ -151,7 +144,7 @@ def pattern():
 def pattern3d():
   freq, slope, base, length = 28.57, .3397, 7, 5.0015
 
-  nec = geometry(freq, slope, base, length)
+  context = geometry(freq, slope, base, length)
 
   del_theta = 3
   del_phi = 6
@@ -161,7 +154,7 @@ def pattern3d():
   assert 90 % n_theta == 0 and 90 == del_theta * n_theta
   assert 360 % n_phi == 0 and 360 == del_phi * n_phi
 
-  handle_nec(nec_rp_card(nec, 0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0))
+  context.rp_card(0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0)
 
   thetas = np.linspace(0,90-del_theta,n_theta)
   phis = np.linspace(0,360,n_phi+1)
@@ -169,10 +162,10 @@ def pattern3d():
   rhos = []
 
   for phi_index, phi in enumerate(phis):
-    rho = [nec_gain(nec, 0, theta_index, phi_index) for theta_index, theta in enumerate(thetas)]
+    rho = [context.get_gain(0, theta_index, phi_index) for theta_index, theta in enumerate(thetas)]
     rhos.append(rho)
              
-  nec_delete(nec)
+  del context
 
   fig = plt.figure()
   ax = fig.add_subplot(111, projection='3d')
@@ -195,12 +188,12 @@ def pattern3d():
   plt.show()
 
 def impedance(freq, slope, base, length):
-  nec = geometry(freq, slope, base, length)
-  handle_nec(nec_xq_card(nec, 0)) # Execute simulation
+  context = geometry(freq, slope, base, length)
+  context.xq_card(0) # Execute simulation
   index = 0
-  z = complex(nec_impedance_real(nec,index), nec_impedance_imag(nec,index))
+  z = complex(context.get_impedance_real(index), context.get_impedance_imag(index))
   print(length, slope, z)
-  nec_delete(nec)
+  del context
   return z
 
 def objective(independent_variables, freq, base):
@@ -226,14 +219,14 @@ def sweep_freq():
 
   xs = np.linspace(min_freq, max_freq, n_freq+1)
 
-  nec = geometry(freq, slope, base, length)
+  context = geometry(freq, slope, base, length)
 
-  handle_nec(nec_fr_card(nec, 0, n_freq+1, min_freq, del_freq))
-  handle_nec(nec_xq_card(nec, 0)) # Execute simulation
+  context.fr_card(0, n_freq+1, min_freq, del_freq)
+  context.xq_card(0) # Execute simulation
   
-  zs = [complex(nec_impedance_real(nec,index), nec_impedance_imag(nec,index)) for index in range(len(xs))]
+  zs = [complex(context.get_impedance_real(index), context.get_impedance_imag(index)) for index in range(len(xs))]
 
-  nec_delete(nec)
+  del context
 
   zs = np.array(zs)
 
@@ -315,19 +308,12 @@ def sweep_slope():
 if __name__ == '__main__':
 
   #pattern()
-  #exit()
   #pattern3d()
-
   #sweep_freq()
   #sweep_slope()
-
   #sweep_length()
 
   freq, slope, base, length = 28.57, .3397, 7, 5.0015
-
-  print(objective((length, slope), freq, base))
-  exit()
-
 
   #'Nelder-Mead'
   #'Powell', options={'xtol': 0.01}
