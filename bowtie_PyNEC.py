@@ -31,20 +31,20 @@ class Bowtie:
     n_seg1 = 3
 
     tups = []
-    tups.extend([((-x,    0),   (-x,   z),    n_seg0)])
-    tups.extend([((-x,    z),   (-eps, eps),  n_seg0)])
-    tups.extend([((-eps,  eps), ( eps, eps),  n_seg1)])
-    tups.extend([(( eps,  eps), ( x,   z),    n_seg0)])
-    tups.extend([(( x,    z),   ( x,   0),    n_seg0)])
-    tups.extend([((-x,    0),   (-x,   -z),   n_seg0)])
-    tups.extend([((-x,   -z),   (-eps, -eps), n_seg0)])
-    tups.extend([(( eps, -eps), ( x,   -z),   n_seg0)])
-    tups.extend([(( x,   -z),   ( x,    0),    n_seg0)])
-    tups.extend([((-eps, -eps), ( eps, -eps), n_seg1)])    # excited
+    tups.extend([((-x,    0),   (-x,   z),    n_seg0, False)])
+    tups.extend([((-x,    z),   (-eps, eps),  n_seg0, False)])
+    tups.extend([((-eps,  eps), ( eps, eps),  n_seg1, False)])
+    tups.extend([(( eps,  eps), ( x,   z),    n_seg0, False)])
+    tups.extend([(( x,    z),   ( x,   0),    n_seg0, False)])
+    tups.extend([((-x,    0),   (-x,   -z),   n_seg0, False)])
+    tups.extend([((-x,   -z),   (-eps, -eps), n_seg0, False)])
+    tups.extend([(( eps, -eps), ( x,   -z),   n_seg0, False)])
+    tups.extend([(( x,   -z),   ( x,    0),   n_seg0, False)])
+    tups.extend([((-eps, -eps), ( eps, -eps), n_seg1, True)])
 
     new_tups = []
     for (xoff, yoff) in [(-4, self.base+2), (-4, self.base-2), (4, self.base+2), (4, self.base-2)]:
-      new_tups.extend([((x0+xoff, y0+yoff), (x1+xoff, y1+yoff), ns) for ((x0, y0), (x1, y1), ns) in tups])
+      new_tups.extend([((x0+xoff, y0+yoff), (x1+xoff, y1+yoff), ns, ex) for ((x0, y0), (x1, y1), ns, ex) in tups])
 
     self.excitation_pairs = []
     for i in range(len(tups), len(new_tups)+len(tups), len(tups)):
@@ -56,7 +56,7 @@ class Bowtie:
 
     geo = context.get_geometry()
 
-    for idx, (p0, p1, n_seg) in enumerate(new_tups, start=1):
+    for idx, (p0, p1, n_seg, ex) in enumerate(new_tups, start=1):
       geo.wire(idx, n_seg, 0, p0[0], p0[1], 0, p1[0], p1[1], 0.002, 1.0, 1.0)
 
     context.geometry_complete(0)
