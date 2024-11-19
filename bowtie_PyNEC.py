@@ -8,56 +8,41 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 from mpl_toolkits.mplot3d import axes3d
 
-class Bowtie:
-  def __init__(self, freq, slope, base, length):
-    self.freq, self.slope, self.base, self.length = freq, slope, base, length
+
+class Antenna:
+  def __init__(self):
     self.excitation_pairs = None
     self.geometry()
 
   def __del__(self):
     del self.c
 
-  def geometry(self):
+  def draw(self):
 
+    pairs = [(p0,p1) for p0, p1, _, _ in self.tups]
+
+    lc = LineCollection(pairs, colors=(1, 0, 0, 1), linewidths=1)
+
+    fig, ax = plt.subplots()
+    ax.add_collection(lc)
+    ax.autoscale(axis='x')
+    ax.set_aspect('equal')
+    ax.margins(0.1)
+    plt.show()
+
+
+
+  def geometry(self):
     conductivity = 5.8e7 # Copper
     ground_conductivity = 0.002
     ground_dielectric = 10
-
-    eps = 0.05
-
-    # diag = sqrt(x^2 + (x*slope)^2) = x*sqrt(1+slope^2)
-    # length/2 = diag + x*slope = x*(slope + sqrt(1+slope^2))
-
-    x = 0.5*self.length/(self.slope + math.sqrt(1+self.slope**2))
-    z = self.slope*x
-
-    n_seg0 = 21
-    n_seg1 = 3
-
-    tups = []
-    tups.extend([((-x,    0),   (-x,   z),    n_seg0, False)])
-    tups.extend([((-x,    z),   (-eps, eps),  n_seg0, False)])
-    tups.extend([((-eps,  eps), ( eps, eps),  n_seg1, False)])
-    tups.extend([(( eps,  eps), ( x,   z),    n_seg0, False)])
-    tups.extend([(( x,    z),   ( x,   0),    n_seg0, False)])
-    tups.extend([((-x,    0),   (-x,   -z),   n_seg0, False)])
-    tups.extend([((-x,   -z),   (-eps, -eps), n_seg0, False)])
-    tups.extend([(( eps, -eps), ( x,   -z),   n_seg0, False)])
-    tups.extend([(( x,   -z),   ( x,    0),   n_seg0, False)])
-    tups.extend([((-eps, -eps), ( eps, -eps), n_seg1, True)])
-
-    new_tups = []
-    for (xoff, yoff) in [(-4, self.base+2), (-4, self.base-2), (4, self.base+2), (4, self.base-2)]:
-      new_tups.extend([((x0+xoff, y0+yoff), (x1+xoff, y1+yoff), ns, ex) for ((x0, y0), (x1, y1), ns, ex) in tups])
-
-    #draw(new_tups)
 
     self.c = nec_context()
 
     geo = self.c.get_geometry()
 
     self.excitation_pairs = []
-    for idx, (p0, p1, n_seg, ex) in enumerate(new_tups, start=1):
+    for idx, (p0, p1, n_seg, ex) in enumerate(self.tups, start=1):
       geo.wire(idx, n_seg, 0, p0[0], p0[1], 0, p1[0], p1[1], 0.002, 1.0, 1.0)
       if ex:
         self.excitation_pairs.append((idx, (n_seg+1)//2))
@@ -96,28 +81,54 @@ class Bowtie:
     return zs
 
 
-def draw(tups):
+class Bowtie(Antenna):
+  
+  def __init__(self, freq, slope, base, length):
+    self.freq, self.slope, self.base, self.length = freq, slope, base, length
+    self.tups = self.build_wires()
+    super().__init__()
 
-  pairs = [(p0,p1) for p0, p1, _, _ in tups]
+  def __del__(self):
+    del self.c
 
-  lc = LineCollection(pairs, colors=(1, 0, 0, 1), linewidths=1)
+  def build_wires(self):
+    eps = 0.05
 
-  fig, ax = plt.subplots()
-  ax.add_collection(lc)
-  ax.autoscale(axis='x')
-  ax.set_aspect('equal')
-  ax.margins(0.1)
-  plt.show()
+    # diag = sqrt(x^2 + (x*slope)^2) = x*sqrt(1+slope^2)
+    # length/2 = diag + x*slope = x*(slope + sqrt(1+slope^2))
 
-  exit()
+    x = 0.5*self.length/(self.slope + math.sqrt(1+self.slope**2))
+    z = self.slope*x
+
+    n_seg0 = 21
+    n_seg1 = 3
+
+    tups = []
+    tups.extend([((-x,    0),   (-x,   z),    n_seg0, False)])
+    tups.extend([((-x,    z),   (-eps, eps),  n_seg0, False)])
+    tups.extend([((-eps,  eps), ( eps, eps),  n_seg1, False)])
+    tups.extend([(( eps,  eps), ( x,   z),    n_seg0, False)])
+    tups.extend([(( x,    z),   ( x,   0),    n_seg0, False)])
+    tups.extend([((-x,    0),   (-x,   -z),   n_seg0, False)])
+    tups.extend([((-x,   -z),   (-eps, -eps), n_seg0, False)])
+    tups.extend([(( eps, -eps), ( x,   -z),   n_seg0, False)])
+    tups.extend([(( x,   -z),   ( x,    0),   n_seg0, False)])
+    tups.extend([((-eps, -eps), ( eps, -eps), n_seg1, True)])
+
+    new_tups = []
+    for (xoff, yoff) in [(-4, self.base+2), (-4, self.base-2), (4, self.base+2), (4, self.base-2)]:
+      new_tups.extend([((x0+xoff, y0+yoff), (x1+xoff, y1+yoff), ns, ex) for ((x0, y0), (x1, y1), ns, ex) in tups])
+
+    #draw(new_tups)
+
+    return new_tups
 
 
 
-def pattern():
-  freq, slope, base, length = get_data()
+def pattern(antenna, antenna_params):
+  freq, slope, base, length = antenna_params
 
-
-  bt = Bowtie(freq, slope, base, length)
+  bt = antenna(freq, slope, base, length)
   bt.set_freq_and_execute()
 
   del_theta = 3
@@ -178,10 +189,10 @@ def pattern():
 
   plt.show()
 
-def pattern3d():
-  freq, slope, base, length = get_data()
+def pattern3d(antenna, antenna_params):
+  freq, slope, base, length = antenna_params
 
-  bt = Bowtie(freq, slope, base, length)
+  bt = antenna(freq, slope, base, length)
   bt.set_freq_and_execute()
 
   del_theta = 3
@@ -197,11 +208,7 @@ def pattern3d():
   thetas = np.linspace(0,90-del_theta,n_theta)
   phis = np.linspace(0,360,n_phi+1)
 
-  rhos = []
-
-  for phi_index, phi in enumerate(phis):
-    rho = [bt.c.get_gain(0, theta_index, phi_index) for theta_index, theta in enumerate(thetas)]
-    rhos.append(rho)
+  rhos = [[bt.c.get_gain(0, theta_index, phi_index) for theta_index, _ in enumerate(thetas)] for phi_index, _ in enumerate(phis)]
              
   del bt
 
@@ -241,7 +248,7 @@ def objective(independent_variables, freq, base):
 
     return sum([abs(z - z0) for z in zs])
 
-def sweep_freq():
+def sweep_freq(antenna, antenna_params):
 
   min_freq = 28.0
   max_freq = 29.0
@@ -250,13 +257,13 @@ def sweep_freq():
 
   xs = np.linspace(min_freq, max_freq, n_freq+1)
   
-  freq, slope, base, length = get_data()
-  bt = Bowtie(freq, slope, base, length)
+  freq, slope, base, length = antenna_params
+  bt = antenna(freq, slope, base, length)
 
   bt.c.fr_card(0, n_freq+1, min_freq, del_freq)
   bt.c.xq_card(0) # Execute simulation
   
-  zs = [bt.impedance(freq_index,sweep=True)[-1] for freq_index in range(len(xs))]
+  zs = np.array([bt.impedance(freq_index,sweep=True) for freq_index in range(len(xs))])
 
   del bt
 
@@ -274,60 +281,68 @@ def sweep_freq():
   color = 'tab:red'
   ax0.set_xlabel('freq')
   ax0.set_ylabel('rho_db', color=color)
-  ax0.plot(xs, rho_db, color=color)
   ax0.tick_params(axis='y', labelcolor=color)
+  for i in range(rho_db.shape[1]):
+    ax0.plot(xs, rho_db[:,i], color=color)
+
 
   color = 'tab:blue'
   ax1 = ax0.twinx()
   ax1.set_ylabel('swr', color=color)
-  ax1.plot(xs, swr, color=color)
   ax1.tick_params(axis='y', labelcolor=color)
+  for i in range(swr.shape[1]):
+    ax1.plot(xs, swr[:,i], color=color)
 
   fig.tight_layout()
   plt.show()
 
 
-def sweep_length():
-  freq, slope, base, length = get_data()
+def sweep_length(antenna, antenna_params):
+  freq, slope, base, length = antenna_params
 
   xs = np.linspace(5.5,6.0,21)
-  zs = [Bowtie(freq, slope, base, length).impedance()[-1] for length in xs]
-  y0s = [z.real for z in zs]
-  y1s = [z.imag for z in zs]
+  zs = np.array([antenna(freq, slope, base, length).impedance() for length in xs])
   
   fig, ax0 = plt.subplots()
   color = 'tab:red'
   ax0.set_xlabel('length')
   ax0.set_ylabel('z real', color=color)
-  ax0.plot(xs, y0s, color=color)
   ax0.tick_params(axis='y', labelcolor=color)
+  for i in range(zs.shape[1]):
+    ax0.plot(xs, np.real(zs)[:,i], color=color)
+
 
   color = 'tab:blue'
   ax1 = ax0.twinx()
   ax1.set_ylabel('z imag', color=color)
-  ax1.plot(xs, y1s, color=color)
   ax1.tick_params(axis='y', labelcolor=color)
+  for i in range(zs.shape[1]):
+    ax1.plot(xs, np.imag(zs)[:,i], color=color)
+
 
   fig.tight_layout()
   plt.show()
 
-def sweep_slope():
-  freq, slope, base, length = get_data()
+def sweep_slope(antenna, antenna_params):
+  freq, slope, base, length = antenna_params
   xs = np.linspace(.4,.8,21)
-  zs = np.array([Bowtie(freq, slope, base, length).impedance()[-1] for slope in xs])
+  zs = np.array([antenna(freq, slope, base, length).impedance() for slope in xs])
   
   fig, ax0 = plt.subplots()
   color = 'tab:red'
   ax0.set_xlabel('slope')
   ax0.set_ylabel('z real', color=color)
-  ax0.plot(xs, zs.real, color=color)
   ax0.tick_params(axis='y', labelcolor=color)
+  for i in range(zs.shape[1]):
+    ax0.plot(xs, np.real(zs)[:,i], color=color)
+
 
   color = 'tab:blue'
   ax1 = ax0.twinx()
   ax1.set_ylabel('z imag', color=color)
-  ax1.plot(xs, zs.imag, color=color)
   ax1.tick_params(axis='y', labelcolor=color)
+  for i in range(zs.shape[1]):
+    ax1.plot(xs, np.imag(zs)[:,i], color=color)
 
   fig.tight_layout()
   plt.show()
@@ -353,23 +368,22 @@ def get_data():
 
 
 def test_pattern():
-  pattern()
+  pattern(Bowtie, get_data())
 
 def test_pattern3d():
-  pattern3d()
+  pattern3d(Bowtie, get_data())
   
 def test_sweep_freq():
-  sweep_freq()
+  sweep_freq(Bowtie, get_data())
 
 def test_sweep_slope():
-  sweep_slope()
+  sweep_slope(Bowtie, get_data())
 
 def test_sweep_length():
-  sweep_length()
+  sweep_length(Bowtie, get_data())
 
 def test_objective():
   freq, slope, base, length = get_data()
-
   print(objective((length, slope), freq, base))
 
 
@@ -377,6 +391,8 @@ def test_optimize():
   optimize()
 
 if __name__ == '__main__':
+  sweep_length()
+  sweep_slope()
   pass
 
 
