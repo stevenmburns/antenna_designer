@@ -39,10 +39,10 @@ def test_invvee_sweep_freq():
   sweep_freq(InvVeeBuilder(**get_invvee_data()), fn='invvee_sweep_freq.pdf')
 
 def test_invvee_sweep_length():
-  sweep(InvVeeBuilder(**get_single_bowtie_data()), 'length', (4,6), fn='invvee_sweep_length.pdf')
+  sweep(InvVeeBuilder(**get_invvee_data()), 'length', (4,6), fn='invvee_sweep_length.pdf')
 
 def test_invvee_sweep_slope():
-  sweep(InvVeeBuilder(**get_single_bowtie_data()), 'slope', (4,6), fn='invvee_sweep_slope.pdf')
+  sweep(InvVeeBuilder(**get_invvee_data()), 'slope', (.2,1), fn='invvee_sweep_slope.pdf')
 
 
 def test_invvee_optimize():
