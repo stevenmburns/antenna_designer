@@ -8,6 +8,20 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 from mpl_toolkits.mplot3d import axes3d
 
+class AntennaParams:
+  def __init__(self, freq):
+    self.params = {}
+    self.params['freq'] = freq
+
+  def __getattr__(self, nm):
+    return self.params[nm]
+
+  def __str__(self):
+    res = []
+    for k, v in self.params.items():
+      res.append(f"{k} = {v:0.3f}")
+    return ', '.join(res)
+
 
 class Antenna:
   def __init__(self):
@@ -16,6 +30,9 @@ class Antenna:
 
   def __del__(self):
     del self.c
+
+  def __getattr__(self, nm):
+    return self.params.__getattr__(nm)
 
   def draw(self):
 
@@ -29,8 +46,6 @@ class Antenna:
     ax.set_aspect('equal')
     ax.margins(0.1)
     plt.show()
-
-
 
   def geometry(self):
 
@@ -82,15 +97,23 @@ class Antenna:
     return zs
 
 
+class BowtieParams(AntennaParams):
+  def __init__(self, freq, slope, base, length):
+    super().__init__(freq)
+    self.params['slope'] = slope
+    self.params['base'] = base
+    self.params['length'] = length
+
 class Bowtie(Antenna):
   
-  def __init__(self, freq, slope, base, length):
-    self.freq, self.slope, self.base, self.length = freq, slope, base, length
+  def __init__(self, antenna_params):
+    self.params = antenna_params
+
     self.tups = self.build_wires()
     super().__init__()
 
-  def __del__(self):
-    del self.c
+  def __getattr__(self, nm):
+    return self.params.__getattr__(nm)
 
   def build_wires(self):
     eps = 0.05
@@ -124,13 +147,11 @@ class Bowtie(Antenna):
 
 class BowtieSingle(Antenna):
   
-  def __init__(self, freq, slope, base, length):
-    self.freq, self.slope, self.base, self.length = freq, slope, base, length
+  def __init__(self, antenna_params):
+    self.params = antenna_params
+
     self.tups = self.build_wires()
     super().__init__()
-
-  def __del__(self):
-    del self.c
 
   def build_wires(self):
     eps = 0.05
@@ -162,15 +183,19 @@ class BowtieSingle(Antenna):
 
     return new_tups
 
+class DipoleParams(AntennaParams):
+  def __init__(self, freq, base, length):
+    super().__init__(freq)
+    self.params['base'] = base
+    self.params['length'] = length
+
 class Dipole(Antenna):
   
-  def __init__(self, freq, slope, base, length):
-    self.freq, self.slope, self.base, self.length = freq, slope, base, length
+  def __init__(self, antenna_params):
+    self.params = antenna_params
+
     self.tups = self.build_wires()
     super().__init__()
-
-  def __del__(self):
-    del self.c
 
   def build_wires(self):
     eps = 0.05
@@ -194,9 +219,7 @@ class Dipole(Antenna):
 
 
 def pattern(antenna, antenna_params, fn=None):
-  freq, slope, base, length = antenna_params
-
-  bt = antenna(freq, slope, base, length)
+  bt = antenna(antenna_params)
   bt.set_freq_and_execute()
 
   del_theta = 3
@@ -262,9 +285,7 @@ def pattern(antenna, antenna_params, fn=None):
 
 
 def pattern3d(antenna, antenna_params, fn=None):
-  freq, slope, base, length = antenna_params
-
-  bt = antenna(freq, slope, base, length)
+  bt = antenna(antenna_params)
   bt.set_freq_and_execute()
 
   del_theta = 3
@@ -318,8 +339,7 @@ def sweep_freq(antenna, antenna_params, fn=None):
 
   xs = np.linspace(min_freq, max_freq, n_freq+1)
   
-  freq, slope, base, length = antenna_params
-  bt = antenna(freq, slope, base, length)
+  bt = antenna(antenna_params)
 
   bt.c.fr_card(0, n_freq+1, min_freq, del_freq)
   bt.c.xq_card(0) # Execute simulation
@@ -363,10 +383,14 @@ def sweep_freq(antenna, antenna_params, fn=None):
 
 
 def sweep_length(antenna, antenna_params, fn=None):
-  freq, slope, base, length = antenna_params
 
   xs = np.linspace(5.5,6.0,21)
-  zs = np.array([antenna(freq, slope, base, length).impedance() for length in xs])
+
+  zs = []
+  for length in xs:
+    antenna_params.params['length'] = length
+    zs.append(antenna(antenna_params).impedance())
+  zs = np.array(zs)
   
   fig, ax0 = plt.subplots()
   color = 'tab:red'
@@ -392,9 +416,13 @@ def sweep_length(antenna, antenna_params, fn=None):
     plt.show()
 
 def sweep_slope(antenna, antenna_params, fn=None):
-  freq, slope, base, length = antenna_params
   xs = np.linspace(.4,.8,21)
-  zs = np.array([antenna(freq, slope, base, length).impedance() for slope in xs])
+  zs = []
+  for slope in xs:
+    antenna_params.params['slope'] = slope
+    zs.append(antenna(antenna_params).impedance())
+  zs = np.array(zs)
+
   
   fig, ax0 = plt.subplots()
   color = 'tab:red'
@@ -419,106 +447,137 @@ def sweep_slope(antenna, antenna_params, fn=None):
   else:
     plt.show()
 
-def optimize(antenna, antenna_params):
-  freq, slope, base, length = antenna_params
-
-  def objective(independent_variables, freq, base):
-      (length,slope) = independent_variables
-      zs = antenna(freq, slope, base, length).impedance()
-
-      z0 = 200
-      for z in zs:
-        reflection_coefficient = (z - z0) / (z + z0)
-        rho = abs(reflection_coefficient)
-        swr = (1+rho)/(1-rho)
-        rho_db = np.log10(rho)*10.0
-
-        print("Impedance at freq = %0.3f, slope=%0.4f, base=%0.4f, length=%0.4f : (%.3f,%+.3fj) Ohms rho=%.4f swr=%.4f, rho_db=%.3f" % (freq, slope, base, length, z.real, z.imag, rho, swr, rho_db))
-
-      return sum([abs(z - z0) for z in zs])
-
-  #'Nelder-Mead'
-  #'Powell', options={'xtol': 0.01}
-  result = minimize(objective, x0=(length, slope), method='Nelder-Mead', bounds=((4,6),(.3,1)), args=(freq, base))
-  print(result)
-  length, slope = result.x
-
-  print(objective((length, slope), freq, base))
-
-  return freq, slope, base, length
-
-
-def optimize1(antenna, antenna_params):
-  freq, slope, base, length = antenna_params
+def optimize(antenna, antenna_params, independent_variable_names, z0=50, resonance=False):
 
   def objective(independent_variables):
-      (length,) = independent_variables
-      zs = antenna(freq, slope, base, length).impedance()
 
-      z0 = 50
+      for v, nm in zip(independent_variables, independent_variable_names):
+        antenna_params.params[nm] = v
+
+      zs = antenna(antenna_params).impedance()
+
       for z in zs:
         reflection_coefficient = (z - z0) / (z + z0)
         rho = abs(reflection_coefficient)
         swr = (1+rho)/(1-rho)
         rho_db = np.log10(rho)*10.0
 
-        print("Impedance at freq = %0.3f, slope=%0.4f, base=%0.4f, length=%0.4f : (%.3f,%+.3fj) Ohms rho=%.4f swr=%.4f, rho_db=%.3f" % (freq, slope, base, length, z.real, z.imag, rho, swr, rho_db))
 
-      #return sum([abs(z - z0) for z in zs])
-      return sum([abs(z.imag) for z in zs])
+        print("Impedance at %s: (%.3f,%+.3fj) Ohms rho=%.4f swr=%.4f, rho_db=%.3f" % (str(antenna_params), z.real, z.imag, rho, swr, rho_db))
+
+
+      if resonance:
+        return sum([abs(z.imag) for z in zs])
+      else:
+        return sum([abs(z - z0) for z in zs])
 
   #'Nelder-Mead'
   #'Powell', options={'xtol': 0.01}
-  result = minimize(objective, x0=(length,), method='Nelder-Mead', bounds=((4,6),))
+
+  x0 = tuple(antenna_params.params[nm] for nm in independent_variable_names)
+
+  bounds = tuple((x*.6, x*1.67) for x in x0)
+
+  result = minimize(objective, x0=x0, method='Powell', options={'xtol': 0.001}, bounds=bounds)
+
   print(result)
-  length, = result.x
 
-  print(objective((length,)))
+  for x, nm in zip(result.x, independent_variable_names):
+    antenna_params.params[nm] = x
 
-  return freq, slope, base, length
+  print(objective(result.x))
+
+  return antenna_params
 
 
-def get_data():
-  freq, slope, base, length = 28.57, .6608, 7, 5.7913
-  return freq, slope, base, length
+def get_dipole_data():
+  return { 'freq': 28.57, 'base': 7, 'length': 5.032}
+
+def get_bowtie_data():
+  return { 'freq': 28.57, 'slope': .6608, 'base': 7, 'length': 5.7913}
+
+def get_single_bowtie_data():
+  return { 'freq': 28.57, 'slope': .363, 'base': 7, 'length': 5.185}
 
 
 def test_pattern():
-  pattern(Bowtie, get_data(), fn='pattern.pdf')
+  pattern(Bowtie, BowtieParams(**get_bowtie_data()), fn='pattern.pdf')
 
 def test_pattern3d():
-  pattern3d(Bowtie, get_data(), fn='pattern3d.pdf')
+  pattern3d(Bowtie, BowtieParams(**get_bowtie_data()), fn='pattern3d.pdf')
   
 def test_sweep_freq():
-  sweep_freq(Bowtie, get_data(), fn='sweep_freq.pdf')
+  sweep_freq(Bowtie, BowtieParams(**get_bowtie_data()), fn='sweep_freq.pdf')
 
 def test_sweep_slope():
-  sweep_slope(Bowtie, get_data(), fn='sweep_slope.pdf')
+  sweep_slope(Bowtie, BowtieParams(**get_bowtie_data()), fn='sweep_slope.pdf')
 
 def test_sweep_length():
-  sweep_length(Bowtie, get_data(), fn='sweep_length.pdf')
+  sweep_length(Bowtie, BowtieParams(**get_bowtie_data()), fn='sweep_length.pdf')
 
-def test_optimize():
-  save_params = optimize(Bowtie, get_data())
-  assert all(math.fabs(x-y) < 0.01 for x,y in zip(get_data(), save_params))
+def test_bowtie_optimize():
+  gold_params = get_bowtie_data()
+
+  save_params = optimize(Bowtie, BowtieParams(**gold_params), ['length', 'slope'], z0=200)
+
+  for k, v in gold_params.items():
+    assert math.fabs(save_params.params[k]-v) < 0.01
+
 
 def test_single_sweep_freq():
-  sweep_freq(BowtieSingle, get_data(), fn='single_sweep_freq.pdf')
+  sweep_freq(BowtieSingle, BowtieParams(**get_single_bowtie_data()), fn='single_sweep_freq.pdf')
+
+def test_single_pattern():
+  pattern(BowtieSingle, BowtieParams(**get_single_bowtie_data()), fn='single_pattern.pdf')
+
+def test_single_pattern3d():
+  pattern3d(BowtieSingle, BowtieParams(**get_single_bowtie_data()), fn='single_pattern3d.pdf')
+
+def test_single_sweep_slope():
+  sweep_slope(BowtieSingle, BowtieParams(**get_single_bowtie_data()), fn='sweep_slope.pdf')
+
+def test_single_sweep_length():
+  sweep_length(BowtieSingle, BowtieParams(**get_single_bowtie_data()), fn='sweep_length.pdf')
+
+def test_single_optimize():
+  gold_params = get_single_bowtie_data()
+
+  save_params = optimize(BowtieSingle, BowtieParams(**gold_params), ['length', 'slope'], z0=200)
+
+  for k, v in gold_params.items():
+    assert math.fabs(save_params.params[k]-v) < 0.01
+
 
 def test_dipole_sweep_freq():
-  sweep_freq(Dipole, get_data(), fn='dipole_sweep_freq.pdf')
+  sweep_freq(Dipole, DipoleParams(**get_dipole_data()), fn='dipole_sweep_freq.pdf')
 
 def test_dipole_pattern():
-  pattern(Dipole, get_data(), fn='dipole_pattern.pdf')
+  pattern(Dipole, DipoleParams(**get_dipole_data()), fn='dipole_pattern.pdf')
 
 def test_dipole_pattern3d():
-  pattern3d(Dipole, get_data(), fn='dipole_pattern3d.pdf')
+  pattern3d(Dipole, DipoleParams(**get_dipole_data()), fn='dipole_pattern3d.pdf')
 
 def test_dipole_optimize():
-  gold_params =  28.57, .6608, 7, 5.0325
-  save_params = optimize1(Dipole, get_data())
+  save_params = optimize(Dipole, DipoleParams(**get_dipole_data()), ['length'], z0=50, resonance=True)
 
-  assert all(math.fabs(x-y) < 0.01 for x,y in zip(gold_params, save_params))
+  for k, v in get_dipole_data().items():
+    assert math.fabs(save_params.params[k]-v) < 0.01
+
+def test_unit_params():
+  dp = DipoleParams(freq=1, base=7, length=10)
+  assert dp.freq == 1
+  assert dp.base == 7
+  assert dp.length == 10
+
+  d = Dipole(dp)
+  assert d.freq == 1
+  assert d.base == 7
+  assert d.length == 10
+
+  d.params.params['freq'] = 2
+  assert dp.freq == 2
+  assert d.freq == 2
+
 
 if __name__ == '__main__':
   pass
