@@ -7,6 +7,7 @@ from scipy.optimize import minimize_scalar, minimize
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 from mpl_toolkits.mplot3d import axes3d
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 class AntennaBuilder:
   def __init__(self, freq):
@@ -38,15 +39,17 @@ class Antenna:
 
   def draw(self):
 
-    pairs = [(p0,p1) for p0, p1, _, _ in self.tups]
+    pairs = [(p0, p1) for p0, p1, _, _ in self.tups]
 
-    lc = LineCollection(pairs, colors=(1, 0, 0, 1), linewidths=1)
+    print(pairs)
 
-    fig, ax = plt.subplots()
-    ax.add_collection(lc)
+    lc = Line3DCollection(pairs, colors=(1, 0, 0, 1), linewidths=1)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.add_collection3d(lc)
     ax.autoscale(axis='x')
     ax.set_aspect('equal')
-    ax.margins(0.1)
     plt.show()
 
   def geometry(self):
@@ -61,7 +64,7 @@ class Antenna:
 
     self.excitation_pairs = []
     for idx, (p0, p1, n_seg, ex) in enumerate(self.tups, start=1):
-      geo.wire(idx, n_seg, 0, p0[0], p0[1], 0, p1[0], p1[1], 0.002, 1.0, 1.0)
+      geo.wire(idx, n_seg, p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], 0.002, 1.0, 1.0)
       if ex:
         self.excitation_pairs.append((idx, (n_seg+1)//2))
 
@@ -98,14 +101,14 @@ class Antenna:
 
     return zs
 
-def pattern(antenna_builder, fn=None):
+def get_pattern_rings(antenna_builder):
   bt = Antenna(antenna_builder)
   bt.set_freq_and_execute()
 
-  del_theta = 3
-  del_phi = 6
-  n_theta = 30
-  n_phi = 60
+  del_theta = 1
+  del_phi = 1
+  n_theta = 90
+  n_phi = 360
 
   assert 90 % n_theta == 0 and 90 == del_theta * n_theta
   assert 360 % n_phi == 0 and 360 == del_phi * n_phi
@@ -126,6 +129,44 @@ def pattern(antenna_builder, fn=None):
   min_gain = bt.c.get_gain_min(0)
 
   del bt
+
+  return rings, max_gain, min_gain, thetas, phis
+
+
+def compare_patterns(antenna_builders, elevation_angle=15, fn=None):
+  rings_lst = []
+
+  for antenna_builder in antenna_builders:
+    rings, max_gain, min_gain, thetas, phis = get_pattern_rings(antenna_builder)
+    rings_lst.append(rings)
+
+  elevations = [[ring[0] for ring in rings] for rings in rings_lst]
+
+  fig, axes = plt.subplots(ncols=2, subplot_kw={'projection': 'polar'})
+
+  axes[0].set_aspect(1)
+
+
+
+  for rings in rings_lst:
+    for theta, ring in list(zip(thetas, rings)):
+      if abs(theta-(90-elevation_angle)) < 0.1:
+        axes[0].plot(np.deg2rad(phis),ring,marker='',label=f"{(90-theta):.0f}")
+
+  axes[0].legend(loc="lower left")
+
+  axes[1].set_aspect(1)
+  for elevation in elevations:
+    axes[1].plot(np.deg2rad(90-thetas),elevation,marker='')
+
+  if fn is not None:
+    plt.savefig(fn)
+  else:
+    plt.show()
+
+def pattern(antenna_builder, fn=None):
+
+  rings, max_gain, min_gain, thetas, phis = get_pattern_rings(antenna_builder)
 
   elevation = [ring[0] for ring in rings]
 
@@ -210,7 +251,7 @@ def pattern3d(antenna_builder, fn=None):
 
 
 
-def sweep_freq(antenna_builder, fn=None):
+def sweep_freq(antenna_builder, *, z0=200, fn=None):
 
   min_freq = 28.0
   max_freq = 29.0
@@ -229,8 +270,6 @@ def sweep_freq(antenna_builder, fn=None):
   del bt
 
   zs = np.array(zs)
-
-  z0 = 200
 
   reflection_coefficient = (zs - z0) / (zs + z0)
   rho = np.abs(reflection_coefficient)

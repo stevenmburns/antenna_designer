@@ -20,11 +20,11 @@ class DipoleBuilder(AntennaBuilder):
     tups = []
     tups.extend([((-x,   0), (-eps, 0), n_seg0, False)])
     tups.extend([(( eps, 0), ( x,   0),    n_seg0, False)])
-    tups.extend([((-eps, 0),  ( eps, 0), n_seg1, True)])
+    tups.extend([((-eps, 0), ( eps, 0), n_seg1, True)])
 
     new_tups = []
-    for (xoff, yoff) in [(0, self.base)]:
-      new_tups.extend([((x0+xoff, y0+yoff), (x1+xoff, y1+yoff), ns, ex) for ((x0, y0), (x1, y1), ns, ex) in tups])
+    for (yoff, zoff) in [(0, self.base)]:
+      new_tups.extend([((0, y0+yoff, z0+zoff), (0, y1+yoff, z1+zoff), ns, ex) for ((y0, z0), (y1, z1), ns, ex) in tups])
 
     return new_tups
 
