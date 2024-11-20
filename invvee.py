@@ -1,5 +1,9 @@
 from antenna import *
 
+
+def get_invvee_data():
+  return { 'freq': 28.57, 'base': 7, 'length': 5.084, 'slope': 0.604}
+
 class InvVeeBuilder(AntennaBuilder):
   def __init__(self, freq, slope, base, length):
     super().__init__(freq)
@@ -31,25 +35,3 @@ class InvVeeBuilder(AntennaBuilder):
       new_tups.extend([((0, y0+yoff, z0+zoff), (0, y1+yoff, z1+zoff), ns, ex) for ((y0, z0), (y1, z1), ns, ex) in tups])
 
     return new_tups
-
-def get_invvee_data():
-  return { 'freq': 28.57, 'base': 7, 'length': 5.084, 'slope': 0.604}
-
-def test_invvee_sweep_freq():
-  sweep_freq(InvVeeBuilder(**get_invvee_data()), fn='invvee_sweep_freq.pdf')
-
-def test_invvee_sweep_length():
-  sweep(InvVeeBuilder(**get_invvee_data()), 'length', (4,6), fn='invvee_sweep_length.pdf')
-
-def test_invvee_sweep_slope():
-  sweep(InvVeeBuilder(**get_invvee_data()), 'slope', (.2,1), fn='invvee_sweep_slope.pdf')
-
-
-def test_invvee_optimize():
-
-  gold_params = get_invvee_data()
-
-  params = optimize(InvVeeBuilder(**gold_params), ['length','slope'], z0=50)
-
-  for k, v in gold_params.items():
-    assert math.fabs(params[k]-v) < 0.01
