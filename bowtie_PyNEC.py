@@ -472,13 +472,13 @@ def optimize(antenna, antenna_params, independent_variable_names, z0=50, resonan
         return sum([abs(z - z0) for z in zs])
 
   #'Nelder-Mead'
-  #'Powell', options={'xtol': 0.01}
+  #'Powell', options={'maxiter':100, 'disp': True, 'xtol': 0.0001}
 
   x0 = tuple(antenna_params.params[nm] for nm in independent_variable_names)
 
   bounds = tuple((x*.6, x*1.67) for x in x0)
 
-  result = minimize(objective, x0=x0, method='Powell', options={'xtol': 0.001}, bounds=bounds)
+  result = minimize(objective, x0=x0, method='Nelder-Mead', tol=0.001, bounds=bounds)
 
   print(result)
 
