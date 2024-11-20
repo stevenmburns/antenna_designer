@@ -440,70 +440,6 @@ def sweep(antenna_builder, nm, rng, npoints=21, fn=None):
   else:
     plt.show()
 
-def sweep_length(antenna_builder, fn=None):
-
-  xs = np.linspace(5.5,6.0,21)
-
-  zs = []
-  for length in xs:
-    antenna_builder.params['length'] = length
-    zs.append(Antenna(antenna_builder).impedance())
-  zs = np.array(zs)
-  
-  fig, ax0 = plt.subplots()
-  color = 'tab:red'
-  ax0.set_xlabel('length')
-  ax0.set_ylabel('z real', color=color)
-  ax0.tick_params(axis='y', labelcolor=color)
-  for i in range(zs.shape[1]):
-    ax0.plot(xs, np.real(zs)[:,i], color=color)
-
-
-  color = 'tab:blue'
-  ax1 = ax0.twinx()
-  ax1.set_ylabel('z imag', color=color)
-  ax1.tick_params(axis='y', labelcolor=color)
-  for i in range(zs.shape[1]):
-    ax1.plot(xs, np.imag(zs)[:,i], color=color)
-
-  fig.tight_layout()
-
-  if fn is not None:
-    plt.savefig(fn)
-  else:
-    plt.show()
-
-def sweep_slope(antenna_builder, fn=None):
-  xs = np.linspace(.4,.8,21)
-  zs = []
-  for slope in xs:
-    antenna_builder.params['slope'] = slope
-    zs.append(Antenna(antenna_builder).impedance())
-  zs = np.array(zs)
-
-  
-  fig, ax0 = plt.subplots()
-  color = 'tab:red'
-  ax0.set_xlabel('slope')
-  ax0.set_ylabel('z real', color=color)
-  ax0.tick_params(axis='y', labelcolor=color)
-  for i in range(zs.shape[1]):
-    ax0.plot(xs, np.real(zs)[:,i], color=color)
-
-
-  color = 'tab:blue'
-  ax1 = ax0.twinx()
-  ax1.set_ylabel('z imag', color=color)
-  ax1.tick_params(axis='y', labelcolor=color)
-  for i in range(zs.shape[1]):
-    ax1.plot(xs, np.imag(zs)[:,i], color=color)
-
-  fig.tight_layout()
-
-  if fn is not None:
-    plt.savefig(fn)
-  else:
-    plt.show()
 
 def optimize(antenna_builder, independent_variable_names, z0=50, resonance=False):
 
@@ -595,19 +531,20 @@ def test_bowtie_optimize():
 
 
 def test_single_sweep_freq():
-  sweep_freq(BowtieBuilder(**get_single_bowtie_data()), fn='single_sweep_freq.pdf')
+  sweep_freq(BowtieSingleBuilder(**get_single_bowtie_data()), fn='single_sweep_freq.pdf')
 
 def test_single_pattern():
-  pattern(BowtieBuilder(**get_single_bowtie_data()), fn='single_pattern.pdf')
+  pattern(BowtieSingleBuilder(**get_single_bowtie_data()), fn='single_pattern.pdf')
 
 def test_single_pattern3d():
   pattern3d(BowtieSingleBuilder(**get_single_bowtie_data()), fn='single_pattern3d.pdf')
 
 def test_single_sweep_slope():
-  sweep_slope(BowtieSingleBuilder(**get_single_bowtie_data()), fn='sweep_slope.pdf')
+  sweep(BowtieSingleBuilder(**get_single_bowtie_data()), 'slope', (.2,1), fn='single_sweep_slope.pdf')
 
 def test_single_sweep_length():
-  sweep_length(BowtieSingleBuilder(**get_single_bowtie_data()), fn='sweep_length.pdf')
+  sweep(BowtieSingleBuilder(**get_single_bowtie_data()), 'length', (4,6), fn='sigle_sweep_length.pdf')
+
 
 def test_single_optimize():
   gold_params = get_single_bowtie_data()
@@ -621,6 +558,9 @@ def test_single_optimize():
 def test_dipole_sweep_freq():
   sweep_freq(DipoleBuilder(**get_dipole_data()), fn='dipole_sweep_freq.pdf')
 
+def test_dipole_sweep_length():
+  sweep(DipoleBuilder(**get_dipole_data()), 'length', (4,6), fn='dipole_sweep_length.pdf')
+
 def test_dipole_pattern():
   pattern(DipoleBuilder(**get_dipole_data()), fn='dipole_pattern.pdf')
 
@@ -631,9 +571,20 @@ def test_dipole_optimize():
   params = optimize(DipoleBuilder(**get_dipole_data()), ['length'], z0=50, resonance=True)
 
   for k, v in get_dipole_data().items():
-    assert math.fabs(params.params[k]-v) < 0.01
+    assert math.fabs(params[k]-v) < 0.01
+
+def test_invvee_sweep_freq():
+  sweep_freq(InvVeeBuilder(**get_invvee_data()), fn='invvee_sweep_freq.pdf')
+
+def test_invvee_sweep_length():
+  sweep(InvVeeBuilder(**get_single_bowtie_data()), 'length', (4,6), fn='invvee_sweep_length.pdf')
+
+def test_invvee_sweep_slope():
+  sweep(InvVeeBuilder(**get_single_bowtie_data()), 'slope', (4,6), fn='invvee_sweep_slope.pdf')
+
 
 def test_invvee_optimize():
+
   gold_params = get_invvee_data()
 
   params = optimize(InvVeeBuilder(**gold_params), ['length','slope'], z0=50)
