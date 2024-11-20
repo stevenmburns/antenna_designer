@@ -1,0 +1,7 @@
+*.pdf
+*.png
+SWEEP_LENGTH
+SWEEP_SLOPE
+__pycache__/
+PyNEC/
+*~
