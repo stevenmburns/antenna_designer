@@ -223,8 +223,9 @@ class InvVeeBuilder(AntennaBuilder):
     # (0.5*self.length)^2 == x^2+z^2
     # z = self.slope*x
     # (0.5*self.length)^2 == x^2*(1+self.slope^2)
+    # 0.5*self.length == x*sqrt(1+self.slope^2)
 
-    x = math.sqrt((0.5*self.length)**2 / (1+self.slope**2))
+    x = 0.5*self.length/math.sqrt(1+self.slope**2)
     z = self.slope*x
 
     n_seg0 = 21
