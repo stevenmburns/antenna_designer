@@ -100,39 +100,49 @@ class Antenna:
 
 
 class BowtieBuilder(AntennaBuilder):
-  def __init__(self, freq, slope, base, length):
+  def __init__(self, freq, slope_top, slope_bot, base, length_top, length_bot):
     super().__init__(freq)
-    self.params['slope'] = slope
+    self.params['slope_top'] = slope_top
+    self.params['slope_bot'] = slope_bot
     self.params['base'] = base
-    self.params['length'] = length
+    self.params['length_top'] = length_top
+    self.params['length_bot'] = length_bot
 
   def build_wires(self):
     eps = 0.05
 
-    # diag = sqrt(x^2 + (x*slope)^2) = x*sqrt(1+slope^2)
-    # length/2 = diag + x*slope = x*(slope + sqrt(1+slope^2))
-
-    x = 0.5*self.length/(self.slope + math.sqrt(1+self.slope**2))
-    z = self.slope*x
-
     n_seg0 = 21
     n_seg1 = 3
 
-    tups = []
-    tups.extend([((-x,    0),   (-x,   z),    n_seg0, False)])
-    tups.extend([((-x,    z),   (-eps, eps),  n_seg0, False)])
-    tups.extend([((-eps,  eps), ( eps, eps),  n_seg1, False)])
-    tups.extend([(( eps,  eps), ( x,   z),    n_seg0, False)])
-    tups.extend([(( x,    z),   ( x,   0),    n_seg0, False)])
-    tups.extend([((-x,    0),   (-x,   -z),   n_seg0, False)])
-    tups.extend([((-x,   -z),   (-eps, -eps), n_seg0, False)])
-    tups.extend([(( eps, -eps), ( x,   -z),   n_seg0, False)])
-    tups.extend([(( x,   -z),   ( x,    0),   n_seg0, False)])
-    tups.extend([((-eps, -eps), ( eps, -eps), n_seg1, True)])
+    def element(length, slope):
+      # diag = sqrt(x^2 + (x*slope)^2) = x*sqrt(1+slope^2)
+      # length/2 = diag + x*slope = x*(slope + sqrt(1+slope^2))
+
+      x = 0.5*length/(slope + math.sqrt(1+slope**2))
+      z = slope*x
+
+      tups = []
+      tups.extend([((-x,    0),   (-x,   z),    n_seg0, False)])
+      tups.extend([((-x,    z),   (-eps, eps),  n_seg0, False)])
+      tups.extend([((-eps,  eps), ( eps, eps),  n_seg1, False)])
+      tups.extend([(( eps,  eps), ( x,   z),    n_seg0, False)])
+      tups.extend([(( x,    z),   ( x,   0),    n_seg0, False)])
+      tups.extend([((-x,    0),   (-x,   -z),   n_seg0, False)])
+      tups.extend([((-x,   -z),   (-eps, -eps), n_seg0, False)])
+      tups.extend([(( eps, -eps), ( x,   -z),   n_seg0, False)])
+      tups.extend([(( x,   -z),   ( x,    0),   n_seg0, False)])
+      tups.extend([((-eps, -eps), ( eps, -eps), n_seg1, True)])
+      return tups
+
+    tups_top = element(self.length_top, self.slope_top)
+    tups_bot = element(self.length_bot, self.slope_bot)
 
     new_tups = []
-    for (xoff, yoff) in [(-4, self.base+2), (-4, self.base-2), (4, self.base+2), (4, self.base-2)]:
-      new_tups.extend([((x0+xoff, y0+yoff), (x1+xoff, y1+yoff), ns, ex) for ((x0, y0), (x1, y1), ns, ex) in tups])
+    for xoff in [-4, 4]:
+      yoff = self.base+2
+      new_tups.extend([((x0+xoff, y0+yoff), (x1+xoff, y1+yoff), ns, ex) for ((x0, y0), (x1, y1), ns, ex) in tups_top])
+      yoff = self.base-2
+      new_tups.extend([((x0+xoff, y0+yoff), (x1+xoff, y1+yoff), ns, ex) for ((x0, y0), (x1, y1), ns, ex) in tups_bot])
 
     return new_tups
 
@@ -396,6 +406,39 @@ def sweep_freq(antenna_builder, fn=None):
     plt.show()
 
 
+def sweep(antenna_builder, nm, rng, npoints=21, fn=None):
+
+  xs = np.linspace(rng[0],rng[1],npoints)
+
+  zs = []
+  for x in xs:
+    antenna_builder.params[nm] = x
+    zs.append(Antenna(antenna_builder).impedance())
+  zs = np.array(zs)
+  
+  fig, ax0 = plt.subplots()
+  color = 'tab:red'
+  ax0.set_xlabel(nm)
+  ax0.set_ylabel('z real', color=color)
+  ax0.tick_params(axis='y', labelcolor=color)
+  for i in range(zs.shape[1]):
+    ax0.plot(xs, np.real(zs)[:,i], color=color)
+
+
+  color = 'tab:blue'
+  ax1 = ax0.twinx()
+  ax1.set_ylabel('z imag', color=color)
+  ax1.tick_params(axis='y', labelcolor=color)
+  for i in range(zs.shape[1]):
+    ax1.plot(xs, np.imag(zs)[:,i], color=color)
+
+  fig.tight_layout()
+
+  if fn is not None:
+    plt.savefig(fn)
+  else:
+    plt.show()
+
 def sweep_length(antenna_builder, fn=None):
 
   xs = np.linspace(5.5,6.0,21)
@@ -511,31 +554,40 @@ def get_invvee_data():
   return { 'freq': 28.57, 'base': 7, 'length': 5.084, 'slope': 0.604}
 
 def get_bowtie_data():
-  return { 'freq': 28.57, 'slope': .6608, 'base': 7, 'length': 5.7913}
+  return { 'freq': 28.57, 'slope_top': .658, 'slope_bot': .512, 'base': 7, 'length_top': 5.771, 'length_bot': 5.68}
 
 def get_single_bowtie_data():
   return { 'freq': 28.57, 'slope': .363, 'base': 7, 'length': 5.185}
 
 
-def test_pattern():
+def test_bowtie_pattern():
   pattern(BowtieBuilder(**get_bowtie_data()), fn='pattern.pdf')
 
-def test_pattern3d():
+def test_bowtie_pattern3d():
   pattern3d(BowtieBuilder(**get_bowtie_data()), fn='pattern3d.pdf')
   
-def test_sweep_freq():
+def test_bowtie_sweep_freq():
   sweep_freq(BowtieBuilder(**get_bowtie_data()), fn='sweep_freq.pdf')
 
-def test_sweep_slope():
-  sweep_slope(BowtieBuilder(**get_bowtie_data()), fn='sweep_slope.pdf')
+def test_bowtie_sweep_freq2():
+  sweep(BowtieBuilder(**get_bowtie_data()), 'freq', (28,29), fn='sweep_freq.pdf')
 
-def test_sweep_length():
-  sweep_length(BowtieBuilder(**get_bowtie_data()), fn='sweep_length.pdf')
+def test_bowtie_sweep_slope_top():
+  sweep(BowtieBuilder(**get_bowtie_data()), 'slope_top', (.2,1), fn='bowtie_sweep_slope_top.pdf')
+
+def test_bowtie_sweep_slope_bot():
+  sweep(BowtieBuilder(**get_bowtie_data()), 'slope_bot', (.2,1), fn='bowtie_sweep_slope_bot.pdf')
+
+def test_bowtie_sweep_length_top():
+  sweep(BowtieBuilder(**get_bowtie_data()), 'length_top', (4,6), fn='bowtie_sweep_length_top.pdf')
+
+def test_bowtie_sweep_length_bot():
+  sweep(BowtieBuilder(**get_bowtie_data()), 'length_bot', (4,6), fn='bowtie_sweep_length_bot.pdf')
 
 def test_bowtie_optimize():
   gold_params = get_bowtie_data()
 
-  params = optimize(BowtieBuilder(**gold_params), ['length', 'slope'], z0=200)
+  params = optimize(BowtieBuilder(**gold_params), ['length_top', 'slope_top', 'length_bot', 'slope_bot'], z0=200)
 
   for k, v in gold_params.items():
     assert math.fabs(params[k]-v) < 0.01
@@ -586,7 +638,7 @@ def test_invvee_optimize():
   params = optimize(InvVeeBuilder(**gold_params), ['length','slope'], z0=50)
 
   for k, v in gold_params.items():
-    assert math.fabs(save_params[k]-v) < 0.01
+    assert math.fabs(params[k]-v) < 0.01
 
 
 
