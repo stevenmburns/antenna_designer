@@ -24,7 +24,9 @@ class AntennaParams:
 
 
 class Antenna:
-  def __init__(self):
+  def __init__(self, antenna_params):
+    self.params = antenna_params
+    self.tups = self.params.build_wires()
     self.excitation_pairs = None
     self.geometry()
 
@@ -104,17 +106,6 @@ class BowtieParams(AntennaParams):
     self.params['base'] = base
     self.params['length'] = length
 
-class Bowtie(Antenna):
-  
-  def __init__(self, antenna_params):
-    self.params = antenna_params
-
-    self.tups = self.build_wires()
-    super().__init__()
-
-  def __getattr__(self, nm):
-    return self.params.__getattr__(nm)
-
   def build_wires(self):
     eps = 0.05
 
@@ -145,13 +136,12 @@ class Bowtie(Antenna):
 
     return new_tups
 
-class BowtieSingle(Antenna):
-  
-  def __init__(self, antenna_params):
-    self.params = antenna_params
-
-    self.tups = self.build_wires()
-    super().__init__()
+class BowtieSingleParams(AntennaParams):
+  def __init__(self, freq, slope, base, length):
+    super().__init__(freq)
+    self.params['slope'] = slope
+    self.params['base'] = base
+    self.params['length'] = length
 
   def build_wires(self):
     eps = 0.05
@@ -183,19 +173,12 @@ class BowtieSingle(Antenna):
 
     return new_tups
 
+
 class DipoleParams(AntennaParams):
   def __init__(self, freq, base, length):
     super().__init__(freq)
     self.params['base'] = base
     self.params['length'] = length
-
-class Dipole(Antenna):
-  
-  def __init__(self, antenna_params):
-    self.params = antenna_params
-
-    self.tups = self.build_wires()
-    super().__init__()
 
   def build_wires(self):
     eps = 0.05
@@ -217,9 +200,40 @@ class Dipole(Antenna):
     return new_tups
 
 
+class InvVeeParams(AntennaParams):
+  def __init__(self, freq, slope, base, length):
+    super().__init__(freq)
+    self.params['slope'] = slope
+    self.params['base'] = base
+    self.params['length'] = length
 
-def pattern(antenna, antenna_params, fn=None):
-  bt = antenna(antenna_params)
+  def build_wires(self):
+    eps = 0.05
+
+    # (0.5*self.length)^2 == x^2+z^2
+    # z = self.slope*x
+    # (0.5*self.length)^2 == x^2*(1+self.slope^2)
+
+    x = math.sqrt((0.5*self.length)**2 / (1+self.slope**2))
+    z = self.slope*x
+
+    n_seg0 = 21
+    n_seg1 = 3
+
+    tups = []
+    tups.extend([((-x,  -z), (-eps, 0), n_seg0, False)])
+    tups.extend([(( eps, 0), ( x,  -z), n_seg0, False)])
+    tups.extend([((-eps, 0), ( eps, 0), n_seg1, True)])
+
+    new_tups = []
+    for (xoff, yoff) in [(0, self.base)]:
+      new_tups.extend([((x0+xoff, y0+yoff), (x1+xoff, y1+yoff), ns, ex) for ((x0, y0), (x1, y1), ns, ex) in tups])
+
+    return new_tups
+
+
+def pattern(antenna_params, fn=None):
+  bt = Antenna(antenna_params)
   bt.set_freq_and_execute()
 
   del_theta = 3
@@ -284,8 +298,8 @@ def pattern(antenna, antenna_params, fn=None):
     plt.show()
 
 
-def pattern3d(antenna, antenna_params, fn=None):
-  bt = antenna(antenna_params)
+def pattern3d(antenna_params, fn=None):
+  bt = Antenna(antenna_params)
   bt.set_freq_and_execute()
 
   del_theta = 3
@@ -330,7 +344,7 @@ def pattern3d(antenna, antenna_params, fn=None):
 
 
 
-def sweep_freq(antenna, antenna_params, fn=None):
+def sweep_freq(antenna_params, fn=None):
 
   min_freq = 28.0
   max_freq = 29.0
@@ -339,7 +353,7 @@ def sweep_freq(antenna, antenna_params, fn=None):
 
   xs = np.linspace(min_freq, max_freq, n_freq+1)
   
-  bt = antenna(antenna_params)
+  bt = Antenna(antenna_params)
 
   bt.c.fr_card(0, n_freq+1, min_freq, del_freq)
   bt.c.xq_card(0) # Execute simulation
@@ -382,14 +396,14 @@ def sweep_freq(antenna, antenna_params, fn=None):
     plt.show()
 
 
-def sweep_length(antenna, antenna_params, fn=None):
+def sweep_length(antenna_params, fn=None):
 
   xs = np.linspace(5.5,6.0,21)
 
   zs = []
   for length in xs:
     antenna_params.params['length'] = length
-    zs.append(antenna(antenna_params).impedance())
+    zs.append(Antenna(antenna_params).impedance())
   zs = np.array(zs)
   
   fig, ax0 = plt.subplots()
@@ -415,12 +429,12 @@ def sweep_length(antenna, antenna_params, fn=None):
   else:
     plt.show()
 
-def sweep_slope(antenna, antenna_params, fn=None):
+def sweep_slope(antenna_params, fn=None):
   xs = np.linspace(.4,.8,21)
   zs = []
   for slope in xs:
     antenna_params.params['slope'] = slope
-    zs.append(antenna(antenna_params).impedance())
+    zs.append(Antenna(antenna_params).impedance())
   zs = np.array(zs)
 
   
@@ -447,14 +461,14 @@ def sweep_slope(antenna, antenna_params, fn=None):
   else:
     plt.show()
 
-def optimize(antenna, antenna_params, independent_variable_names, z0=50, resonance=False):
+def optimize(antenna_params, independent_variable_names, z0=50, resonance=False):
 
   def objective(independent_variables):
 
       for v, nm in zip(independent_variables, independent_variable_names):
         antenna_params.params[nm] = v
 
-      zs = antenna(antenna_params).impedance()
+      zs = Antenna(antenna_params).impedance()
 
       for z in zs:
         reflection_coefficient = (z - z0) / (z + z0)
@@ -493,6 +507,9 @@ def optimize(antenna, antenna_params, independent_variable_names, z0=50, resonan
 def get_dipole_data():
   return { 'freq': 28.57, 'base': 7, 'length': 5.032}
 
+def get_invvee_data():
+  return { 'freq': 28.57, 'base': 7, 'length': 5.084, 'slope': 0.604}
+
 def get_bowtie_data():
   return { 'freq': 28.57, 'slope': .6608, 'base': 7, 'length': 5.7913}
 
@@ -501,67 +518,77 @@ def get_single_bowtie_data():
 
 
 def test_pattern():
-  pattern(Bowtie, BowtieParams(**get_bowtie_data()), fn='pattern.pdf')
+  pattern(BowtieParams(**get_bowtie_data()), fn='pattern.pdf')
 
 def test_pattern3d():
-  pattern3d(Bowtie, BowtieParams(**get_bowtie_data()), fn='pattern3d.pdf')
+  pattern3d(BowtieParams(**get_bowtie_data()), fn='pattern3d.pdf')
   
 def test_sweep_freq():
-  sweep_freq(Bowtie, BowtieParams(**get_bowtie_data()), fn='sweep_freq.pdf')
+  sweep_freq(BowtieParams(**get_bowtie_data()), fn='sweep_freq.pdf')
 
 def test_sweep_slope():
-  sweep_slope(Bowtie, BowtieParams(**get_bowtie_data()), fn='sweep_slope.pdf')
+  sweep_slope(BowtieParams(**get_bowtie_data()), fn='sweep_slope.pdf')
 
 def test_sweep_length():
-  sweep_length(Bowtie, BowtieParams(**get_bowtie_data()), fn='sweep_length.pdf')
+  sweep_length(BowtieParams(**get_bowtie_data()), fn='sweep_length.pdf')
 
 def test_bowtie_optimize():
   gold_params = get_bowtie_data()
 
-  save_params = optimize(Bowtie, BowtieParams(**gold_params), ['length', 'slope'], z0=200)
+  save_params = optimize(BowtieParams(**gold_params), ['length', 'slope'], z0=200)
 
   for k, v in gold_params.items():
     assert math.fabs(save_params.params[k]-v) < 0.01
 
 
 def test_single_sweep_freq():
-  sweep_freq(BowtieSingle, BowtieParams(**get_single_bowtie_data()), fn='single_sweep_freq.pdf')
+  sweep_freq(BowtieParams(**get_single_bowtie_data()), fn='single_sweep_freq.pdf')
 
 def test_single_pattern():
-  pattern(BowtieSingle, BowtieParams(**get_single_bowtie_data()), fn='single_pattern.pdf')
+  pattern(BowtieParams(**get_single_bowtie_data()), fn='single_pattern.pdf')
 
 def test_single_pattern3d():
-  pattern3d(BowtieSingle, BowtieParams(**get_single_bowtie_data()), fn='single_pattern3d.pdf')
+  pattern3d(BowtieSingleParams(**get_single_bowtie_data()), fn='single_pattern3d.pdf')
 
 def test_single_sweep_slope():
-  sweep_slope(BowtieSingle, BowtieParams(**get_single_bowtie_data()), fn='sweep_slope.pdf')
+  sweep_slope(BowtieSingleParams(**get_single_bowtie_data()), fn='sweep_slope.pdf')
 
 def test_single_sweep_length():
-  sweep_length(BowtieSingle, BowtieParams(**get_single_bowtie_data()), fn='sweep_length.pdf')
+  sweep_length(BowtieSingleParams(**get_single_bowtie_data()), fn='sweep_length.pdf')
 
 def test_single_optimize():
   gold_params = get_single_bowtie_data()
 
-  save_params = optimize(BowtieSingle, BowtieParams(**gold_params), ['length', 'slope'], z0=200)
+  save_params = optimize(BowtieSingleParams(**gold_params), ['length', 'slope'], z0=200)
 
   for k, v in gold_params.items():
     assert math.fabs(save_params.params[k]-v) < 0.01
 
 
 def test_dipole_sweep_freq():
-  sweep_freq(Dipole, DipoleParams(**get_dipole_data()), fn='dipole_sweep_freq.pdf')
+  sweep_freq(DipoleParams(**get_dipole_data()), fn='dipole_sweep_freq.pdf')
 
 def test_dipole_pattern():
-  pattern(Dipole, DipoleParams(**get_dipole_data()), fn='dipole_pattern.pdf')
+  pattern(DipoleParams(**get_dipole_data()), fn='dipole_pattern.pdf')
 
 def test_dipole_pattern3d():
-  pattern3d(Dipole, DipoleParams(**get_dipole_data()), fn='dipole_pattern3d.pdf')
+  pattern3d(DipoleParams(**get_dipole_data()), fn='dipole_pattern3d.pdf')
 
 def test_dipole_optimize():
-  save_params = optimize(Dipole, DipoleParams(**get_dipole_data()), ['length'], z0=50, resonance=True)
+  save_params = optimize(DipoleParams(**get_dipole_data()), ['length'], z0=50, resonance=True)
 
   for k, v in get_dipole_data().items():
     assert math.fabs(save_params.params[k]-v) < 0.01
+
+def test_invvee_optimize():
+  gold_params = get_invvee_data()
+
+  save_params = optimize(InvVeeParams(**gold_params), ['length','slope'], z0=50)
+
+  for k, v in gold_params.items():
+    assert math.fabs(save_params.params[k]-v) < 0.01
+
+
 
 def test_unit_params():
   dp = DipoleParams(freq=1, base=7, length=10)
@@ -569,14 +596,8 @@ def test_unit_params():
   assert dp.base == 7
   assert dp.length == 10
 
-  d = Dipole(dp)
-  assert d.freq == 1
-  assert d.base == 7
-  assert d.length == 10
-
-  d.params.params['freq'] = 2
+  dp.params['freq'] = 2
   assert dp.freq == 2
-  assert d.freq == 2
 
 
 if __name__ == '__main__':
