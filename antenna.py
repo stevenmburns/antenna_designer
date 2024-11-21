@@ -32,6 +32,26 @@ class AntennaBuilder:
       res.append(f"{k} = {v:0.3f}")
     return ', '.join(res)
 
+  def draw(self, tups, fn=None):
+
+    pairs = [(p0, p1) for p0, p1, _, _ in tups]
+
+
+
+    print(pairs)
+
+    lc = Line3DCollection(pairs, colors=(1, 0, 0, 1), linewidths=1)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.add_collection3d(lc)
+    ax.set_xlim(-3, 3)
+    ax.set_ylim(-3, 3)
+    ax.set_zlim(4, 10)
+    ax.set_aspect('equal')
+
+    save_or_show(plt, fn)
+
 
 class Antenna:
   def __init__(self, antenna_builder):
@@ -45,22 +65,6 @@ class Antenna:
 
   def __getattr__(self, nm):
     return self.params.__getattr__(nm)
-
-  def draw(self, fn=None):
-
-    pairs = [(p0, p1) for p0, p1, _, _ in self.tups]
-
-    print(pairs)
-
-    lc = Line3DCollection(pairs, colors=(1, 0, 0, 1), linewidths=1)
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.add_collection3d(lc)
-    ax.autoscale(axis='x')
-    ax.set_aspect('equal')
-
-    save_or_show(plt, fn)
 
   def geometry(self):
 
@@ -173,9 +177,6 @@ def get_elevation(antenna_builder):
 
   return rings, max_gain, min_gain, thetas, phis
 
-
-
-
 def compare_patterns(antenna_builders, elevation_angle=15, fn=None):
   rings_lst = []
 
@@ -183,13 +184,11 @@ def compare_patterns(antenna_builders, elevation_angle=15, fn=None):
     rings, max_gain, min_gain, thetas, phis = get_pattern_rings(antenna_builder)
     rings_lst.append(rings)
 
-  elevations = [[ring[0] for ring in rings] for rings in rings_lst]
+
 
   fig, axes = plt.subplots(ncols=2, subplot_kw={'projection': 'polar'})
 
   axes[0].set_aspect(1)
-
-
 
   for rings in rings_lst:
     for theta, ring in list(zip(thetas, rings)):
@@ -199,8 +198,13 @@ def compare_patterns(antenna_builders, elevation_angle=15, fn=None):
   axes[0].legend(loc="lower left")
 
   axes[1].set_aspect(1)
+
+  n = len(rings_lst[0][0])
+  assert (n-1) % 2 == 0
+  elevations = [list(reversed([ring[0] for ring in rings]))+[ring[(n-1)//2] for ring in rings] for rings in rings_lst]
+  el_thetas = list(reversed(list(90-thetas))) + list(90+thetas)
   for elevation in elevations:
-    axes[1].plot(np.deg2rad(90-thetas),elevation,marker='')
+    axes[1].plot(np.deg2rad(el_thetas),elevation,marker='')
 
   save_or_show(plt, fn)
 
@@ -284,12 +288,10 @@ def pattern3d(antenna_builder, fn=None):
 
   save_or_show(plt, fn)
 
+def sweep_freq(antenna_builder, *, z0=200, rng=(28, 29), fn=None):
 
-
-def sweep_freq(antenna_builder, *, z0=200, fn=None):
-
-  min_freq = 28.0
-  max_freq = 29.0
+  min_freq = rng[0]
+  max_freq = rng[1]
   n_freq = 20
   del_freq = (max_freq- min_freq)/n_freq
 
