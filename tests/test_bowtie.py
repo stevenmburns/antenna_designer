@@ -27,6 +27,24 @@ def test_bowtie_sweep_length_top():
 def test_bowtie_sweep_length_bot():
   ant.sweep(BowtieBuilder(**get_bowtie_data()), 'length_bot', (4,6), fn='bowtie_sweep_length_bot.pdf')
 
+def test_bowtie_sweep_del_z():
+  ant.sweep(BowtieBuilder(**get_bowtie_data()), 'del_z', (1,3), fn='bowtie_sweep_del_z.pdf')
+
+def test_bowtie_sweep_del_y():
+  ant.sweep(BowtieBuilder(**get_bowtie_data()), 'del_y', (3.5,6), fn='bowtie_sweep_del_y.pdf')
+
+def test_bowtie_sweep_base():
+  ant.sweep(BowtieBuilder(**get_bowtie_data()), 'base', (6,8), fn='bowtie_sweep_base.pdf')
+
+def test_bowtie_sweep_gain_del_z():
+  ant.sweep_gain(BowtieBuilder(**get_bowtie_data()), 'del_z', (1,3), fn='bowtie_sweep_gain_del_z.pdf')
+
+def test_bowtie_sweep_gain_del_y():
+  ant.sweep_gain(BowtieBuilder(**get_bowtie_data()), 'del_y', (3.5,6), fn='bowtie_sweep_gain_del_y.pdf')
+
+def test_bowtie_sweep_gain_base():
+  ant.sweep_gain(BowtieBuilder(**get_bowtie_data()), 'base', (6,8), fn='bowtie_sweep_gain_base.pdf')
+
 def test_bowtie_optimize():
   gold_params = get_bowtie_data()
 

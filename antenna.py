@@ -142,6 +142,37 @@ def get_pattern_rings(antenna_builder):
 
   return rings, max_gain, min_gain, thetas, phis
 
+def get_elevation(antenna_builder):
+  bt = Antenna(antenna_builder)
+  bt.set_freq_and_execute()
+
+  del_theta = 1
+  del_phi = 360
+  n_theta = 90
+  n_phi = 1
+
+  assert 90 % n_theta == 0 and 90 == del_theta * n_theta
+  assert 360 % n_phi == 0 and 360 == del_phi * n_phi
+
+
+  bt.c.rp_card(0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0)
+
+  thetas = np.linspace(0,90-del_theta,n_theta)
+  phis = np.linspace(0,360,n_phi+1)
+
+  rings = []
+
+  for theta_index, theta in enumerate(thetas):
+    ring = [bt.c.get_gain(0, theta_index, phi_index) for phi_index, phi in enumerate(phis)]
+    rings.append(ring)
+             
+  max_gain = bt.c.get_gain_max(0)
+  min_gain = bt.c.get_gain_min(0)
+
+  del bt
+
+  return rings, max_gain, min_gain, thetas, phis
+
 
 
 
@@ -301,6 +332,27 @@ def sweep_freq(antenna_builder, *, z0=200, fn=None):
 
   save_or_show(plt, fn)
 
+
+def sweep_gain(antenna_builder, nm, rng, npoints=21, fn=None):
+
+  xs = np.linspace(rng[0],rng[1],npoints)
+
+  gs = []
+  for x in xs:
+    antenna_builder.params[nm] = x
+    _, max_gain, _, _, _ = get_elevation(antenna_builder)
+    gs.append(max_gain)
+
+  gs = np.array(gs)
+  
+  fig, ax0 = plt.subplots()
+  color = 'tab:red'
+  ax0.set_xlabel(nm)
+  ax0.set_ylabel('max_gain', color=color)
+  ax0.tick_params(axis='y', labelcolor=color)
+  ax0.plot(xs, gs, color=color)
+
+  save_or_show(plt, fn)
 
 def sweep(antenna_builder, nm, rng, npoints=21, fn=None):
 

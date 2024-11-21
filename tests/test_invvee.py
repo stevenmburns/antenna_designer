@@ -12,6 +12,15 @@ def test_invvee_sweep_length():
 def test_invvee_sweep_slope():
   ant.sweep(InvVeeBuilder(**get_invvee_data()), 'slope', (.2,1), fn='invvee_sweep_slope.pdf')
 
+def test_invvee_sweep_gain_freq():
+  ant.sweep_gain(InvVeeBuilder(**get_invvee_data()), 'freq', (28,30), fn='invvee_sweep_gain_freq.pdf')
+
+def test_invvee_sweep_gain_length():
+  ant.sweep_gain(InvVeeBuilder(**get_invvee_data()), 'length', (4,6), fn='invvee_sweep_gain_length.pdf')
+
+def test_invvee_sweep_gain_slope():
+  ant.sweep_gain(InvVeeBuilder(**get_invvee_data()), 'slope', (.2,1), fn='invvee_sweep_gain_slope.pdf')
+
 
 def test_invvee_optimize():
 

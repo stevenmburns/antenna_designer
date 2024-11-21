@@ -3,16 +3,26 @@ from antenna import AntennaBuilder
 import math
 
 def get_bowtie_data():
-  return { 'freq': 28.57, 'slope_top': .658, 'slope_bot': .512, 'base': 7, 'length_top': 5.771, 'length_bot': 5.68}
+  return { 'freq': 28.57,
+           'slope_top': .658,
+           'slope_bot': .512,
+           'base': 7,
+           'length_top': 5.771,
+           'length_bot': 5.68,
+           'del_y': 4,
+           'del_z': 2
+  }
 
 class BowtieBuilder(AntennaBuilder):
-  def __init__(self, freq, slope_top, slope_bot, base, length_top, length_bot):
+  def __init__(self, freq, slope_top, slope_bot, base, length_top, length_bot, del_y, del_z):
     super().__init__(freq)
     self.params['slope_top'] = slope_top
     self.params['slope_bot'] = slope_bot
     self.params['base'] = base
     self.params['length_top'] = length_top
     self.params['length_bot'] = length_bot
+    self.params['del_y'] = del_y
+    self.params['del_z'] = del_z
 
   def build_wires(self):
     eps = 0.05
@@ -44,10 +54,10 @@ class BowtieBuilder(AntennaBuilder):
     tups_bot = element(self.length_bot, self.slope_bot)
 
     new_tups = []
-    for yoff in [-4, 4]:
-      zoff = self.base+2
+    for yoff in (-self.del_y, self.del_y):
+      zoff = self.base+self.del_z
       new_tups.extend([((0, y0+yoff, z0+zoff), (0, y1+yoff, z1+zoff), ns, ex) for ((y0, z0), (y1, z1), ns, ex) in tups_top])
-      zoff = self.base-2
+      zoff = self.base-self.del_z
       new_tups.extend([((0, y0+yoff, z0+zoff), (0, y1+yoff, z1+zoff), ns, ex) for ((y0, z0), (y1, z1), ns, ex) in tups_bot])
 
     return new_tups
