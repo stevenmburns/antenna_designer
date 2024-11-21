@@ -8,4 +8,4 @@ jobs:
       - name: load code
         uses: actions/checkout@v4
       - name: run tests
-        run: pytest -vv --durations=0 -- tests/dipole.py
+        run: /bin/bash -c "source /opt/.venv/bin/activate && pytest -vv --durations=0 -- tests/dipole.py"
