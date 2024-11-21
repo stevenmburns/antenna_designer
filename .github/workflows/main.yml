@@ -1,0 +1,11 @@
+on: [push]
+
+jobs:
+  antenna_design_job:
+    runs-on: stevenmburns/antenna_design_base_with_pynec:latest
+    name: Python tests for antenna_design
+    steps:
+      - name: load code
+        uses: actions/checkout@v4
+      - name: run tests
+        run: pytest -vv --durations=0 -- tests/dipole.py
