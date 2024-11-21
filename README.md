@@ -10,10 +10,14 @@ The compile and run:
 pytest -vv --durations=0 -- tests/
 ```
 
-There is a `Dockerfile` to automate installation and document the necessary packages.
-To build the docker image, try:
+There are dockerfiles to automate and document the necessary packages installations.
+To build the docker image locally, try:
 ```bash
-docker build --target antenna_design --tag stevenmburns/antenna_design .
+docker build -f Dockerfile.local --target antenna_design --tag stevenmburns/antenna_design .
+```
+or, to use the cached environment container on docker hub:
+```bash
+docker build -f Dockerfile.dev --target antenna_design --tag stevenmburns/antenna_design .
 ```
 To run some of the test in docker, try:
 ```bash
