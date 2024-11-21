@@ -24,4 +24,7 @@ To run some of the test in docker, try:
 docker run -it stevenmburns/antenna_design /bin/bash -c "source /opt/.venv/bin/activate && cd /opt/antenna_design && pytest -vv --durations=0 -- tests/test_dipole.py tests/test_invvee.py" 
 ```
 
+The tests are also running in Github Actions:
+[![.github/workflows/main.yml](https://github.com/stevenmburns/antenna_design/actions/workflows/main.yml/badge.svg)](https://github.com/stevenmburns/antenna_design/actions/workflows/main.yml)
+
 
