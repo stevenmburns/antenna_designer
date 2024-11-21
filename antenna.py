@@ -1,13 +1,22 @@
-from PyNEC import *
-import math
+import PyNEC as nec
 import numpy as np
 
-from scipy.optimize import minimize_scalar, minimize
+#from scipy.optimize import minimize_scalar
+from scipy.optimize import minimize
 
 import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
-from mpl_toolkits.mplot3d import axes3d
+#from matplotlib.collections import LineCollection
+#from mpl_toolkits.mplot3d import axes3d
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
+
+def save_or_show(plt, fn):
+  if fn is not None:
+    plt.savefig(fn)
+  else:
+    plt.show()
+
+  plt.close()
+
 
 class AntennaBuilder:
   def __init__(self, freq):
@@ -37,7 +46,7 @@ class Antenna:
   def __getattr__(self, nm):
     return self.params.__getattr__(nm)
 
-  def draw(self):
+  def draw(self, fn=None):
 
     pairs = [(p0, p1) for p0, p1, _, _ in self.tups]
 
@@ -50,7 +59,8 @@ class Antenna:
     ax.add_collection3d(lc)
     ax.autoscale(axis='x')
     ax.set_aspect('equal')
-    plt.show()
+
+    save_or_show(plt, fn)
 
   def geometry(self):
 
@@ -58,7 +68,7 @@ class Antenna:
     ground_conductivity = 0.002
     ground_dielectric = 10
 
-    self.c = nec_context()
+    self.c = nec.nec_context()
 
     geo = self.c.get_geometry()
 
@@ -133,6 +143,8 @@ def get_pattern_rings(antenna_builder):
   return rings, max_gain, min_gain, thetas, phis
 
 
+
+
 def compare_patterns(antenna_builders, elevation_angle=15, fn=None):
   rings_lst = []
 
@@ -159,10 +171,7 @@ def compare_patterns(antenna_builders, elevation_angle=15, fn=None):
   for elevation in elevations:
     axes[1].plot(np.deg2rad(90-thetas),elevation,marker='')
 
-  if fn is not None:
-    plt.savefig(fn)
-  else:
-    plt.show()
+  save_or_show(plt, fn)
 
 def pattern(antenna_builder, fn=None):
 
@@ -174,8 +183,8 @@ def pattern(antenna_builder, fn=None):
 
 #  ax = fig.add_subplot()
 
-  X = np.cos(np.deg2rad(phis))
-  Y = np.sin(np.deg2rad(phis))
+  #X = np.cos(np.deg2rad(phis))
+  #Y = np.sin(np.deg2rad(phis))
 
   #R = 10**(np.array(rings[-5])/10)
 
@@ -183,10 +192,11 @@ def pattern(antenna_builder, fn=None):
   axes[0].set_aspect(1)
 
   for i in range(len(rings)):
-    R = np.maximum(np.array(rings[i]) - min_gain, 0)
+    pass
+    #R = np.maximum(np.array(rings[i]) - min_gain, 0)
     #ax.plot(R*X, R*Y)
 
-  R = max_gain-min_gain
+  #R = max_gain-min_gain
   #ax.plot(R*X, R*Y)
 
 
@@ -199,10 +209,7 @@ def pattern(antenna_builder, fn=None):
   axes[1].set_aspect(1)
   axes[1].plot(np.deg2rad(90-thetas),elevation,marker='')
 
-  if fn is not None:
-    plt.savefig(fn)
-  else:
-    plt.show()
+  save_or_show(plt, fn)
 
 
 def pattern3d(antenna_builder, fn=None):
@@ -244,10 +251,7 @@ def pattern3d(antenna_builder, fn=None):
   ax.set_ylabel('Y')
   ax.set_zlabel('Z')
 
-  if fn is not None:
-    plt.savefig(fn)
-  else:
-    plt.show()
+  save_or_show(plt, fn)
 
 
 
@@ -295,10 +299,7 @@ def sweep_freq(antenna_builder, *, z0=200, fn=None):
 
   fig.tight_layout()
 
-  if fn is not None:
-    plt.savefig(fn)
-  else:
-    plt.show()
+  save_or_show(plt, fn)
 
 
 def sweep(antenna_builder, nm, rng, npoints=21, fn=None):
@@ -329,10 +330,7 @@ def sweep(antenna_builder, nm, rng, npoints=21, fn=None):
 
   fig.tight_layout()
 
-  if fn is not None:
-    plt.savefig(fn)
-  else:
-    plt.show()
+  save_or_show(plt, fn)
 
 
 def optimize(antenna_builder, independent_variable_names, z0=50, resonance=False):

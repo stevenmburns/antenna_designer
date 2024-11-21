@@ -1,4 +1,4 @@
-from antenna import *
+from antenna import AntennaBuilder
 
 import math
 

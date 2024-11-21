@@ -1,4 +1,3 @@
-from antenna import *
 from dipole import DipoleBuilder
 
 def test_unit_params():

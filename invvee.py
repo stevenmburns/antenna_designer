@@ -1,5 +1,5 @@
-from antenna import *
-
+from antenna import AntennaBuilder
+import math
 
 def get_invvee_data():
   return { 'freq': 28.57, 'base': 7, 'length': 5.084, 'slope': 0.604}

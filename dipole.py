@@ -1,4 +1,4 @@
-from antenna import *
+from antenna import AntennaBuilder
 
 def get_dipole_data():
   return { 'freq': 28.57, 'base': 7, 'length': 5.032}

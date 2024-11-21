@@ -1,4 +1,6 @@
-from antenna import *
+from antenna import AntennaBuilder
+
+import math
 
 def get_bowtie_data():
   return { 'freq': 28.57, 'slope_top': .658, 'slope_bot': .512, 'base': 7, 'length_top': 5.771, 'length_bot': 5.68}
