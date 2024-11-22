@@ -146,10 +146,11 @@ def get_pattern_rings(antenna_builder):
 
   return rings, max_gain, min_gain, thetas, phis
 
-def get_elevation(antenna_builder):
+def get_build_and_get_elevation(antenna_builder):
   bt = Antenna(antenna_builder)
   bt.set_freq_and_execute()
 
+def get_elevation(bt):
   del_theta = 1
   del_phi = 360
   n_theta = 90
@@ -184,11 +185,9 @@ def compare_patterns(antenna_builders, elevation_angle=15, fn=None):
     rings, max_gain, min_gain, thetas, phis = get_pattern_rings(antenna_builder)
     rings_lst.append(rings)
 
-
-
   fig, axes = plt.subplots(ncols=2, subplot_kw={'projection': 'polar'})
 
-  axes[0].set_aspect(1)
+  axes[0].set_rticks([-12, -6, 0, 6, 12])
 
   for rings in rings_lst:
     for theta, ring in list(zip(thetas, rings)):
@@ -197,12 +196,13 @@ def compare_patterns(antenna_builders, elevation_angle=15, fn=None):
 
   axes[0].legend(loc="lower left")
 
-  axes[1].set_aspect(1)
-
   n = len(rings_lst[0][0])
   assert (n-1) % 2 == 0
   elevations = [list(reversed([ring[0] for ring in rings]))+[ring[(n-1)//2] for ring in rings] for rings in rings_lst]
   el_thetas = list(reversed(list(90-thetas))) + list(90+thetas)
+
+  axes[1].set_rticks([-12, -6, 0, 6, 12])
+
   for elevation in elevations:
     axes[1].plot(np.deg2rad(el_thetas),elevation,marker='')
 
@@ -342,7 +342,7 @@ def sweep_gain(antenna_builder, nm, rng, npoints=21, fn=None):
   gs = []
   for x in xs:
     antenna_builder.params[nm] = x
-    _, max_gain, _, _, _ = get_elevation(antenna_builder)
+    _, max_gain, _, _, _ = build_and_get_elevation(antenna_builder)
     gs.append(max_gain)
 
   gs = np.array(gs)
@@ -362,6 +362,7 @@ def sweep(antenna_builder, nm, rng, npoints=21, fn=None):
 
   zs = []
   for x in xs:
+    print(nm, x)
     antenna_builder.params[nm] = x
     zs.append(Antenna(antenna_builder).impedance())
   zs = np.array(zs)
@@ -387,14 +388,18 @@ def sweep(antenna_builder, nm, rng, npoints=21, fn=None):
   save_or_show(plt, fn)
 
 
-def optimize(antenna_builder, independent_variable_names, z0=50, resonance=False):
+def optimize(antenna_builder, independent_variable_names, z0=50, resonance=False, opt_gain=False):
 
   def objective(independent_variables):
 
       for v, nm in zip(independent_variables, independent_variable_names):
         antenna_builder.params[nm] = v
 
-      zs = Antenna(antenna_builder).impedance()
+      a = Antenna(antenna_builder)
+      zs = a.impedance()
+      _, max_gain, _, _, _ = get_elevation(a)      
+      del a
+
 
       for z in zs:
         reflection_coefficient = (z - z0) / (z + z0)
@@ -403,13 +408,21 @@ def optimize(antenna_builder, independent_variable_names, z0=50, resonance=False
         rho_db = np.log10(rho)*10.0
 
 
-        print("Impedance at %s: (%.3f,%+.3fj) Ohms rho=%.4f swr=%.4f, rho_db=%.3f" % (str(antenna_builder), z.real, z.imag, rho, swr, rho_db))
+        if opt_gain:
+          print("Impedance at %s: (%.3f,%+.3fj) Ohms rho=%.4f swr=%.4f, rho_db=%.3f max_gain=%.2f" % (str(antenna_builder), z.real, z.imag, rho, swr, rho_db, max_gain))
+        else:
+          print("Impedance at %s: (%.3f,%+.3fj) Ohms rho=%.4f swr=%.4f, rho_db=%.3f" % (str(antenna_builder), z.real, z.imag, rho, swr, rho_db))
 
-
+      res = 0
       if resonance:
-        return sum([abs(z.imag) for z in zs])
+        res += sum([abs(z.imag) for z in zs])
       else:
-        return sum([abs(z - z0) for z in zs])
+        res += sum([abs(z - z0) for z in zs])
+
+      if opt_gain:
+        res -= 10*max_gain
+
+      return res
 
   #'Nelder-Mead'
   #'Powell', options={'maxiter':100, 'disp': True, 'xtol': 0.0001}
