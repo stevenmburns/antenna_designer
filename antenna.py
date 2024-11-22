@@ -57,6 +57,46 @@ class AntennaBuilder:
 
     save_or_show(plt, fn)
 
+class Array2x2Builder(AntennaBuilder):
+  def __init__(self, element_builder):
+    self.element_builder = element_builder
+    super().__init__()
+
+  def build_wires(self):
+    elem_params = self.element_builder.default_params
+    elem_params_keys = set(elem_params.keys())
+
+    changed_keys = set()
+    for k,v in self.params.items():
+      if k not in elem_params_keys:
+        if k.endswith('_top') or k.endswith('_bot'):
+          elem_key = k[:-4]
+          assert elem_key in elem_params_keys
+          changed_keys.add(elem_key)
+
+    def build_element_wires(suffix):
+      local_element_params = dict(elem_params)
+      for k,v in self.params.items():    
+        if k in elem_params_keys and k not in changed_keys:
+          local_element_params[k] = v
+
+      for k in changed_keys:
+        local_element_params[k] = self.params[k + suffix]
+
+      element_builder_local = self.element_builder(local_element_params)
+
+      return element_builder_local.build_wires()
+
+    tups_top = build_element_wires('_top')
+    tups_bot = build_element_wires('_bot')
+
+    new_tups = []
+    for yoff in (-self.del_y, self.del_y):
+      for zoff, tups in ((self.del_z, tups_top), (-self.del_z, tups_bot)):
+        new_tups.extend([((x0, y0+yoff, z0+zoff), (x1, y1+yoff, z1+zoff), ns, ex) for ((x0, y0, z0), (x1, y1, z1), ns, ex) in tups])
+
+    return new_tups
+
 
 class Antenna:
   def __init__(self, antenna_builder):
