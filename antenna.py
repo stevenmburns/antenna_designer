@@ -58,9 +58,9 @@ class AntennaBuilder:
     save_or_show(plt, fn)
 
 class Array2x2Builder(AntennaBuilder):
-  def __init__(self, element_builder):
+  def __init__(self, element_builder, params=None):
     self.element_builder = element_builder
-    super().__init__()
+    super().__init__(params)
 
   def build_wires(self):
     elem_params = self.element_builder.default_params
