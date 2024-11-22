@@ -40,9 +40,6 @@ class AntennaBuilder:
   def draw(self, tups, fn=None):
 
     pairs = [(p0, p1) for p0, p1, _, _ in tups]
-
-
-
     print(pairs)
 
     lc = Line3DCollection(pairs, colors=(1, 0, 0, 1), linewidths=1)

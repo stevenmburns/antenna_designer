@@ -7,7 +7,7 @@ from moxon import MoxonBuilder
 
 def test_compare():
     builders = (
-        MoxonBuilder(),
+        DipoleBuilder(),
         InvVeeBuilder(),
         BowtieBuilder(),
         BowtieSingleBuilder(),
