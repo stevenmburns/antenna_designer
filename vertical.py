@@ -1,15 +1,13 @@
 from antenna import AntennaBuilder
-
 import math
-
-def get_vertical_data():
-  return { 'freq': 28.57, 'length': 2.619, 'base': .5}
+from types import MappingProxyType
 
 class VerticalBuilder(AntennaBuilder):
-  def __init__(self, freq, base, length):
-    super().__init__(freq)
-    self.params['base'] = base
-    self.params['length'] = length
+  default_params = MappingProxyType({
+    'freq': 28.57,
+    'length': 2.619,
+    'base': .5
+  })
 
   def build_wires(self):
     eps = 0.05

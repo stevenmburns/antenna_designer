@@ -1,15 +1,14 @@
 from antenna import AntennaBuilder
 import math
-
-def get_invvee_data():
-  return { 'freq': 28.57, 'base': 7, 'length': 5.084, 'slope': 0.604}
+from types import MappingProxyType
 
 class InvVeeBuilder(AntennaBuilder):
-  def __init__(self, freq, slope, base, length):
-    super().__init__(freq)
-    self.params['slope'] = slope
-    self.params['base'] = base
-    self.params['length'] = length
+  default_params = MappingProxyType({
+    'freq': 28.57,
+    'base': 7,
+    'length': 5.084,
+    'slope': 0.604
+  })
 
   def build_wires(self):
     eps = 0.05

@@ -19,9 +19,14 @@ def save_or_show(plt, fn):
 
 
 class AntennaBuilder:
-  def __init__(self, freq):
-    self.params = {}
-    self.params['freq'] = freq
+  def __init__(self, params=None):
+    if params is None:
+      self.params = dict(self.__class__.default_params)
+    else:
+      self.params = dict(params)
+
+    "Check that params key's are legal"
+    assert all(k in self.__class__.default_params for k in self.params.keys())
 
   def __getattr__(self, nm):
     return self.params[nm]
@@ -146,9 +151,10 @@ def get_pattern_rings(antenna_builder):
 
   return rings, max_gain, min_gain, thetas, phis
 
-def get_build_and_get_elevation(antenna_builder):
+def build_and_get_elevation(antenna_builder):
   bt = Antenna(antenna_builder)
   bt.set_freq_and_execute()
+  return get_elevation(bt)
 
 def get_elevation(bt):
   del_theta = 1
@@ -389,6 +395,8 @@ def sweep(antenna_builder, nm, rng, npoints=21, fn=None):
 
 
 def optimize(antenna_builder, independent_variable_names, z0=50, resonance=False, opt_gain=False):
+
+  print(antenna_builder.params)
 
   def objective(independent_variables):
 

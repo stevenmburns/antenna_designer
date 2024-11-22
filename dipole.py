@@ -1,13 +1,13 @@
 from antenna import AntennaBuilder
-
-def get_dipole_data():
-  return { 'freq': 28.57, 'base': 7, 'length': 5.032}
+from types import MappingProxyType
 
 class DipoleBuilder(AntennaBuilder):
-  def __init__(self, freq, base, length):
-    super().__init__(freq)
-    self.params['base'] = base
-    self.params['length'] = length
+  default_params = MappingProxyType({
+    'freq': 28.57,
+    'base': 7,
+    'length': 5.032
+  })
+
 
   def build_wires(self):
     eps = 0.05
