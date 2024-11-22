@@ -51,3 +51,10 @@ def test_bowtiearray_optimize():
   params = ant.optimize(BowtieArrayBuilder(gold_params), ['length_top', 'slope_top', 'length_bot', 'slope_bot'], z0=200)
 
   assert all(math.fabs(params[k]-v) < 0.01 for k, v in gold_params.items())
+
+def test_bowtiearray_optimize_for_gain():
+  gold_params = BowtieArrayBuilder.default_params
+
+  params = ant.optimize(BowtieArrayBuilder(gold_params), ['length_top', 'slope_top', 'length_bot', 'slope_bot', 'del_y', 'del_z'], z0=200, resonance=True, opt_gain=True)
+
+  assert all(math.fabs(params[k]-v) < 0.01 for k, v in gold_params.items())

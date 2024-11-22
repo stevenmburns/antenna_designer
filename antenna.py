@@ -94,6 +94,54 @@ class Array2x2Builder(AntennaBuilder):
 
     return new_tups
 
+class Array2x4Builder(AntennaBuilder):
+  def __init__(self, element_builder, params=None):
+    self.element_builder = element_builder
+    super().__init__(params)
+
+  def build_wires(self):
+    elem_params = self.element_builder.default_params
+    elem_params_keys = set(elem_params.keys())
+
+    suffixes = ['_itop', '_ibot', '_otop', '_obot']
+
+    changed_keys = set()
+    for k,v in self.params.items():
+      if k not in elem_params_keys:
+        if any(k.endswith(suffix) for suffix in suffixes):
+          elem_key = k[:-5]
+          assert elem_key in elem_params_keys
+          changed_keys.add(elem_key)
+
+    def build_element_wires(suffix):
+      local_element_params = dict(elem_params)
+      for k,v in self.params.items():    
+        if k in elem_params_keys and k not in changed_keys:
+          local_element_params[k] = v
+
+      for k in changed_keys:
+        local_element_params[k] = self.params[k + suffix]
+
+      element_builder_local = self.element_builder(local_element_params)
+
+      return element_builder_local.build_wires()
+
+    tups_itop = build_element_wires('_itop')
+    tups_otop = build_element_wires('_otop')
+    tups_ibot = build_element_wires('_ibot')
+    tups_obot = build_element_wires('_obot')
+
+    new_tups = []
+    for yoff, pairs in ((-3*self.del_y, ((self.del_z, tups_otop), (-self.del_z, tups_obot))),
+                        (-1*self.del_y, ((self.del_z, tups_itop), (-self.del_z, tups_ibot))), 
+                        ( 1*self.del_y, ((self.del_z, tups_itop), (-self.del_z, tups_ibot))),
+                        ( 3*self.del_y, ((self.del_z, tups_otop), (-self.del_z, tups_obot)))
+    ):
+      for zoff, tups in pairs:
+        new_tups.extend([((x0, y0+yoff, z0+zoff), (x1, y1+yoff, z1+zoff), ns, ex) for ((x0, y0, z0), (x1, y1, z1), ns, ex) in tups])
+
+    return new_tups
+
 
 class Antenna:
   def __init__(self, antenna_builder):
@@ -251,7 +299,7 @@ def compare_patterns(antenna_builders, elevation_angle=15, fn=None):
 
   save_or_show(plt, fn)
 
-def pattern(antenna_builder, fn=None):
+def pattern(antenna_builder, elevation_angle=15, fn=None):
 
   rings, max_gain, min_gain, thetas, phis = get_pattern_rings(antenna_builder)
 
@@ -259,33 +307,22 @@ def pattern(antenna_builder, fn=None):
 
   fig, axes = plt.subplots(ncols=2, subplot_kw={'projection': 'polar'})
 
-#  ax = fig.add_subplot()
+  axes[0].set_rticks([-12, -6, 0, 6, 12])
 
-  #X = np.cos(np.deg2rad(phis))
-  #Y = np.sin(np.deg2rad(phis))
-
-  #R = 10**(np.array(rings[-5])/10)
-
-
-  axes[0].set_aspect(1)
-
-  for i in range(len(rings)):
-    pass
-    #R = np.maximum(np.array(rings[i]) - min_gain, 0)
-    #ax.plot(R*X, R*Y)
-
-  #R = max_gain-min_gain
-  #ax.plot(R*X, R*Y)
-
-
-  for theta, ring in list(zip(thetas, rings))[-7:-1]:
-    print(90-theta, np.max(ring))
-    axes[0].plot(np.deg2rad(phis),ring,marker='',label=f"{(90-theta):.0f}")
+  for theta, ring in list(zip(thetas, rings)):
+    if abs(theta-(90-elevation_angle)) < 0.1:
+      axes[0].plot(np.deg2rad(phis),ring,marker='',label=f"{(90-theta):.0f}")
 
   axes[0].legend(loc="lower left")
 
-  axes[1].set_aspect(1)
-  axes[1].plot(np.deg2rad(90-thetas),elevation,marker='')
+  n = len(rings[0])
+  assert (n-1) % 2 == 0
+  elevation = list(reversed([ring[0] for ring in rings]))+[ring[(n-1)//2] for ring in rings]
+  el_thetas = list(reversed(list(90-thetas))) + list(90+thetas)
+
+  axes[1].set_rticks([-12, -6, 0, 6, 12])
+
+  axes[1].plot(np.deg2rad(el_thetas),elevation,marker='')
 
   save_or_show(plt, fn)
 
@@ -465,7 +502,7 @@ def optimize(antenna_builder, independent_variable_names, z0=50, resonance=False
         res += sum([abs(z - z0) for z in zs])
 
       if opt_gain:
-        res -= 10*max_gain
+        res -= 100*max_gain
 
       return res
 

@@ -1,6 +1,6 @@
 from antenna import compare_patterns
 from dipole import DipoleBuilder
-from invvee import InvVeeBuilder
+from invvee import InvVeeBuilder, InvveeArrayBuilder
 from hexbeam import HexbeamBuilder, get_hexbeam_data_opt
 from bowtie import BowtieBuilder, BowtieArrayBuilder
 from moxon import MoxonBuilder
@@ -23,6 +23,11 @@ def test_compare_hexbeams():
 
 def test_compare_bowtie_single_vs_array():
     builder0 = BowtieBuilder()
+    builder1 = BowtieArrayBuilder()
+    compare_patterns((builder0, builder1), elevation_angle=15)
+
+def test_compare_bowtie_invvee_arrays():
+    builder0 = InvveeArrayBuilder()
     builder1 = BowtieArrayBuilder()
     compare_patterns((builder0, builder1), elevation_angle=15)
 
