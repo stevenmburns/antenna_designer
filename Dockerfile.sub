@@ -31,26 +31,23 @@ RUN \
     pip install --upgrade pip -q && \
     pip install setuptools numpy scipy pytest matplotlib -q"
 
-FROM antenna_design_base_with_python as antenna_design_base_with_pynec
+FROM antenna_design_base_with_python as antenna_design_base
 
 RUN \
     /bin/bash -c "source /opt/.venv/bin/activate && \
     cd /opt && \
-    git clone https://github.com/tmolteno/python-necpp.git && \
-    cd python-necpp && \
+    git clone https://github.com/stevenmburns/antenna_design && \
+    cd antenna_design && \
     git submodule init && \
-    git submodule update --remote && \
+    git submodule update --remote --recursive && \
+    cd python-necpp && \    
     cd PyNEC && \
     ln -s ../necpp_src . && \
     cd ../necpp_src && \
     make -f Makefile.git && \
     ./configure --without-lapack && \
-    cd /opt/python-necpp/PyNEC && \
+    cd /opt/antenna_design/python-necpp/PyNEC && \
     swig3.0 -Wall -v -c++ -python PyNEC.i && \
     python setup.py build && \
     python setup.py install"
-
-FROM antenna_design_base_with_pynec as antenna_design
-
-COPY . /opt/antenna_design
 
