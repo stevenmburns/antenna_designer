@@ -34,14 +34,8 @@ jobs:
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Setup C++
-      uses: actions/setup-cpp@v3
-      with:
-        compiler: g++
-    - name: Setup Fortran
-      uses: fortran-lang/setup-fortran@v2
-      with:
-        fortran-compiler: gfortran
+    - name: install g++ and fortran
+        sudo apt install -y g++ gfortran swig3.0 git build-essential automake libtool
 
     - name: Compile
       run: |
