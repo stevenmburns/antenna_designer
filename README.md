@@ -25,7 +25,7 @@ docker run -it stevenmburns/antenna_design /bin/bash -c "source /opt/.venv/bin/a
 ```
 
 The tests are also running in Github Actions:
-[![.github/workflows/main.yml](https://github.com/stevenmburns/antenna_design/actions/workflows/main.yml/badge.svg)](https://github.com/stevenmburns/antenna_design/actions/workflows/main.yml)
+[![Python application](https://github.com/stevenmburns/antenna_design/actions/workflows/python-app.yml/badge.svg)](https://github.com/stevenmburns/antenna_design/actions/workflows/python-app.yml)
 
 [![Ruff](https://github.com/stevenmburns/antenna_design/actions/workflows/ruff.yml/badge.svg)](https://github.com/stevenmburns/antenna_design/actions/workflows/ruff.yml)
 
