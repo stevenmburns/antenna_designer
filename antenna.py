@@ -368,11 +368,11 @@ def pattern3d(antenna_builder, fn=None):
 
   save_or_show(plt, fn)
 
-def sweep_freq(antenna_builder, *, z0=200, rng=(28, 29), fn=None):
+def sweep_freq(antenna_builder, *, z0=200, rng=(28, 29), npoints=21, fn=None):
 
   min_freq = rng[0]
   max_freq = rng[1]
-  n_freq = 20
+  n_freq = npoints-1
   del_freq = (max_freq- min_freq)/n_freq
 
   xs = np.linspace(min_freq, max_freq, n_freq+1)

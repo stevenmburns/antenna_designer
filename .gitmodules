@@ -1,0 +1,3 @@
+[submodule "python-necpp"]
+	path = python-necpp
+	url = https://github.com/tmolteno/python-necpp.git
