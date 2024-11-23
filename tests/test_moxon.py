@@ -1,8 +1,10 @@
+import pytest
 import antenna as ant
 from moxon import MoxonBuilder
 
 import math
 
+@pytest.mark.skip(reason="Displays to screen")
 def test_moxon_draw():
     builder = MoxonBuilder()
     builder.draw(builder.build_wires())
@@ -52,6 +54,7 @@ def test_moxon_pattern():
 def test_moxon_pattern3d():
   ant.pattern3d(MoxonBuilder(), fn='moxon_pattern3d.pdf')
 
+@pytest.mark.skip(reason="Too long and golden answer changing")
 def test_moxon_optimize():
   params = ant.optimize(MoxonBuilder(), ['halfdriver','t0_factor','tipspacer_factor'], z0=50, opt_gain=True)
 

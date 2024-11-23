@@ -1,7 +1,7 @@
 from antenna import AntennaBuilder
 import math
 from types import MappingProxyType
-from icecream import ic
+# from icecream import ic
 
 class FandipoleBuilder(AntennaBuilder):
   old_params = MappingProxyType({
@@ -66,9 +66,9 @@ class FandipoleBuilder(AntennaBuilder):
     ) for (x, y) in lst]
 
 
-    ls = [l/2 for l in [self.length_10, self.length_12, self.length_15, self.length_17, self.length_20]]
+    ls = [q/2 for q in [self.length_10, self.length_12, self.length_15, self.length_17, self.length_20]]
 
-    Ds = [(0, S[1]+l*math.sqrt(1+self.slope**2), -self.slope*l*math.sqrt(1+self.slope**2)) for l in ls]
+    Ds = [(0, S[1]+q*math.sqrt(1+self.slope**2), -self.slope*q*math.sqrt(1+self.slope**2)) for q in ls]
 
     B = [(D[0]+radius*x,
           D[1]+radius*y*self.slope*math.sqrt(1+self.slope**2),

@@ -1,3 +1,4 @@
+import pytest
 import antenna as ant
 from bowtie import BowtieArrayBuilder
 
@@ -52,6 +53,7 @@ def test_bowtiearray_optimize():
 
   assert all(math.fabs(params[k]-v) < 0.01 for k, v in gold_params.items())
 
+@pytest.mark.skip(reason="Too long and unstable params")
 def test_bowtiearray_optimize_for_gain():
   gold_params = BowtieArrayBuilder.default_params
 

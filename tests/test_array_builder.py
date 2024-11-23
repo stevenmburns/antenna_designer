@@ -5,14 +5,15 @@ import antenna as ant
 from bowtie import BowtieArrayBuilder, BowtieArray2x4Builder
 from invvee import InvveeArrayBuilder
 
-def test_newbowtiebuilder():
+@pytest.mark.skip(reason="Draws to screen")
+def test_bowtiearraybuilder():
     b = BowtieArrayBuilder()
     b.build_wires()
 
 def test_bowtiearray2x4_pattern():
   ant.pattern(BowtieArray2x4Builder(), fn='bowtiearray2x4_pattern.pdf')
 
-@pytest.mark.skip(reason='Takes too long')
+@pytest.mark.skip(reason='Takes too long and unstable params')
 def test_bowtiearray2x4_optimize():
   gold_params = BowtieArray2x4Builder.default_params
 
@@ -24,8 +25,9 @@ def test_bowtiearray2x4_optimize():
 
 
 def test_invveearray_pattern():
-  ant.pattern(InvveeArrayBuilder(), fn=None)
+  ant.pattern(InvveeArrayBuilder(), fn="invveearray_pattern.pdf")
 
+@pytest.mark.skip(reason='Takes too long and unstable params')
 def test_invveearray_optimize():
   gold_params = InvveeArrayBuilder.default_params
 

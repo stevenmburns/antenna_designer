@@ -52,4 +52,4 @@ jobs:
 
     - name: Test with pytest
       run: |
-        pytest -- tests/test_dipole.py
+        pytest -vv --durations=0 -- tests/

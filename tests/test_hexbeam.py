@@ -1,8 +1,10 @@
+import pytest
 import antenna as ant
 from hexbeam import HexbeamBuilder, get_hexbeam_data_opt
 
 import math
 
+@pytest.mark.skip(reason="Draws to screen")
 def test_hexbeam_draw():
     builder = HexbeamBuilder()
     builder.draw(builder.build_wires())

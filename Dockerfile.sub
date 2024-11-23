@@ -45,10 +45,10 @@ RUN \
     git submodule update --remote && \
     cd PyNEC && \
     ln -s ../necpp_src . && \
-    cd ../necpp_src && \
+    pushd ../necpp_src && \
     make -f Makefile.git && \
     ./configure --without-lapack && \
-    cd /opt/antenna_design/python-necpp/PyNEC && \
+    popd && \
     swig3.0 -Wall -v -c++ -python PyNEC.i && \
     python setup.py build && \
     python setup.py install"
