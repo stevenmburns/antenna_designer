@@ -29,7 +29,7 @@ RUN \
     /bin/bash -c "python3 -m venv /opt/.venv && \
     source /opt/.venv/bin/activate && \
     pip install --upgrade pip -q && \
-    pip install setuptools numpy scipy pytest matplotlib -q"
+    pip install setuptools numpy scipy pytest matplotlib icecream -q"
 
 FROM antenna_design_base_with_python as antenna_design_base
 
@@ -39,8 +39,10 @@ RUN \
     git clone https://github.com/stevenmburns/antenna_design && \
     cd antenna_design && \
     git submodule init && \
-    git submodule update --remote --recursive && \
+    git submodule update --remote && \
     cd python-necpp && \    
+    git submodule init && \
+    git submodule update --remote && \
     cd PyNEC && \
     ln -s ../necpp_src . && \
     cd ../necpp_src && \
