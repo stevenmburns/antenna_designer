@@ -51,7 +51,7 @@ jobs:
         make -f Makefile.git
         ./configure --without-lapack
         popd
-        swig3.0 -Wwll -v -c++ -python PyNEC.i
+        swig3.0 -Wall -v -c++ -python PyNEC.i
         python setup.py build
         python setup.py install
 
