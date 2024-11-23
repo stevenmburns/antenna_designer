@@ -45,9 +45,9 @@ jobs:
         cd python-necpp
         git submodule init
         git submodule update --remote
-        pushd PyNEC
+        cd PyNEC
         ln -s ../necpp_src .
-        cd ../necpp_src
+        pushd ../necpp_src
         make -f Makefile.git
         ./configure --without-lapack
         popd
