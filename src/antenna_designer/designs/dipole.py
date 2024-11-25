@@ -1,7 +1,7 @@
 from .. import AntennaBuilder
 from types import MappingProxyType
 
-class DipoleBuilder(AntennaBuilder):
+class Builder(AntennaBuilder):
   default_params = MappingProxyType({
     'freq': 28.57,
     'base': 7,

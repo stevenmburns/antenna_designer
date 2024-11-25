@@ -3,7 +3,7 @@ from .. import AntennaBuilder
 import math
 from types import MappingProxyType
 
-class VerticalBuilder(AntennaBuilder):
+class Builder(AntennaBuilder):
   default_params = MappingProxyType({
     'freq': 28.57,
     'length': 2.619,

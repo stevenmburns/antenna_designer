@@ -1,7 +1,7 @@
-from antenna_designer.designs.dipole import DipoleBuilder
+from antenna_designer.designs.dipole import Builder
 
 def test_unit_params():
-  dp = DipoleBuilder({'freq':1, 'base':7, 'length':10})
+  dp = Builder({'freq':1, 'base':7, 'length':10})
   assert dp.freq == 1
   assert dp.base == 7
   assert dp.length == 10

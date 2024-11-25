@@ -2,10 +2,8 @@ from .. import AntennaBuilder
 import math
 from types import MappingProxyType
 
-def get_hexbeam_data_opt():
-  return {'freq': 28.57, 'base': 7, 'halfdriver': 2.782539354535098, 'tipspacer_factor': 0.20803460322922357, 't0_factor': 0.07058920808116927}
 
-class HexbeamBuilder(AntennaBuilder):
+class Builder(AntennaBuilder):
   default_params = MappingProxyType({
     'freq': 28.57,
     'base': 7,
@@ -14,6 +12,8 @@ class HexbeamBuilder(AntennaBuilder):
     'tipspacer_factor': 0.1900,
     't0_factor': 0.1171
   })
+
+  opt_params = MappingProxyType({'freq': 28.57, 'base': 7, 'halfdriver': 2.782539354535098, 'tipspacer_factor': 0.20803460322922357, 't0_factor': 0.07058920808116927})
 
   def build_wires(self):
     eps = 0.05

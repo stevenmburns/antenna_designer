@@ -1,8 +1,8 @@
-from .. import AntennaBuilder, Array2x2Builder
+from .. import AntennaBuilder
 import math
 from types import MappingProxyType
 
-class InvVeeBuilder(AntennaBuilder):
+class Builder(AntennaBuilder):
   default_params = MappingProxyType({
     'freq': 28.57,
     'base': 7,
@@ -34,21 +34,3 @@ class InvVeeBuilder(AntennaBuilder):
       new_tups.extend([((0, y0+yoff, z0+zoff), (0, y1+yoff, z1+zoff), ns, ex) for ((y0, z0), (y1, z1), ns, ex) in tups])
 
     return new_tups
-
-class InvveeArrayBuilder(Array2x2Builder):
-  old_params = MappingProxyType({
-    'freq': 28.57,
-    'base': 7,
-    'length_top': 5.084,
-    'length_bot': 5.084,
-    'slope_top': 0.604,
-    'slope_bot': 0.604,
-    'del_y': 4,
-    'del_z': 2
-  })
-
-  default_params = MappingProxyType({ 'freq': 28.57, 'base': 7, 'length_top': 5.242007322397589, 'length_bot': 5.246919973992382, 'slope_top': 0.37787773670163516, 'slope_bot': 0.49423025861394565, 'del_y': 4, 'del_z': 2})
-
-  def __init__(self, params = None):
-    super().__init__(InvVeeBuilder, params)
-

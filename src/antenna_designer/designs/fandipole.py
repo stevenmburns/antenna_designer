@@ -3,7 +3,7 @@ import math
 from types import MappingProxyType
 # from icecream import ic
 
-class FandipoleBuilder(AntennaBuilder):
+class Builder(AntennaBuilder):
   old_params = MappingProxyType({
     'freq': 28.57,
     'base': 7,

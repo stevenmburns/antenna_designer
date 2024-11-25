@@ -1,7 +1,7 @@
 from .. import AntennaBuilder
 from types import MappingProxyType
 
-class MoxonBuilder(AntennaBuilder):
+class Builder(AntennaBuilder):
   original_params = MappingProxyType({
     'freq': 28.57,
     'base': 7,
