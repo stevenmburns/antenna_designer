@@ -53,4 +53,4 @@ RUN \
     python setup.py build && \
     python setup.py install && \
     popd && \
-    pip install -e ."
+    pip install -i https://test.pypi.org/simple/ antenna-designer-stevenmburns==0.0.1"
