@@ -20,6 +20,8 @@ RUN apt-get -qq update && DEBIAN_FRONTEND=noninterative apt-get -qq install \
     libtool \
 &&    apt-get -qq clean
 
+FROM antenna_design_base as antenna_design_base_with_python
+
 # Create virtual environment and install python packages
 # Upgrade pip & install testing dependencies
 # Note: Package dependencies are in setup.py
@@ -27,31 +29,27 @@ RUN \
     /bin/bash -c "python3 -m venv /opt/.venv && \
     source /opt/.venv/bin/activate && \
     pip install --upgrade pip -q && \
-    pip install setuptools numpy scipy pytest matplotlib -q"
+    pip install setuptools numpy scipy pytest matplotlib icecream -q"
 
-FROM antenna_design_base as antenna_design
+FROM antenna_design_base_with_python as antenna_design_base
 
 RUN \
     /bin/bash -c "source /opt/.venv/bin/activate && \
     cd /opt && \
-    git clone https://github.com/tmolteno/python-necpp.git && \
-    cd python-necpp && \
+    git clone https://github.com/stevenmburns/antenna_design && \
+    cd antenna_design && \
+    git submodule init && \
+    git submodule update --remote && \
+    cd python-necpp && \    
     git submodule init && \
     git submodule update --remote && \
     cd PyNEC && \
     ln -s ../necpp_src . && \
-    cd ../necpp_src && \
+    pushd ../necpp_src && \
     make -f Makefile.git && \
     ./configure --without-lapack && \
-    cd /opt/python-necpp/PyNEC && \
+    popd && \
     swig3.0 -Wall -v -c++ -python PyNEC.i && \
     python setup.py build && \
     python setup.py install"
-
-RUN \
-    /bin/bash -c "source /opt/.venv/bin/activate && \
-    cd /opt && \
-    git clone https://github.com/stevenmburns/antenna_design.git && \
-    cd antenna_design && \
-    pytest -vv --durations=0 -- tests/test_dipole.py"
 

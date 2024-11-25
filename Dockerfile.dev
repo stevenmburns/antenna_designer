@@ -1,4 +1,0 @@
-FROM stevenmburns/antenna_design_base_with_pynec as antenna_design
-
-COPY . /opt/antenna_design
-
