@@ -2,7 +2,7 @@
 
 Antenna design and optimization using the PyNEC library (https://github.com/tmolteno/python-necpp.git)
 
-The compile and run on recent ubuntu systems (22.04 and 24.04):
+To compile and run on recent ubuntu systems (22.04 and 24.04):
 
 1. Download system dependencies
 ```bash
@@ -44,7 +44,7 @@ cd PyNEC
 ln -s ../necpp_src .
 pushd ../necpp_src
 make -f Makefile.git
-/configure --without-lapack && \
+/configure --without-lapack
 popd
 swig3.0 -Wall -v -c++ -python PyNEC.i
 python setup.py build
