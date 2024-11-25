@@ -40,7 +40,7 @@ RUN \
     cd antenna_design && \
     git submodule init && \
     git submodule update --remote && \
-    cd python-necpp && \    
+    pushd python-necpp && \    
     git submodule init && \
     git submodule update --remote && \
     cd PyNEC && \
@@ -51,5 +51,6 @@ RUN \
     popd && \
     swig3.0 -Wall -v -c++ -python PyNEC.i && \
     python setup.py build && \
-    python setup.py install"
-
+    python setup.py install && \
+    popd && \
+    pip install -e ."
