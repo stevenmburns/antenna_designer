@@ -145,8 +145,8 @@ class Array2x4Builder(AntennaBuilder):
 
 class Antenna:
   def __init__(self, antenna_builder):
-    self.params = antenna_builder
-    self.tups = self.params.build_wires()
+    self.builder = antenna_builder
+    self.tups = self.builder.build_wires()
     self.excitation_pairs = None
     self.geometry()
 
@@ -154,7 +154,7 @@ class Antenna:
     del self.c
 
   def __getattr__(self, nm):
-    return self.params.__getattr__(nm)
+    return self.builder.__getattr__(nm)
 
   def geometry(self):
 
@@ -206,8 +206,8 @@ class Antenna:
     return zs
 
 def get_pattern_rings(antenna_builder):
-  bt = Antenna(antenna_builder)
-  bt.set_freq_and_execute()
+  a = Antenna(antenna_builder)
+  a.set_freq_and_execute()
 
   del_theta = 1
   del_phi = 1
@@ -218,7 +218,7 @@ def get_pattern_rings(antenna_builder):
   assert 360 % n_phi == 0 and 360 == del_phi * n_phi
 
 
-  bt.c.rp_card(0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0)
+  a.c.rp_card(0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0)
 
   thetas = np.linspace(0,90-del_theta,n_theta)
   phis = np.linspace(0,360,n_phi+1)
@@ -226,22 +226,22 @@ def get_pattern_rings(antenna_builder):
   rings = []
 
   for theta_index, theta in enumerate(thetas):
-    ring = [bt.c.get_gain(0, theta_index, phi_index) for phi_index, phi in enumerate(phis)]
+    ring = [a.c.get_gain(0, theta_index, phi_index) for phi_index, phi in enumerate(phis)]
     rings.append(ring)
              
-  max_gain = bt.c.get_gain_max(0)
-  min_gain = bt.c.get_gain_min(0)
+  max_gain = a.c.get_gain_max(0)
+  min_gain = a.c.get_gain_min(0)
 
-  del bt
+  del a
 
   return rings, max_gain, min_gain, thetas, phis
 
 def build_and_get_elevation(antenna_builder):
-  bt = Antenna(antenna_builder)
-  bt.set_freq_and_execute()
-  return get_elevation(bt)
+  a = Antenna(antenna_builder)
+  a.set_freq_and_execute()
+  return get_elevation(a)
 
-def get_elevation(bt):
+def get_elevation(a):
   del_theta = 1
   del_phi = 360
   n_theta = 90
@@ -251,7 +251,7 @@ def get_elevation(bt):
   assert 360 % n_phi == 0 and 360 == del_phi * n_phi
 
 
-  bt.c.rp_card(0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0)
+  a.c.rp_card(0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0)
 
   thetas = np.linspace(0,90-del_theta,n_theta)
   phis = np.linspace(0,360,n_phi+1)
@@ -259,13 +259,13 @@ def get_elevation(bt):
   rings = []
 
   for theta_index, theta in enumerate(thetas):
-    ring = [bt.c.get_gain(0, theta_index, phi_index) for phi_index, phi in enumerate(phis)]
+    ring = [a.c.get_gain(0, theta_index, phi_index) for phi_index, phi in enumerate(phis)]
     rings.append(ring)
              
-  max_gain = bt.c.get_gain_max(0)
-  min_gain = bt.c.get_gain_min(0)
+  max_gain = a.c.get_gain_max(0)
+  min_gain = a.c.get_gain_min(0)
 
-  del bt
+  del a
 
   return rings, max_gain, min_gain, thetas, phis
 
@@ -328,8 +328,8 @@ def pattern(antenna_builder, elevation_angle=15, fn=None):
 
 
 def pattern3d(antenna_builder, fn=None):
-  bt = Antenna(antenna_builder)
-  bt.set_freq_and_execute()
+  a = Antenna(antenna_builder)
+  a.set_freq_and_execute()
 
   del_theta = 3
   del_phi = 6
@@ -339,14 +339,14 @@ def pattern3d(antenna_builder, fn=None):
   assert 90 % n_theta == 0 and 90 == del_theta * n_theta
   assert 360 % n_phi == 0 and 360 == del_phi * n_phi
 
-  bt.c.rp_card(0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0)
+  a.c.rp_card(0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0)
 
   thetas = np.linspace(0,90-del_theta,n_theta)
   phis = np.linspace(0,360,n_phi+1)
 
-  rhos = [[bt.c.get_gain(0, theta_index, phi_index) for theta_index, _ in enumerate(thetas)] for phi_index, _ in enumerate(phis)]
+  rhos = [[a.c.get_gain(0, theta_index, phi_index) for theta_index, _ in enumerate(thetas)] for phi_index, _ in enumerate(phis)]
              
-  del bt
+  del a
 
   fig = plt.figure()
   ax = fig.add_subplot(111, projection='3d')
@@ -370,6 +370,10 @@ def pattern3d(antenna_builder, fn=None):
 
 def sweep_freq(antenna_builder, *, z0=200, rng=(28, 29), npoints=21, fn=None):
 
+  if rng is None:
+    center = antenna_builder.params['freq']
+    rng = (center*.8, center*1.25)
+
   min_freq = rng[0]
   max_freq = rng[1]
   n_freq = npoints-1
@@ -377,14 +381,14 @@ def sweep_freq(antenna_builder, *, z0=200, rng=(28, 29), npoints=21, fn=None):
 
   xs = np.linspace(min_freq, max_freq, n_freq+1)
   
-  bt = Antenna(antenna_builder)
+  a = Antenna(antenna_builder)
 
-  bt.c.fr_card(0, n_freq+1, min_freq, del_freq)
-  bt.c.xq_card(0) # Execute simulation
+  a.c.fr_card(0, n_freq+1, min_freq, del_freq)
+  a.c.xq_card(0) # Execute simulation
   
-  zs = np.array([bt.impedance(freq_index,sweep=True) for freq_index in range(len(xs))])
+  zs = np.array([a.impedance(freq_index,sweep=True) for freq_index in range(len(xs))])
 
-  del bt
+  del a
 
   zs = np.array(zs)
 
@@ -417,6 +421,10 @@ def sweep_freq(antenna_builder, *, z0=200, rng=(28, 29), npoints=21, fn=None):
 
 def sweep_gain(antenna_builder, nm, rng, npoints=21, fn=None):
 
+  if rng is None:
+    center = antenna_builder.params[nm]
+    rng = (center*.8, center*1.25)
+
   xs = np.linspace(rng[0],rng[1],npoints)
 
   gs = []
@@ -436,7 +444,11 @@ def sweep_gain(antenna_builder, nm, rng, npoints=21, fn=None):
 
   save_or_show(plt, fn)
 
-def sweep(antenna_builder, nm, rng, npoints=21, fn=None):
+def sweep(antenna_builder, nm, rng=None, npoints=21, fn=None):
+
+  if rng is None:
+    center = antenna_builder.params[nm]
+    rng = (center*.8, center*1.25)
 
   xs = np.linspace(rng[0],rng[1],npoints)
 
