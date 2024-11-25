@@ -33,10 +33,11 @@ RUN \
 
 FROM antenna_design_base_with_python as antenna_design_base
 
+COPY . /opt/antenna_design
+
 RUN \
     /bin/bash -c "source /opt/.venv/bin/activate && \
     cd /opt && \
-    git clone https://github.com/stevenmburns/antenna_design && \
     cd antenna_design && \
     git submodule init && \
     git submodule update --remote && \
