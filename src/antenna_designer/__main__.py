@@ -19,6 +19,8 @@ parser.add_argument('--builders', type=str, nargs='+', default=['dipole', 'invve
 parser.add_argument('--sweep_param', type=str, default='freq', help='Use this sweep parameter.')
 
 parser.add_argument('--sweep_range', nargs='+', default=None, type=float, help='Use this sweep range.')
+parser.add_argument('--sweep_center', default=None, type=float, help='Use this to construct the sweep range.')
+parser.add_argument('--sweep_fraction', default=None, type=float, help='Use this to construct the sweep range.')
 
 parser.add_argument('--sweep_npoints', default=21, type=int, help='Use this as the number of points in the sweep.')
 
@@ -33,11 +35,11 @@ if args.command == 'draw':
     b = module.Builder()
     b.draw(b.build_wires())
 elif args.command == 'sweep':
-    sweep(module.Builder(), args.sweep_param, rng=args.sweep_range, npoints=args.sweep_npoints)
+    sweep(module.Builder(), args.sweep_param, rng=args.sweep_range, npoints=args.sweep_npoints, center=args.sweep_center, fraction=args.sweep_fraction)
 elif args.command == 'sweep_freq':
-    sweep_freq(module.Builder(), rng=args.sweep_range, npoints=args.sweep_npoints)
+    sweep_freq(module.Builder(), rng=args.sweep_range, npoints=args.sweep_npoints, center=args.sweep_center, fraction=args.sweep_fraction)
 elif args.command == 'sweep_gain':
-    sweep_gain(module.Builder(), args.sweep_param, rng=args.sweep_range, npoints=args.sweep_npoints)
+    sweep_gain(module.Builder(), args.sweep_param, rng=args.sweep_range, npoints=args.sweep_npoints, center=args.sweep_center, fraction=args.sweep_fraction)
 elif args.command == 'pattern':
     pattern(module.Builder())
 elif args.command == 'pattern3d':

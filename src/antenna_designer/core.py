@@ -368,11 +368,22 @@ def pattern3d(antenna_builder, fn=None):
 
   save_or_show(plt, fn)
 
-def sweep_freq(antenna_builder, *, z0=200, rng=(28, 29), npoints=21, fn=None):
-
+def resolve_range(default_value, rng, center, fraction):
   if rng is None:
-    center = antenna_builder.params['freq']
-    rng = (center*.8, center*1.25)
+    if fraction is None:
+      fraction = 1.25
+
+    if center is None:
+      center = default_value
+
+    rng = (center / fraction, center * fraction)
+
+  return rng
+
+
+def sweep_freq(antenna_builder, *, z0=200, rng=None, center=None, fraction=None, npoints=21, fn=None):
+
+  rng = resolve_range(antenna_builder.params['freq'], rng, center, fraction)
 
   min_freq = rng[0]
   max_freq = rng[1]
@@ -419,11 +430,9 @@ def sweep_freq(antenna_builder, *, z0=200, rng=(28, 29), npoints=21, fn=None):
   save_or_show(plt, fn)
 
 
-def sweep_gain(antenna_builder, nm, rng, npoints=21, fn=None):
+def sweep_gain(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, fn=None):
 
-  if rng is None:
-    center = antenna_builder.params[nm]
-    rng = (center*.8, center*1.25)
+  rng = resolve_range(antenna_builder.params[nm], rng, center, fraction)
 
   xs = np.linspace(rng[0],rng[1],npoints)
 
@@ -444,11 +453,9 @@ def sweep_gain(antenna_builder, nm, rng, npoints=21, fn=None):
 
   save_or_show(plt, fn)
 
-def sweep(antenna_builder, nm, rng=None, npoints=21, fn=None):
+def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, fn=None):
 
-  if rng is None:
-    center = antenna_builder.params[nm]
-    rng = (center*.8, center*1.25)
+  rng = resolve_range(antenna_builder.params[nm], rng, center, fraction)
 
   xs = np.linspace(rng[0],rng[1],npoints)
 

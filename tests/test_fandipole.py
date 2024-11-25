@@ -19,17 +19,17 @@ def test_fandipole_sweep_freq():
 def test_fandipole_sweep_length_20():
   params = dict(Builder.default_params)
   params['freq'] = 14.3
-  ant.sweep(Builder(params), 'length_20', (10.5,12), fn='fandipole_sweep_length_20.pdf')
+  ant.sweep(Builder(params), 'length_20', rng=(10.5,12), fn='fandipole_sweep_length_20.pdf')
 
 def test_fandipole_sweep_length17():
   params = dict(Builder.default_params)
   params['freq'] = 18.1575
-  ant.sweep(Builder(params), 'length_17', (11.3*17/20-1,11.3*17/20+1), fn='fandipole_sweep_length_17.pdf')
+  ant.sweep(Builder(params), 'length_17', rng=(11.3*17/20-1,11.3*17/20+1), fn='fandipole_sweep_length_17.pdf')
 
 def test_fandipole_sweep_length_15():
   params = dict(Builder.default_params)
   params['freq'] = 21.383
-  ant.sweep(Builder(params), 'length_15', (11.3*15/20-1,11.3*15/20+1), fn='fandipole_sweep_length_15.pdf')
+  ant.sweep(Builder(params), 'length_15', rng=(11.3*15/20-1,11.3*15/20+1), fn='fandipole_sweep_length_15.pdf')
 
 def test_fandipole_sweep_length_12():
   params = dict(Builder.default_params)
@@ -45,7 +45,7 @@ def test_fandipole_sweep_length_12():
 
 
   params['freq'] = 24.97
-  ant.sweep(Builder(params), 'length_12', (3,6), fn='fandipole_sweep_length_12.pdf')
+  ant.sweep(Builder(params), 'length_12', rng=(3,6), fn='fandipole_sweep_length_12.pdf')
 
 def test_fandipole_sweep_length_10():
   params = dict(Builder.default_params)
@@ -60,7 +60,7 @@ def test_fandipole_sweep_length_10():
              'slope': 0.604}
 
   params['freq'] = 28.57
-  ant.sweep(Builder(params), 'length_10', (3,6), fn='fandipole_sweep_length_10.pdf')
+  ant.sweep(Builder(params), 'length_10', rng=(3,6), fn='fandipole_sweep_length_10.pdf')
 
 def test_fandipole_pattern():
   ant.pattern(Builder(), fn='fandipole_pattern.pdf')

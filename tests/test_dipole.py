@@ -7,7 +7,7 @@ def test_dipole_sweep_freq():
   ant.sweep_freq(Builder(), fn='dipole_sweep_freq.pdf')
 
 def test_dipole_sweep_length():
-  ant.sweep(Builder(), 'length', (4,6), fn='dipole_sweep_length.pdf')
+  ant.sweep(Builder(), 'length', rng=(4,6), fn='dipole_sweep_length.pdf')
 
 def test_dipole_pattern():
   ant.pattern(Builder(), fn='dipole_pattern.pdf')

@@ -28,7 +28,7 @@ def test_hexbeam_sweep_tipspacer_factor():
   ant.sweep(Builder(), 'tipspacer_factor', rng=(.05,.25), fn='hexbeam_sweep_tipspacer_factor.pdf')
 
 def test_hexbeam_sweep_gain_freq():
-  ant.sweep_gain(Builder(), 'freq', (28,32), fn='hexbeam_sweep_gain_freq.pdf')
+  ant.sweep_gain(Builder(), 'freq', rng=(28,32), fn='hexbeam_sweep_gain_freq.pdf')
 
 def test_hexbeam_sweep_gain_halfdriver():
   ant.sweep_gain(Builder(), 'halfdriver', rng=(2.6,3.0), fn='hexbeam_sweep_gain_halfdriver.pdf')

@@ -7,7 +7,7 @@ def test_vertical_sweep_freq():
   ant.sweep_freq(Builder(), z0=50, fn='vertical_sweep_freq.pdf')
 
 def test_vertical_sweep_length():
-  ant.sweep(Builder(), 'length', (2,3), fn='vertical_sweep_length.pdf')
+  ant.sweep(Builder(), 'length', rng=(2,3), fn='vertical_sweep_length.pdf')
 
 def test_vertical_pattern():
   ant.pattern(Builder(), fn='vertical_pattern.pdf')

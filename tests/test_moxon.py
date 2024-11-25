@@ -31,7 +31,7 @@ def test_moxon_sweep_aspect_ratio():
   ant.sweep(Builder(), 'aspect_ratio', rng=(.1,.5), fn='moxon_sweep_aspect_ratio.pdf')
 
 def test_moxon_sweep_gain_freq():
-  ant.sweep_gain(Builder(), 'freq', (28,30), fn='moxon_sweep_gain_freq.pdf')
+  ant.sweep_gain(Builder(), 'freq', rng=(28,30), fn='moxon_sweep_gain_freq.pdf')
 
 def test_moxon_sweep_gain_halfdriver():
   ant.sweep_gain(Builder(), 'halfdriver', rng=(2.3,2.6), fn='moxon_sweep_gain_halfdriver.pdf')
