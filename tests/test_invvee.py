@@ -1,5 +1,5 @@
-import antenna as ant
-from invvee import InvVeeBuilder
+import antenna_designer as ant
+from antenna_designer.designs.invvee import InvVeeBuilder
 
 import math
 

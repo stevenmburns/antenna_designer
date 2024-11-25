@@ -1,5 +1,5 @@
-import antenna as ant
-from vertical import VerticalBuilder
+import antenna_designer as ant
+from antenna_designer.designs.vertical import VerticalBuilder
 
 import math
 

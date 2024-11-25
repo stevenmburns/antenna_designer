@@ -1,6 +1,6 @@
 import pytest
-import antenna as ant
-from hexbeam import HexbeamBuilder, get_hexbeam_data_opt
+import antenna_designer as ant
+from antenna_designer.designs.hexbeam import HexbeamBuilder, get_hexbeam_data_opt
 
 import math
 

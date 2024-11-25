@@ -1,9 +1,9 @@
 import pytest
 import math
 
-import antenna as ant
-from bowtie import BowtieArrayBuilder, BowtieArray2x4Builder
-from invvee import InvveeArrayBuilder
+import antenna_designer as ant
+from antenna_designer.designs.bowtie import BowtieArrayBuilder, BowtieArray2x4Builder
+from antenna_designer.designs.invvee import InvveeArrayBuilder
 
 @pytest.mark.skip(reason="Draws to screen")
 def test_bowtiearraybuilder():

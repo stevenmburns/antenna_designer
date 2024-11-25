@@ -1,4 +1,4 @@
-from antenna import AntennaBuilder
+from .. import AntennaBuilder
 from types import MappingProxyType
 
 class DipoleBuilder(AntennaBuilder):

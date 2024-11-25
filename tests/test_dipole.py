@@ -1,5 +1,5 @@
-import antenna as ant
-from dipole import DipoleBuilder
+import antenna_designer as ant
+from antenna_designer.designs.dipole import DipoleBuilder
 
 import math
 

@@ -1,10 +1,10 @@
 import pytest
-from antenna import compare_patterns
-from dipole import DipoleBuilder
-from invvee import InvVeeBuilder, InvveeArrayBuilder
-from hexbeam import HexbeamBuilder, get_hexbeam_data_opt
-from bowtie import BowtieBuilder, BowtieArrayBuilder
-from moxon import MoxonBuilder
+from antenna_designer import compare_patterns
+from antenna_designer.designs.dipole import DipoleBuilder
+from antenna_designer.designs.invvee import InvVeeBuilder, InvveeArrayBuilder
+from antenna_designer.designs.hexbeam import HexbeamBuilder, get_hexbeam_data_opt
+from antenna_designer.designs.bowtie import BowtieBuilder, BowtieArrayBuilder
+from antenna_designer.designs.moxon import MoxonBuilder
 
 @pytest.mark.skip(reason="Draws to screen")
 def test_compare():

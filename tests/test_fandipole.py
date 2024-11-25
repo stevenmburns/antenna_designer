@@ -1,6 +1,6 @@
 import pytest
-import antenna as ant
-from fandipole import FandipoleBuilder
+import antenna_designer as ant
+from antenna_designer.designs.fandipole import FandipoleBuilder
 from icecream import ic
 
 import math

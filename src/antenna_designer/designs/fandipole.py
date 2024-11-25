@@ -1,4 +1,4 @@
-from antenna import AntennaBuilder
+from antenna_designer import AntennaBuilder
 import math
 from types import MappingProxyType
 # from icecream import ic

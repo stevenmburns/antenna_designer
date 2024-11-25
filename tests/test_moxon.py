@@ -1,6 +1,6 @@
 import pytest
-import antenna as ant
-from moxon import MoxonBuilder
+import antenna_designer as ant
+from antenna_designer.designs.moxon import MoxonBuilder
 
 import math
 

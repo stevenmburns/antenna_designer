@@ -1,5 +1,5 @@
-import antenna as ant
-from bowtie import BowtieBuilder
+import antenna_designer as ant
+from antenna_designer.designs.bowtie import BowtieBuilder
 
 import math
 

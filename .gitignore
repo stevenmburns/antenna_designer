@@ -5,3 +5,5 @@ SWEEP_SLOPE
 __pycache__/
 PyNEC/
 *~
+src/*.egg-info/
+TEST_RESULTS

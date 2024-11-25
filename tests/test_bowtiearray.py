@@ -1,6 +1,6 @@
 import pytest
-import antenna as ant
-from bowtie import BowtieArrayBuilder
+import antenna_designer as ant
+from antenna_designer.designs.bowtie import BowtieArrayBuilder
 
 import math
 

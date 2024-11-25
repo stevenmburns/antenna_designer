@@ -1,4 +1,4 @@
-from dipole import DipoleBuilder
+from antenna_designer.designs.dipole import DipoleBuilder
 
 def test_unit_params():
   dp = DipoleBuilder({'freq':1, 'base':7, 'length':10})

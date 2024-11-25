@@ -1,4 +1,4 @@
-from antenna import AntennaBuilder, Array2x2Builder, Array2x4Builder
+from .. import AntennaBuilder, Array2x2Builder, Array2x4Builder
 import math
 from types import MappingProxyType
 
