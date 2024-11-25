@@ -23,7 +23,7 @@ sudo apt-get install \
     libtool
 ```
 
-1. Create a virtual environment and collect python dependencies
+2. Create a virtual environment and collect python dependencies
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -31,7 +31,7 @@ pip install --upgrade pip
 pip install setuptools numpy scipy pytest matplotlib icecream
 ```
 
-2. Clone repo, update the submodules (for python-necpp) and install from sources (can't do just a pip install PyNEC). Do this in the virtual environment.
+3. Clone repo, update the submodules (for python-necpp) and install from sources (can't do just a pip install PyNEC). Do this in the virtual environment.
 ```bash
 git clone https://github.com/stevenmburns/antenna_design
 cd antenna_design
@@ -52,12 +52,12 @@ python setup.py install
 popd
 ```
 
-3. Install an editable version of this repo (inside virtual enviroment and in the cloned repository directory)
+4. Install an editable version of this repo (inside virtual enviroment and in the cloned repository directory)
 ```bash
 pip install -e .
 ```
 
-3. Tests can be run using (inside virtual enviroment and in the cloned repository directory):
+5. Tests can be run using (inside virtual enviroment and in the cloned repository directory):
 ```bash
 pytest -vv --durations=0 -- tests/
 ```
