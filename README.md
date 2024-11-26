@@ -51,7 +51,7 @@ from types import MappingProxyType
 
 class Builder(AntennaBuilder):
   default_params = MappingProxyType({
-	'freq': 28.57,
+    'freq': 28.57,
     'base': 7,
     'halfdriver': 2.460
     'aspect_ratio': 0.3646
