@@ -76,6 +76,6 @@ class Builder(AntennaBuilder):
     tups.extend(build_path([S,A,B], n_seg0, False))
     tups.extend(build_path([C,D,E,F], n_seg0, False))
     tups.extend(build_path([G,H,T], n_seg0, False))
-    tups.append((T, S, n_seg1, True))
+    tups.append((T, S, n_seg1, 1+0j))
 
     return tups

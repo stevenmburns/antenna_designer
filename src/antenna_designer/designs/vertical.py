@@ -20,8 +20,8 @@ class Builder(AntennaBuilder):
     n_seg_radials = 5
 
     tups = []
-    tups.extend([((0, 0, 0),   (0, 0, eps), n_seg1, True)])
-    tups.extend([((0, 0, eps), (0, 0, z),   n_seg0, False)])
+    tups.extend([((0, 0, 0),   (0, 0, eps), n_seg1, 1+0j)])
+    tups.extend([((0, 0, eps), (0, 0, z),   n_seg0, None)])
 
     n_radials = 3
 
@@ -30,12 +30,12 @@ class Builder(AntennaBuilder):
 
       x, y = self.length*math.cos(theta), self.length*math.sin(theta)
 
-      tups.extend([((0, 0, 0), (x, y, 0), n_seg_radials, False)])
+      tups.extend([((0, 0, 0), (x, y, 0), n_seg_radials, None)])
 
     base = self.base
     new_tups = []
-    for (x0, y0, z0), (x1, y1, z1), n_seg, ex in tups:
-      new_tups.append(( (x0, y0, z0+base), (x1, y1, z1+base), n_seg, ex))
+    for (x0, y0, z0), (x1, y1, z1), n_seg, ev in tups:
+      new_tups.append(( (x0, y0, z0+base), (x1, y1, z1+base), n_seg, ev))
 
     return new_tups
 

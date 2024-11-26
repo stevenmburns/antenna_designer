@@ -21,10 +21,10 @@ class Antenna:
     geo = self.c.get_geometry()
 
     self.excitation_pairs = []
-    for idx, (p0, p1, n_seg, ex) in enumerate(self.tups, start=1):
+    for idx, (p0, p1, n_seg, ev) in enumerate(self.tups, start=1):
       geo.wire(idx, n_seg, p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], 0.002, 1.0, 1.0)
-      if ex:
-        self.excitation_pairs.append((idx, (n_seg+1)//2, 1 + 0j))
+      if ev is not None:
+        self.excitation_pairs.append((idx, (n_seg+1)//2, ev))
 
     self.c.geometry_complete(0)
 
@@ -55,6 +55,6 @@ class Antenna:
     zs = [voltage/currents[idx] for idx, voltage in indices]
 
     if sum_currents:
-      zs = [1/sum(1/zs)]
+      zs = [1/sum(1/z for z in zs)]
 
     return zs

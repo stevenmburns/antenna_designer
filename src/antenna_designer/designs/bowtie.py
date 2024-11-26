@@ -23,20 +23,20 @@ class Builder(AntennaBuilder):
     n_seg1 = 3
 
     tups = []
-    tups.extend([((-y,    0),   (-y,   z),    n_seg0, False)])
-    tups.extend([((-y,    z),   (-eps, eps),  n_seg0, False)])
-    tups.extend([((-eps,  eps), ( eps, eps),  n_seg1, False)])
-    tups.extend([(( eps,  eps), ( y,   z),    n_seg0, False)])
-    tups.extend([(( y,    z),   ( y,   0),    n_seg0, False)])
-    tups.extend([((-y,    0),   (-y,   -z),   n_seg0, False)])
-    tups.extend([((-y,   -z),   (-eps, -eps), n_seg0, False)])
-    tups.extend([(( eps, -eps), ( y,   -z),   n_seg0, False)])
-    tups.extend([(( y,   -z),   ( y,    0),   n_seg0, False)])
-    tups.extend([((-eps, -eps), ( eps, -eps), n_seg1, True)])
+    tups.extend([((-y,    0),   (-y,   z),    n_seg0, None)])
+    tups.extend([((-y,    z),   (-eps, eps),  n_seg0, None)])
+    tups.extend([((-eps,  eps), ( eps, eps),  n_seg1, None)])
+    tups.extend([(( eps,  eps), ( y,   z),    n_seg0, None)])
+    tups.extend([(( y,    z),   ( y,   0),    n_seg0, None)])
+    tups.extend([((-y,    0),   (-y,   -z),   n_seg0, None)])
+    tups.extend([((-y,   -z),   (-eps, -eps), n_seg0, None)])
+    tups.extend([(( eps, -eps), ( y,   -z),   n_seg0, None)])
+    tups.extend([(( y,   -z),   ( y,    0),   n_seg0, None)])
+    tups.extend([((-eps, -eps), ( eps, -eps), n_seg1, 1+0j)])
 
     new_tups = []
     for (yoff, zoff) in [(0, self.base)]:
-      new_tups.extend([((0, y0+yoff, z0+zoff), (0, y1+yoff, z1+zoff), ns, ex) for ((y0, z0), (y1, z1), ns, ex) in tups])
+      new_tups.extend([((0, y0+yoff, z0+zoff), (0, y1+yoff, z1+zoff), ns, ev) for ((y0, z0), (y1, z1), ns, ev) in tups])
 
     return new_tups
 

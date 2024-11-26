@@ -83,12 +83,12 @@ class Builder(AntennaBuilder):
       
     tups = []
     for i in range(n):
-        tups.extend(build_path([S,A[i],B[i]], n_seg0, False))
-        tups.extend(build_path([T,Ay[i],By[i]], n_seg0, False))
-    tups.append((T, S, n_seg1, True))
+      tups.extend(build_path([S,A[i],B[i]], n_seg0, None))
+      tups.extend(build_path([T,Ay[i],By[i]], n_seg0, None))
+    tups.append((T, S, n_seg1, 1+0j))
 
     new_tups = []
     for (xoff, yoff, zoff) in [(0, 0, self.base)]:
-      new_tups.extend([((x0+xoff, y0+yoff, z0+zoff), (x1+xoff, y1+yoff, z1+zoff), ns, ex) for ((x0, y0, z0), (x1, y1, z1), ns, ex) in tups])
+      new_tups.extend([((x0+xoff, y0+yoff, z0+zoff), (x1+xoff, y1+yoff, z1+zoff), ns, ev) for ((x0, y0, z0), (x1, y1, z1), ns, ev) in tups])
 
     return new_tups
