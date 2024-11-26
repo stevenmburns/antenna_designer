@@ -104,7 +104,6 @@ def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=
 
   zs = []
   for x in xs:
-    print(nm, x)
     antenna_builder.params[nm] = x
     zs.append(Antenna(antenna_builder).impedance())
   zs = np.array(zs)
