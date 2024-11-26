@@ -2,8 +2,6 @@ import pytest
 import antenna_designer as ant
 from antenna_designer.designs.moxon import Builder
 
-import math
-
 @pytest.mark.skip(reason="Displays to screen")
 def test_moxon_draw():
     builder = Builder()
@@ -59,6 +57,4 @@ def test_moxon_optimize():
   params = ant.optimize(Builder(), ['halfdriver','t0_factor','tipspacer_factor'], z0=50, opt_gain=True)
 
   print(params)
-
-  for k, v in Builder.opt_params.items():
-    assert math.fabs(params[k]-v) < 0.01
+  assert all(abs(params[k]-v) < 0.01 for k, v in Builder.opt_params.items())

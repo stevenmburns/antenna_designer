@@ -1,8 +1,8 @@
-# Python Code for Amateur Radio Antenna Design
+# Python-based Amateur Radio Antenna Design and Modeling Package
 
-Antenna design and optimization using the PyNEC library (https://github.com/tmolteno/python-necpp.git)
+Front-end code for antenna design and optimization using the PyNEC library (https://github.com/tmolteno/python-necpp.git)
 
-# Usage:
+# Basic Usage:
 
 To render (produce an image) of a moxon antenna, try:
 ```bash
@@ -16,6 +16,27 @@ python -m antenna_designer sweep --builder moxon --sweep_param halfdriver
 To compare the far-field patterns of a moxon and hexbeam, try:
 ```bash
 python -m antenna_designer compare_patterns --builders moxon hexbeam 
+```
+# More Advanced Usage
+
+Optimize the `length` and `slope` of an inverted vee dipole antenna as the height (`base`) is swept across several different values and then show the far-field plots for the different builds:
+```python3
+import antenna_designer as ant
+from antenna_designer.designs.invvee import Builder
+
+p = Builder.default_params
+bounds = ((p['length']*.8, p['length']*1.25),(0,1))
+
+builders = (
+  Builder(
+    ant.optimize(
+	  Builder(dict(p, **{'base': base})),
+              ['length','slope'], z0=50, bounds=bounds
+    )
+  ) for base in [5,6,7,8]
+)
+
+ant.compare_patterns(builders)
 ```
 
 

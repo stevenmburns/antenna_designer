@@ -6,7 +6,7 @@ import numpy as np
 #from scipy.optimize import minimize_scalar
 from scipy.optimize import minimize
 
-def optimize(antenna_builder, independent_variable_names, z0=50, resonance=False, opt_gain=False):
+def optimize(antenna_builder, independent_variable_names, *, z0=50, resonance=False, opt_gain=False, bounds=None):
 
   print(antenna_builder.params)
 
@@ -48,8 +48,8 @@ def optimize(antenna_builder, independent_variable_names, z0=50, resonance=False
   #'Powell', options={'maxiter':100, 'disp': True, 'xtol': 0.0001}
 
   x0 = tuple(antenna_builder.params[nm] for nm in independent_variable_names)
-
-  bounds = tuple((x*.6, x*1.67) for x in x0)
+  if bounds is None:
+    bounds = tuple((x*.6, x*1.67) for x in x0)
 
   result = minimize(objective, x0=x0, method='Nelder-Mead', tol=0.001, bounds=bounds)
 

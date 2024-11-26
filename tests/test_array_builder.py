@@ -1,5 +1,4 @@
 import pytest
-import math
 
 import antenna_designer as ant
 
@@ -21,7 +20,7 @@ def test_bowtiearray2x4_optimize():
 
   print(params)
 
-  assert all(math.fabs(params[k]-v) < 0.01 for k, v in gold_params.items())
+  assert all(abs(params[k]-v) < 0.01 for k, v in gold_params.items())
 
 
 def test_invveearray_pattern():
@@ -38,5 +37,5 @@ def test_invveearray_optimize():
 
   print(params)
 
-  assert all(math.fabs(params[k]-v) < 0.01 for k, v in gold_params.items())
+  assert all(abs(params[k]-v) < 0.01 for k, v in gold_params.items())
 

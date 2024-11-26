@@ -2,8 +2,6 @@ import pytest
 import antenna_designer as ant
 from antenna_designer.designs.hexbeam import Builder
 
-import math
-
 @pytest.mark.skip(reason="Draws to screen")
 def test_hexbeam_draw():
     builder = Builder()
@@ -53,5 +51,4 @@ def test_hexbeam_optimize():
 
   print(params)
 
-  for k, v in Builder.opt_params.items():
-    assert math.fabs(params[k]-v) < 0.01
+  assert all(abs(params[k]-v) < 0.01 for k, v in Builder.opt_params.items())

@@ -1,8 +1,6 @@
 import antenna_designer as ant
 from antenna_designer.designs.bowtie import Builder
 
-import math
-
 def test_bowtie_sweep_freq():
   ant.sweep_freq(Builder(), fn='bowtie_sweep_freq.pdf')
 
@@ -24,6 +22,6 @@ def test_bowtie_optimize():
 
   params = ant.optimize(Builder(gold_params), ['length', 'slope'], z0=200)
 
-  assert all(math.fabs(params[k]-v) < 0.01 for k, v in gold_params.items())
+  assert all(abs(params[k]-v) < 0.01 for k, v in gold_params.items())
 
 

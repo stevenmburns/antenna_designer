@@ -3,8 +3,6 @@ import antenna_designer as ant
 from antenna_designer.designs.fandipole import Builder
 from icecream import ic
 
-import math
-
 @pytest.mark.skip(reason="Draws to screen")
 def test_fandipole_build():
   b = Builder()
@@ -73,8 +71,7 @@ def test_fandipole_optimize():
   params = ant.optimize(Builder(), ['length_10', 'length_12'], z0=50, resonance=True)
   ic(params)
 
-  for k, v in Builder.default_params.items():
-    assert math.fabs(params[k]-v) < 0.01
+  assert all(abs(params[k]-v) < 0.01 for k, v in Builder.default_params.items())
 
 @pytest.mark.skip(reason="Takes too long and has unstable params")
 def test_fandipole_seq_optimize():
@@ -101,5 +98,5 @@ def test_fandipole_seq_optimize():
       params = ant.optimize(Builder(params), [nm], z0=50, resonance=False)
       ic('results for', freq, nm, 'are', params)
 
-  for k, v in gold_params.items():
-    assert math.fabs(params[k]-v) < 0.01
+
+    assert all(abs(params[k]-v) < 0.01 for k, v in gold_params.items())

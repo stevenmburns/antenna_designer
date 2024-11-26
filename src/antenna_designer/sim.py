@@ -34,8 +34,12 @@ class Antenna:
     self.c.ld_card(5, 0, 0, 0, conductivity, 0.0, 0.0)
     self.c.gn_card(0, 0, ground_dielectric, ground_conductivity, 0, 0, 0, 0)
 
+    
+    real_voltage = 1
+    imag_voltage = 0
+
     for tag, sub_index in self.excitation_pairs:
-      self.c.ex_card(0, tag, sub_index, 0, 1.0, 0, 0, 0, 0, 0)
+      self.c.ex_card(0, tag, sub_index, 0, real_voltage, imag_voltage, 0, 0, 0, 0)
 
   def set_freq_and_execute(self):
     self.c.fr_card(0, 1, self.freq, 0)

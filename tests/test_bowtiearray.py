@@ -2,8 +2,6 @@ import pytest
 import antenna_designer as ant
 from antenna_designer.designs import bowtiearray
 
-import math
-
 def test_bowtiearray_pattern():
   ant.pattern(bowtiearray.Builder(), fn='bowtiearray_pattern.pdf')
 
@@ -51,7 +49,7 @@ def test_bowtiearray_optimize():
 
   params = ant.optimize(bowtiearray.Builder(gold_params), ['length_top', 'slope_top', 'length_bot', 'slope_bot'], z0=200)
 
-  assert all(math.fabs(params[k]-v) < 0.01 for k, v in gold_params.items())
+  assert all(abs(params[k]-v) < 0.01 for k, v in gold_params.items())
 
 @pytest.mark.skip(reason="Too long and unstable params")
 def test_bowtiearray_optimize_for_gain():
@@ -59,4 +57,4 @@ def test_bowtiearray_optimize_for_gain():
 
   params = ant.optimize(bowtiearray.Builder(gold_params), ['length_top', 'slope_top', 'length_bot', 'slope_bot', 'del_y', 'del_z'], z0=200, resonance=True, opt_gain=True)
 
-  assert all(math.fabs(params[k]-v) < 0.01 for k, v in gold_params.items())
+  assert all(abs(params[k]-v) < 0.01 for k, v in gold_params.items())
