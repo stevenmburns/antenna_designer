@@ -25,9 +25,9 @@ class Builder(AntennaBuilder):
     n_seg1 = 3
 
     tups = []
-    tups.extend([((-x,  -z), (-eps, 0), n_seg0, False)])
-    tups.extend([(( eps, 0), ( x,  -z), n_seg0, False)])
-    tups.extend([((-eps, 0), ( eps, 0), n_seg1, True)])
+    tups.extend([((-x,  -z), (-eps, 0), n_seg0, None)])
+    tups.extend([(( eps, 0), ( x,  -z), n_seg0, None)])
+    tups.extend([((-eps, 0), ( eps, 0), n_seg1, 1+0j)])
 
     new_tups = []
     for (yoff, zoff) in [(0, self.base)]:
