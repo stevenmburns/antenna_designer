@@ -2,6 +2,25 @@
 
 Antenna design and optimization using the PyNEC library (https://github.com/tmolteno/python-necpp.git)
 
+# Usage:
+
+To render (produce an image) of a moxon antenna, try:
+```bash
+python -m antenna_designer draw --builder moxon
+```
+
+To see the impedance as a function of the `halfdriver` parameter in the moxon model, try:
+```bash
+python -m antenna_designer sweep --builder moxon --sweep_param halfdriver
+```
+To compare the far-field patterns of a moxon and hexbeam, try:
+```bash
+python -m antenna_designer compare_patterns --builders moxon hexbeam 
+```
+
+
+# Install
+
 To compile and run on recent ubuntu systems (22.04 and 24.04):
 
 1. Download system dependencies
@@ -57,7 +76,7 @@ popd
 pip install -e .
 ```
 
-5. Tests can be run using (inside virtual enviroment and in the cloned repository directory):
+5. Tests can be run (inside virtual enviroment and in the cloned repository directory) using:
 ```bash
 pytest -vv --durations=0 -- tests/
 ```

@@ -18,7 +18,7 @@ parser.add_argument('--builders', type=str, nargs='+', default=['dipole', 'invve
 
 parser.add_argument('--sweep_param', type=str, default='freq', help='Use this sweep parameter.')
 
-parser.add_argument('--sweep_range', nargs='+', default=None, type=float, help='Use this sweep range.')
+parser.add_argument('--sweep_range', nargs=2, default=None, type=float, help='Use this sweep range.')
 parser.add_argument('--sweep_center', default=None, type=float, help='Use this to construct the sweep range.')
 parser.add_argument('--sweep_fraction', default=None, type=float, help='Use this to construct the sweep range.')
 
