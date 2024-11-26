@@ -1,6 +1,6 @@
 from antenna_designer.designs.dipole import Builder
 
-from antenna_designer.core import resolve_range
+from antenna_designer.sweep import resolve_range
 
 def test_unit_params():
   dp = Builder({'freq':1, 'base':7, 'length':10})
