@@ -1,5 +1,7 @@
 from antenna_designer.designs.dipole import Builder
 
+from types import MappingProxyType
+
 from antenna_designer.sweep import resolve_range
 
 def test_unit_params():
@@ -11,6 +13,39 @@ def test_unit_params():
   dp.params['freq'] = 2
   assert dp.freq == 2
   assert dp.params['freq'] == 2
+
+def test_dict_update_options():
+  p = {'a': 0, 'b': 1}
+
+  q = dict(p, **{'b':2})
+  assert p['a'] == 0 and p['b'] == 1
+  assert q['a'] == 0 and q['b'] == 2
+
+  r = dict(p, b=2)
+  assert p['a'] == 0 and p['b'] == 1
+  assert r['a'] == 0 and r['b'] == 2
+
+  s = dict(p)
+  s['b'] = 2
+  assert p['a'] == 0 and p['b'] == 1
+  assert s['a'] == 0 and s['b'] == 2
+
+  p = MappingProxyType({'a': 0, 'b': 1})
+
+  q = dict(p, **{'b':2})
+  assert p['a'] == 0 and p['b'] == 1
+  assert q['a'] == 0 and q['b'] == 2
+
+  r = dict(p, b=2)
+  assert p['a'] == 0 and p['b'] == 1
+  assert r['a'] == 0 and r['b'] == 2
+
+  s = dict(p)
+  s['b'] = 2
+  assert p['a'] == 0 and p['b'] == 1
+  assert s['a'] == 0 and s['b'] == 2
+  
+
 
 def test_resolve_range():
   # test all eight cases of potential None arguments

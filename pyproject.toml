@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "antenna_designer_stevenmburns"
+name = "antenna_designer-stevenmburns"
 version = "0.0.1"
 authors = [
   { name="Steven M. Burns", email="smburns47@gmail.com" },
@@ -18,5 +18,5 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/stevenmburns/antenna_design"
-Issues = "https://github.com/stevenmburns/antenna_design/issues"
+Homepage = "https://github.com/stevenmburns/antenna_designer"
+Issues = "https://github.com/stevenmburns/antenna_designer/issues"
