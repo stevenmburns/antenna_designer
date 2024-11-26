@@ -39,6 +39,86 @@ builders = (
 ant.compare_patterns(builders)
 ```
 
+# Antenna Builder Example
+Here is a python subclass that can be used to design a moxon antenna.
+In this design, there are four parameters that describe the shape of the rectangle. The parameter `halfdriver` is the length of one side of the radiating element, and this includes half of the long side of the rectangle and a segment on the short side. The parameter `t0_factor` is the fraction of the short side segment. `tipspacer_factor` is the fraction of the short side segment that separates the driver and the reflector. Finally, `aspect_ratio` describes the ratio of the short side to the long side.
+
+```python3
+from .. import AntennaBuilder
+from types import MappingProxyType
+
+class Builder(AntennaBuilder):
+  default_params = MappingProxyType({
+	'freq': 28.57,
+    'base': 7,
+    'halfdriver': 2.460
+    'aspect_ratio': 0.3646
+    'tipspacer_factor': 0.0772
+    't0_factor': 0.4078
+  })
+
+  def build_wires(self):
+    eps = 0.05
+	base = self.base
+
+    # short = aspect_ratio*long
+    # halfdriver = long/2 + short*t0_factor
+    # halfdriver = long/2 + aspect_ratio*long*t0_factor
+    # 2*halfdriver = long + 2*aspect_ratio*long*t0_factor
+    # 2*halfdriver = long(1 + 2*aspect_ratio*t0_factor)
+    # long = 2*halfdriver/(1 + 2*aspect_ratio*t0_factor)
+
+    long = 2*self.halfdriver / (1 + 2*self.aspect_ratio*self.t0_factor)
+    short = self.aspect_ratio * long
+
+    tipspacer = short * self.tipspacer_factor
+    t0 = short * self.t0_factor
+
+    def build_path(lst, ns, ex):
+      return ((a,b,ns,ex) for a,b in zip(lst[:-1], lst[1:]))
+    def rx(p):
+      return -p[0],  p[1], p[2]
+    def ry(p):
+      return  p[0], -p[1], p[2]
+
+    """
+    D----------C   B-----A
+    |                    |
+    |                    |
+    |                    |
+    |                    |
+    |                    |
+    |                    |
+    |                    S
+	|
+    |                    T
+    |                    |
+    |                    |
+    |                    |
+    |                    |
+    |                    |
+    |                    |
+    E----------F   G-----H
+	"""
+
+    S = (0,              eps,    base) 
+    A = (0,              long/2, base)
+    B = (A[0]-t0,        A[1],   base)
+    C = (B[0]-tipspacer, B[1],   base)
+    D = (-short,         long/2, base)
+
+    E, F, G, H, T = ry(D), ry(C), ry(B), ry(A), ry(S)
+
+    n_seg0, n_seg1 = 21, 1
+      
+    tups = []
+    tups.extend(build_path([S,A,B], n_seg0, False))
+    tups.extend(build_path([C,D,E,F], n_seg0, False))
+    tups.extend(build_path([G,H,T], n_seg0, False))
+    tups.append((T, S, n_seg1, True))
+
+    return tups
+```
 
 # Install
 
