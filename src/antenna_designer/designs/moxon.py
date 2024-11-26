@@ -21,21 +21,14 @@ class Builder(AntennaBuilder):
 
   def build_wires(self):
     eps = 0.05
-
-    """
-    A = 147.25
-    B = 22 3/16
-    C = 4 1/16
-    D = 27 7/16
-    E = 53 11/16
-"""
+    base = self.base
 
     # short = aspect_ratio*long
     # halfdriver = long/2 + short*t0_factor
     # halfdriver = long/2 + aspect_ratio*long*t0_factor
     # 2*halfdriver = long + 2*aspect_ratio*long*t0_factor
-    # 2*halfdriver = long(1 + 2*aspect_ratio*t0_factor)
-    # 2*halfdriver/(1 + 2*aspect_ratio*t0_factor) = long
+    # 2*halfdriver = long*(1 + 2*aspect_ratio*t0_factor)
+    # long = 2*halfdriver/(1 + 2*aspect_ratio*t0_factor)
 
     long = 2*self.halfdriver / (1 + 2*self.aspect_ratio*self.t0_factor)
     short = self.aspect_ratio * long
@@ -45,26 +38,39 @@ class Builder(AntennaBuilder):
 
     def build_path(lst, ns, ex):
       return ((a,b,ns,ex) for a,b in zip(lst[:-1], lst[1:]))
-
     def rx(p):
       return -p[0],  p[1], p[2]
     def ry(p):
       return  p[0], -p[1], p[2]
 
-    S = (0, eps, 0) 
-    T = ry(S)
+    """
+    D----------C   B-----A
+    |                    |
+    |                    |
+    |                    |
+    |                    |
+    |                    |
+    |                    |
+    |                    S
+    |                    |
+    |                    T
+    |                    |
+    |                    |
+    |                    |
+    |                    |
+    |                    |
+    |                    |
+    E----------F   G-----H
+	"""
 
-    A = (0, long/2, 0)
-    B = (A[0]-t0, A[1], 0)
-    C = (B[0]-tipspacer, B[1], 0)
-    D = (-short, long/2, 0)
-    E = ry(D)
-    F = ry(C)
-    G = ry(B)
-    H = ry(A)
+    S = (short/2,       eps,    base) 
+    A = (S[0],          long/2, base)
+    B = (A[0]-t0,        A[1],   base)
+    C = (B[0]-tipspacer, B[1],   base)
+    D = rx(A)
+    E, F, G, H, T = ry(D), ry(C), ry(B), ry(A), ry(S)
 
-    n_seg0 = 21
-    n_seg1 = 1
+    n_seg0, n_seg1 = 21, 1
       
     tups = []
     tups.extend(build_path([S,A,B], n_seg0, False))
@@ -72,8 +78,4 @@ class Builder(AntennaBuilder):
     tups.extend(build_path([G,H,T], n_seg0, False))
     tups.append((T, S, n_seg1, True))
 
-    new_tups = []
-    for (xoff, yoff, zoff) in [(0, 0, self.base)]:
-      new_tups.extend([((x0+xoff, y0+yoff, z0+zoff), (x1+xoff, y1+yoff, z1+zoff), ns, ex) for ((x0, y0, z0), (x1, y1, z1), ns, ex) in tups])
-
-    return new_tups
+    return tups

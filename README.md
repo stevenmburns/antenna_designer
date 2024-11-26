@@ -43,6 +43,8 @@ ant.compare_patterns(builders)
 Here is a python subclass that can be used to design a moxon antenna.
 In this design, there are four parameters that describe the shape of the rectangle. The parameter `halfdriver` is the length of one side of the radiating element, and this includes half of the long side of the rectangle and a segment on the short side. The parameter `t0_factor` is the fraction of the short side segment. `tipspacer_factor` is the fraction of the short side segment that separates the driver and the reflector. Finally, `aspect_ratio` describes the ratio of the short side to the long side.
 
+There are three helper functions that manipulate nodes, and form wires between nodes. The `rx` and `ry` functions negate the x and y coordinates, respectively, and the `build_path` functions constructs wires by connecting consecutive nodes. These functions, and the general use of Python programming constructs, allow the designer to specify physical coordinates a minimal number of times, perhaps reducing errors and simplifying the design. Few of the nodes have their coordinates specified explicitly, then rest being defined through node negation, and relative position with respect to other nodes. Most antenna design systems require six absolute coordinates per wire.
+
 ```python3
 from .. import AntennaBuilder
 from types import MappingProxyType
@@ -65,7 +67,7 @@ class Builder(AntennaBuilder):
     # halfdriver = long/2 + short*t0_factor
     # halfdriver = long/2 + aspect_ratio*long*t0_factor
     # 2*halfdriver = long + 2*aspect_ratio*long*t0_factor
-    # 2*halfdriver = long(1 + 2*aspect_ratio*t0_factor)
+    # 2*halfdriver = long*(1 + 2*aspect_ratio*t0_factor)
     # long = 2*halfdriver/(1 + 2*aspect_ratio*t0_factor)
 
     long = 2*self.halfdriver / (1 + 2*self.aspect_ratio*self.t0_factor)
@@ -90,7 +92,7 @@ class Builder(AntennaBuilder):
     |                    |
     |                    |
     |                    S
-	|
+	|                    |
     |                    T
     |                    |
     |                    |
@@ -101,12 +103,11 @@ class Builder(AntennaBuilder):
     E----------F   G-----H
 	"""
 
-    S = (0,              eps,    base) 
-    A = (0,              long/2, base)
+    S = (short/2,        eps,    base) 
+    A = (S[0],           long/2, base)
     B = (A[0]-t0,        A[1],   base)
     C = (B[0]-tipspacer, B[1],   base)
-    D = (-short,         long/2, base)
-
+    D = rx(A)
     E, F, G, H, T = ry(D), ry(C), ry(B), ry(A), ry(S)
 
     n_seg0, n_seg1 = 21, 1
