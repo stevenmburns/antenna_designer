@@ -20,7 +20,9 @@ def test_bowtie_sweep_length():
 def test_bowtie_optimize():
   gold_params = Builder.default_params
 
-  params = ant.optimize(Builder(gold_params), ['length', 'slope'], z0=200)
+  builder = ant.optimize(Builder(gold_params), ['length', 'slope'], z0=200)
+
+  params = builder._params
 
   assert all(abs(params[k]-v) < 0.01 for k, v in gold_params.items())
 

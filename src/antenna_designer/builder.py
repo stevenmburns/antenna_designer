@@ -110,7 +110,7 @@ class Array2x4Builder(AntennaBuilder):
           local_element_params[k] = v
 
       for k in changed_keys:
-        local_element_params[k] = self.params[k + suffix]
+        local_element_params[k] = self._params[k + suffix]
 
       element_builder_local = self.element_builder(local_element_params)
 

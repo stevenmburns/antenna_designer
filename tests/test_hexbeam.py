@@ -47,8 +47,9 @@ def test_hexbeam_pattern3d():
   ant.pattern3d(Builder(), fn='hexbeam_pattern3d.pdf')
 
 def test_hexbeam_optimize():
-  params = ant.optimize(Builder(), ['halfdriver','t0_factor','tipspacer_factor'], z0=50, resonance=True, opt_gain=True)
+  builder = ant.optimize(Builder(), ['halfdriver','t0_factor','tipspacer_factor'], z0=50, resonance=True, opt_gain=True)
 
+  params = builder._params
   print(params)
 
   assert all(abs(params[k]-v) < 0.01 for k, v in Builder.opt_params.items())

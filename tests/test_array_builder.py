@@ -16,8 +16,9 @@ def test_bowtiearray2x4_pattern():
 def test_bowtiearray2x4_optimize():
   gold_params = bowtiearray2x4.Builder.default_params
 
-  params = ant.optimize(bowtiearray2x4.Builder(gold_params), ['length_otop', 'slope_otop', 'length_obot', 'slope_obot', 'length_itop', 'slope_itop', 'length_ibot', 'slope_ibot'], z0=200, resonance=True, opt_gain=True)
+  builder = ant.optimize(bowtiearray2x4.Builder(gold_params), ['length_otop', 'slope_otop', 'length_obot', 'slope_obot', 'length_itop', 'slope_itop', 'length_ibot', 'slope_ibot'], z0=200, resonance=True, opt_gain=True)
 
+  params = builder._params
   print(params)
 
   assert all(abs(params[k]-v) < 0.01 for k, v in gold_params.items())
