@@ -54,7 +54,8 @@ def test_moxon_pattern3d():
 
 @pytest.mark.skip(reason="Too long and golden answer changing")
 def test_moxon_optimize():
-  params = ant.optimize(Builder(), ['halfdriver','t0_factor','tipspacer_factor'], z0=50, opt_gain=True)
+  builder = ant.optimize(Builder(), ['halfdriver','t0_factor','tipspacer_factor'], z0=50, opt_gain=True)
 
+  params = builder._params
   print(params)
   assert all(abs(params[k]-v) < 0.01 for k, v in Builder.opt_params.items())

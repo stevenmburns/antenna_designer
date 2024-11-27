@@ -14,5 +14,5 @@ def test_vertical_pattern3d():
   ant.pattern3d(Builder(), fn='vertical_pattern3d.pdf')
 
 def test_vertical_optimize():
-  params = ant.optimize(Builder(), ['length'], z0=50, resonance=True)
-  assert all(abs(params[k]-v) < 0.01 for k, v in Builder.default_params.items())
+  builder = ant.optimize(Builder(), ['length'], z0=50, resonance=True)
+  assert all(abs(getattr(builder, k)-v) < 0.01 for k, v in Builder.default_params.items())

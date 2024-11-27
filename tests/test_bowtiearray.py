@@ -47,7 +47,9 @@ def test_bowtiearray_sweep_gain_base():
 def test_bowtiearray_optimize():
   gold_params = bowtiearray.Builder.default_params
 
-  params = ant.optimize(bowtiearray.Builder(gold_params), ['length_top', 'slope_top', 'length_bot', 'slope_bot'], z0=200)
+  builder = ant.optimize(bowtiearray.Builder(gold_params), ['length_top', 'slope_top', 'length_bot', 'slope_bot'], z0=200)
+  params = builder._params
+  print(params)
 
   assert all(abs(params[k]-v) < 0.01 for k, v in gold_params.items())
 
@@ -55,6 +57,9 @@ def test_bowtiearray_optimize():
 def test_bowtiearray_optimize_for_gain():
   gold_params = bowtiearray.Builder.default_params
 
-  params = ant.optimize(bowtiearray.Builder(gold_params), ['length_top', 'slope_top', 'length_bot', 'slope_bot', 'del_y', 'del_z'], z0=200, resonance=True, opt_gain=True)
+  builder = ant.optimize(bowtiearray.Builder(gold_params), ['length_top', 'slope_top', 'length_bot', 'slope_bot', 'del_y', 'del_z'], z0=200, resonance=True, opt_gain=True)
+
+  params = builder._params
+  print(params)
 
   assert all(abs(params[k]-v) < 0.01 for k, v in gold_params.items())

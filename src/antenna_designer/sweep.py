@@ -26,7 +26,7 @@ def resolve_range(default_value, rng, center, fraction):
 
 def sweep_freq(antenna_builder, *, z0=200, rng=None, center=None, fraction=None, npoints=21, fn=None):
 
-  rng = resolve_range(antenna_builder.params['freq'], rng, center, fraction)
+  rng = resolve_range(antenna_builder.freq, rng, center, fraction)
 
   min_freq = rng[0]
   max_freq = rng[1]
@@ -75,13 +75,13 @@ def sweep_freq(antenna_builder, *, z0=200, rng=None, center=None, fraction=None,
 
 def sweep_gain(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, fn=None):
 
-  rng = resolve_range(antenna_builder.params[nm], rng, center, fraction)
+  rng = resolve_range(getattr(antenna_builder, nm), rng, center, fraction)
 
   xs = np.linspace(rng[0],rng[1],npoints)
 
   gs = []
   for x in xs:
-    antenna_builder.params[nm] = x
+    setattr(antenna_builder, nm, x)
     _, max_gain, _, _, _ = build_and_get_elevation(antenna_builder)
     gs.append(max_gain)
 
@@ -98,13 +98,13 @@ def sweep_gain(antenna_builder, nm, *, rng=None, center=None, fraction=None, npo
 
 def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, fn=None):
 
-  rng = resolve_range(antenna_builder.params[nm], rng, center, fraction)
+  rng = resolve_range(getattr(antenna_builder, nm), rng, center, fraction)
 
   xs = np.linspace(rng[0],rng[1],npoints)
 
   zs = []
   for x in xs:
-    antenna_builder.params[nm] = x
+    setattr(antenna_builder, nm, x)
     zs.append(Antenna(antenna_builder).impedance())
   zs = np.array(zs)
   

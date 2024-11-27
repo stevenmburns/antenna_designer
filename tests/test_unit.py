@@ -10,9 +10,19 @@ def test_unit_params():
   assert dp.base == 7
   assert dp.length == 10
 
-  dp.params['freq'] = 2
+  dp._params['freq'] = 2
   assert dp.freq == 2
-  assert dp.params['freq'] == 2
+  assert dp._params['freq'] == 2
+
+  dp.freq = 3
+  assert dp.freq == 3
+  assert dp._params['freq'] == 3
+
+  dp.z0 = 50
+  assert dp.z0 == 50
+  assert dp._params['z0'] == 50
+
+
 
 def test_dict_update_options():
   p = {'a': 0, 'b': 1}

@@ -7,20 +7,23 @@ from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 class AntennaBuilder:
   def __init__(self, params=None):
-    if params is None:
-      self.params = dict(self.__class__.default_params)
-    else:
-      self.params = dict(params)
+    # write directly to __dict__ because otherwise __setattr__ goes into infinite loop
+    self.__dict__['_params'] = dict(
+      self.__class__.default_params if params is None else params
+    )
 
     "Check that params key's are legal"
-    assert all(k in self.__class__.default_params for k in self.params.keys())
+    assert all(k in self.__class__.default_params for k in self._params.keys())
 
   def __getattr__(self, nm):
-    return self.params[nm]
+    return self._params[nm]
+
+  def __setattr__(self, nm, v):
+    self._params[nm] = v
 
   def __str__(self):
     res = []
-    for k, v in self.params.items():
+    for k, v in self._params.items():
       res.append(f"{k} = {v:0.3f}")
     return ', '.join(res)
 
@@ -43,7 +46,7 @@ class AntennaBuilder:
 
 class Array2x2Builder(AntennaBuilder):
   def __init__(self, element_builder, params=None):
-    self.element_builder = element_builder
+    self.__dict__['element_builder'] = element_builder
     super().__init__(params)
 
   def build_wires(self):
@@ -51,7 +54,7 @@ class Array2x2Builder(AntennaBuilder):
     elem_params_keys = set(elem_params.keys())
 
     changed_keys = set()
-    for k,v in self.params.items():
+    for k,v in self._params.items():
       if k not in elem_params_keys:
         if k.endswith('_top') or k.endswith('_bot'):
           elem_key = k[:-4]
@@ -60,12 +63,12 @@ class Array2x2Builder(AntennaBuilder):
 
     def build_element_wires(suffix):
       local_element_params = dict(elem_params)
-      for k,v in self.params.items():    
+      for k,v in self._params.items():    
         if k in elem_params_keys and k not in changed_keys:
           local_element_params[k] = v
 
       for k in changed_keys:
-        local_element_params[k] = self.params[k + suffix]
+        local_element_params[k] = self._params[k + suffix]
 
       element_builder_local = self.element_builder(local_element_params)
 
@@ -83,7 +86,7 @@ class Array2x2Builder(AntennaBuilder):
 
 class Array2x4Builder(AntennaBuilder):
   def __init__(self, element_builder, params=None):
-    self.element_builder = element_builder
+    self.__dict__['element_builder'] = element_builder
     super().__init__(params)
 
   def build_wires(self):
@@ -93,7 +96,7 @@ class Array2x4Builder(AntennaBuilder):
     suffixes = ['_itop', '_ibot', '_otop', '_obot']
 
     changed_keys = set()
-    for k,v in self.params.items():
+    for k,v in self._params.items():
       if k not in elem_params_keys:
         if any(k.endswith(suffix) for suffix in suffixes):
           elem_key = k[:-5]
@@ -102,7 +105,7 @@ class Array2x4Builder(AntennaBuilder):
 
     def build_element_wires(suffix):
       local_element_params = dict(elem_params)
-      for k,v in self.params.items():    
+      for k,v in self._params.items():    
         if k in elem_params_keys and k not in changed_keys:
           local_element_params[k] = v
 
