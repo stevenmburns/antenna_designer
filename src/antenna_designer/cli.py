@@ -56,7 +56,7 @@ def cli(arguments=None):
     elif args.command == 'sweep':
         module = getattr(designs, args.builder)
         if args.gain:
-            sweep_gain(module.Builder(), args.sweep_param, rng=args.sweep_range, npoints=args.sweep_npoints, center=args.sweep_center, fraction=args.sweep_fraction, fn=args.fn)
+            sweep_gain(module.Builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, fn=args.fn)
         else:
             sweep(module.Builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, fn=args.fn)
     elif args.command == 'pattern':
