@@ -8,12 +8,10 @@ from scipy.optimize import minimize
 
 def optimize(antenna_builder, independent_variable_names, *, z0=50, resonance=False, opt_gain=False, bounds=None):
 
-  print(antenna_builder.params)
-
   def objective(independent_variables):
 
       for v, nm in zip(independent_variables, independent_variable_names):
-        antenna_builder.params[nm] = v
+        setattr(antenna_builder, nm, v)
 
       a = Antenna(antenna_builder)
       zs = a.impedance()
@@ -26,7 +24,6 @@ def optimize(antenna_builder, independent_variable_names, *, z0=50, resonance=Fa
         rho = abs(reflection_coefficient)
         swr = (1+rho)/(1-rho)
         rho_db = np.log10(rho)*10.0
-
 
         if opt_gain:
           print("Impedance at %s: (%.3f,%+.3fj) Ohms rho=%.4f swr=%.4f, rho_db=%.3f max_gain=%.2f" % (str(antenna_builder), z.real, z.imag, rho, swr, rho_db, max_gain))
@@ -47,7 +44,7 @@ def optimize(antenna_builder, independent_variable_names, *, z0=50, resonance=Fa
   #'Nelder-Mead'
   #'Powell', options={'maxiter':100, 'disp': True, 'xtol': 0.0001}
 
-  x0 = tuple(antenna_builder.params[nm] for nm in independent_variable_names)
+  x0 = tuple(getattr(antenna_builder, nm) for nm in independent_variable_names)
   if bounds is None:
     bounds = tuple((x*.6, x*1.67) for x in x0)
 
@@ -56,9 +53,9 @@ def optimize(antenna_builder, independent_variable_names, *, z0=50, resonance=Fa
   print(result)
 
   for x, nm in zip(result.x, independent_variable_names):
-    antenna_builder.params[nm] = x
+    setattr(antenna_builder, nm, x)
 
   print(objective(result.x))
 
-  return antenna_builder.params
+  return antenna_builder
 

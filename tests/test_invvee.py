@@ -21,12 +21,12 @@ def test_invvee_sweep_gain_length():
 def test_invvee_sweep_gain_slope():
   ant.sweep_gain(Builder(), 'slope', rng=(.2,1), fn='invvee_sweep_gain_slope.pdf')
 
-
 def test_invvee_optimize():
 
   gold_params = Builder.default_params
-  params = ant.optimize(Builder(gold_params), ['length','slope'], z0=50)
-
+  builder = ant.optimize(Builder(gold_params), ['length','slope'], z0=50)
+  params = builder._params
+  print(params)
   assert all(abs(params[k]-v) < 0.01  for k, v in gold_params.items())
 
 @pytest.mark.skip(reason='Experimental')
@@ -36,10 +36,8 @@ def test_invvee_diff_optimize():
   bounds = ((gold_params['length']*.8, gold_params['length']*1.25),(0,1))
 
   builders = (
-    Builder(
-      ant.optimize(Builder(dict(gold_params, **{'base': base})),
-                   ['length','slope'], z0=50, bounds=bounds
-      )
+    ant.optimize(Builder(dict(gold_params, **{'base': base})),
+                 ['length','slope'], z0=50, bounds=bounds
     ) for base in [5,6,7,8]
   )
 
