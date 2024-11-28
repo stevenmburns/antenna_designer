@@ -1,5 +1,5 @@
 import pytest
-
+import numpy as np
 import antenna_designer as ant
 
 from antenna_designer.designs import bowtiearray, bowtiearray2x4, invveearray
@@ -40,3 +40,20 @@ def test_invveearray_optimize():
 
   assert all(abs(params[k]-v) < 0.01 for k, v in gold_params.items())
 
+@pytest.mark.skip(reason='Draws to screen')
+def test_bowtiearray_phase_lr_pattern():
+
+  builders = (
+    bowtiearray.Builder(dict(bowtiearray.Builder.default_params, **{'phase_lr': p})) for p in np.linspace(0, 180-36, 5)
+  )
+
+  ant.compare_patterns(builders)
+
+@pytest.mark.skip(reason='Draws to screen')
+def test_bowtiearray_phase_tb_pattern():
+
+  builders = (
+    bowtiearray.Builder(dict(bowtiearray.Builder.default_params, **{'phase_tb': p})) for p in np.linspace(-60, 60, 5)
+  )
+
+  ant.compare_patterns(builders)

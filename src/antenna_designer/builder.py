@@ -1,4 +1,5 @@
 from .core import save_or_show
+import numpy as np
 
 import matplotlib.pyplot as plt
 #from matplotlib.collections import LineCollection
@@ -16,7 +17,13 @@ class AntennaBuilder:
     assert all(k in self.__class__.default_params for k in self._params.keys())
 
   def __getattr__(self, nm):
-    return self._params[nm]
+    if nm in self._params:
+      return self._params[nm]
+    else:
+      # raise AttributeError to get hasattr() to work correctly
+      classname = type(self).__name__
+      msg = f'{classname!r} object has no attribute {nm!r}'
+      raise AttributeError(msg)
 
   def __setattr__(self, nm, v):
     self._params[nm] = v
@@ -24,10 +31,11 @@ class AntennaBuilder:
   def __str__(self):
     res = []
     for k, v in self._params.items():
-      res.append(f"{k} = {v:0.3f}")
+      res.append(f"{k} = {v:.4f}")
     return ', '.join(res)
 
-  def draw(self, tups, fn=None):
+  @staticmethod
+  def draw(tups, fn=None):
 
     pairs = [(p0, p1) for p0, p1, _, _ in tups]
     print(pairs)
@@ -77,10 +85,15 @@ class Array2x2Builder(AntennaBuilder):
     tups_top = build_element_wires('_top')
     tups_bot = build_element_wires('_bot')
 
+    phasor_lr, phasor_tb = (
+      np.exp((0+1j)*np.pi*getattr(self, p)/180) if hasattr(self, p) else 1 for p in ('phase_lr', 'phase_tb')
+    )
+
     new_tups = []
-    for yoff in (-self.del_y, self.del_y):
-      for zoff, tups in ((self.del_z, tups_top), (-self.del_z, tups_bot)):
-        new_tups.extend([((x0, y0+yoff, z0+zoff), (x1, y1+yoff, z1+zoff), ns, ex) for ((x0, y0, z0), (x1, y1, z1), ns, ex) in tups])
+    for yoff, ph0 in ((-self.del_y, 1), (self.del_y, phasor_lr)):
+      for zoff, tups, ph1 in ((self.del_z, tups_top, 1), (-self.del_z, tups_bot, phasor_tb)):
+        for (x0, y0, z0), (x1, y1, z1), ns, ex in tups:
+          new_tups.extend([((x0, y0+yoff, z0+zoff), (x1, y1+yoff, z1+zoff), ns, ph0*ph1 if ex is not None else ex)])
 
     return new_tups
 

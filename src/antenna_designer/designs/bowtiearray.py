@@ -12,7 +12,9 @@ class Builder(Array2x2Builder):
     'length_top': 5.771,
     'length_bot': 5.68,
     'del_y': 4,
-    'del_z': 2
+    'del_z': 2,
+    'phase_lr': 0,
+    'phase_tb': 0
   })
 
   def __init__(self, params = None):

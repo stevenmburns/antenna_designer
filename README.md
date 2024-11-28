@@ -11,7 +11,7 @@ python -m antenna_designer draw --builder moxon
 
 To see the impedance as a function of the `halfdriver` parameter in the moxon model, try:
 ```bash
-python -m antenna_designer sweep --builder moxon --sweep_param halfdriver
+python -m antenna_designer sweep --builder moxon --param halfdriver
 ```
 To compare the far-field patterns of a moxon and hexbeam, try:
 ```bash
@@ -28,11 +28,9 @@ p = Builder.default_params
 bounds = ((p['length']*.8, p['length']*1.25),(0,1))
 
 builders = (
-  Builder(
-    ant.optimize(
-	  Builder(dict(p, **{'base': base})),
-              ['length','slope'], z0=50, bounds=bounds
-    )
+  ant.optimize(
+    Builder(dict(p, **{'base': base})),
+    ['length','slope'], z0=50, bounds=bounds
   ) for base in [5,6,7,8]
 )
 

@@ -22,7 +22,9 @@ def test_unit_params():
   assert dp.z0 == 50
   assert dp._params['z0'] == 50
 
-
+  assert not hasattr(dp, 'excitation')
+    
+  
 
 def test_dict_update_options():
   p = {'a': 0, 'b': 1}

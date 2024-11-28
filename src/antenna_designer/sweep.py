@@ -106,8 +106,9 @@ def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=
   for x in xs:
     setattr(antenna_builder, nm, x)
     zs.append(Antenna(antenna_builder).impedance())
+
   zs = np.array(zs)
-  
+
   fig, ax0 = plt.subplots()
   color = 'tab:red'
   ax0.set_xlabel(nm)
