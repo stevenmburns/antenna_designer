@@ -9,3 +9,4 @@ src/*.egg-info/
 TEST_RESULTS
 dist/
 build/
+.coverage
