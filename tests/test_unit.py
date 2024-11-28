@@ -1,8 +1,30 @@
 from antenna_designer.designs.dipole import Builder
+#from icecream import ic
 
 from types import MappingProxyType
 
 from antenna_designer.sweep import resolve_range
+
+from antenna_designer.cli import resolve_class
+from types import ModuleType
+
+def test_resolve_class():
+  def check(res):
+    return res is not None and not isinstance(res, ModuleType)
+
+
+  assert check(resolve_class('dipole.Builder'))
+  assert check(resolve_class('dipole.Builder'))
+
+  assert not check(resolve_class('dipole.Builder0'))
+  assert check(resolve_class('freq_based_dipole.Builder'))
+  assert check(resolve_class('freq_based_dipole.FancyBuilder')) 
+  assert not check(resolve_class('freq_based_dipole.Builder0'))
+  assert check(resolve_class('dipole')) 
+  assert check(resolve_class('freq_based_dipole'))
+  assert not check(resolve_class('fail'))
+  
+
 
 def test_unit_params():
   dp = Builder({'freq':1, 'base':7, 'length':10})

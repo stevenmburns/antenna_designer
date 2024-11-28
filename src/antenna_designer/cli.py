@@ -1,10 +1,58 @@
 from . import AntennaBuilder
 from icecream import ic
 from . import sweep, sweep_gain, pattern, pattern3d, compare_patterns, optimize
-from . import designs
-from .designs import * #noqa F401, F403
 
 import argparse
+from importlib import import_module
+from types import ModuleType
+
+def resolve_class(s):
+    lst = s.split('.')
+    
+    """
+    Try in order:
+    local with explicit Builder
+    local with implicit Builder
+    library with explicit Builder
+    library with implicit Builder
+    """
+
+    ic(s, lst)
+
+    def try_to_resolve(builder_name, module_name):
+        ic(builder_name, module_name)
+        try:
+            module = import_module(module_name)
+            try:
+                res = getattr(module, builder_name)
+                ic(res)
+                if isinstance(res, ModuleType):
+                    return None
+                else:
+                    return res
+            except AttributeError as ex:
+                ic(ex)
+                return None
+        except ModuleNotFoundError as ex:
+            ic(ex)
+            return None
+
+    if len(lst) > 1:
+        if (res := try_to_resolve(lst[-1], '.'.join(lst[:-1]))) is not None:
+            return res
+
+    if (res := try_to_resolve('Builder', '.'.join(lst))) is not None:
+        return res
+
+    lst = ['antenna_designer', 'designs'] + lst
+
+    if len(lst) > 1:
+        if (res := try_to_resolve(lst[-1], '.'.join(lst[:-1]))) is not None:
+            return res
+
+    if (res := try_to_resolve('Builder', '.'.join(lst))) is not None:
+        return res
+
 
 def cli(arguments=None):
     parser = argparse.ArgumentParser()
@@ -49,28 +97,33 @@ def cli(arguments=None):
 
     ic(args)
 
+    def get_builder(nm):
+        return resolve_class(nm)
+
+    def get_builders(nms):
+        return (get_builder(nm) for nm in nms)
+
+
     if args.command == 'draw':
-        module = getattr(designs, args.builder)
-        b = module.Builder()
-        AntennaBuilder.draw(b.build_wires(), fn=args.fn)
+        builder = get_builder(args.builder)
+        AntennaBuilder.draw(builder().build_wires(), fn=args.fn)
     elif args.command == 'sweep':
-        module = getattr(designs, args.builder)
+        builder = get_builder(args.builder)
         if args.gain:
-            sweep_gain(module.Builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, fn=args.fn)
+            sweep_gain(builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, fn=args.fn)
         else:
-            sweep(module.Builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, fn=args.fn)
+            sweep(builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, fn=args.fn)
     elif args.command == 'pattern':
-        module = getattr(designs, args.builder)
+        builder = get_builder(args.builder)
         if args.wireframe:
-            pattern3d(module.Builder(), fn=args.fn)
+            pattern3d(builder(), fn=args.fn)
         else:
-            pattern(module.Builder(), fn=args.fn)
+            pattern(builder(), fn=args.fn)
     elif args.command == 'compare_patterns':
-        modules = (getattr(designs, builder) for builder in args.builders)
-        builders = (module.Builder() for module in modules)
-        compare_patterns(builders, fn=args.fn)
+        builders = get_builders(args.builders)
+        compare_patterns((builder() for builder in builders), fn=args.fn)
     elif args.command == 'optimize':
-        module = getattr(designs, args.builder)
-        builder = optimize(module.Builder(), args.params, z0=args.z0, opt_gain=args.opt_gain, resonance=args.resonance)
-        print(builder)
-        compare_patterns((module.Builder(), builder), fn=args.fn)
+        builder = get_builder(args.builder)
+        opt_builder = optimize(builder(), args.params, z0=args.z0, opt_gain=args.opt_gain, resonance=args.resonance)
+        print(opt_builder)
+        compare_patterns((builder(), opt_builder), fn=args.fn)
