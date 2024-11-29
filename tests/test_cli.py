@@ -15,6 +15,7 @@ def test_cli():
     ant.cli(f'draw --builder {design}{o}'.split())
 
   ant.cli(f'sweep --param tipspacer_factor --builder moxon{o}'.split())
+  ant.cli(f'sweep --param tipspacer_factor --builder moxon{o} --use_smithchart --z0=50'.split())
   ant.cli(f'sweep --gain --param tipspacer_factor --builder moxon{o}'.split())
   ant.cli(f'optimize --params length slope --builder invvee{o}'.split())
   ant.cli(f'optimize --opt_gain --params length slope --resonance --builder invvee{o}'.split())

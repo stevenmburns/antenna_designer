@@ -5,6 +5,8 @@ from .far_field import get_elevation
 import numpy as np
 
 import matplotlib.pyplot as plt
+import skrf
+import skrf.plotting
 
 def build_and_get_elevation(antenna_builder):
   a = Antenna(antenna_builder)
@@ -96,7 +98,7 @@ def sweep_gain(antenna_builder, nm, *, rng=None, center=None, fraction=None, npo
 
   save_or_show(plt, fn)
 
-def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, fn=None):
+def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, use_smithchart=False, z0=50, fn=None):
 
   rng = resolve_range(getattr(antenna_builder, nm), rng, center, fraction)
 
@@ -109,23 +111,32 @@ def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=
 
   zs = np.array(zs)
 
-  fig, ax0 = plt.subplots()
-  color = 'tab:red'
-  ax0.set_xlabel(nm)
-  ax0.set_ylabel('z real', color=color)
-  ax0.tick_params(axis='y', labelcolor=color)
-  for i in range(zs.shape[1]):
-    ax0.plot(xs, np.real(zs)[:,i], color=color)
+  if use_smithchart:
+    fig, ax0 = plt.subplots()
+    color = 'tab:red'
+    skrf.plotting.smith(draw_labels=True, chart_type='z')
+    for i in range(zs.shape[1]):
+      normalized_zs = zs/z0
+      reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
 
+      skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z')
 
-  color = 'tab:blue'
-  ax1 = ax0.twinx()
-  ax1.set_ylabel('z imag', color=color)
-  ax1.tick_params(axis='y', labelcolor=color)
-  for i in range(zs.shape[1]):
-    ax1.plot(xs, np.imag(zs)[:,i], color=color)
+  else:
+    fig, ax0 = plt.subplots()
+    color = 'tab:red'
+    ax0.set_ylabel('z real', color=color)
+    ax0.tick_params(axis='y', labelcolor=color)
+    for i in range(zs.shape[1]):
+      ax0.plot(xs, np.imag(zs)[:,i], color=color)
 
-  fig.tight_layout()
+    color = 'tab:blue'
+    ax1 = ax0.twinx()
+    ax1.set_ylabel('z imag', color=color)
+    ax1.tick_params(axis='y', labelcolor=color)
+    for i in range(zs.shape[1]):
+      ax1.plot(xs, np.imag(zs)[:,i], color=color)
+
+    fig.tight_layout()
 
   save_or_show(plt, fn)
 
