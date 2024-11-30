@@ -1,4 +1,4 @@
-from .. import AntennaBuilder
+from ... import AntennaBuilder
 
 from types import MappingProxyType
 

@@ -98,7 +98,7 @@ def sweep_gain(antenna_builder, nm, *, rng=None, center=None, fraction=None, npo
 
   save_or_show(plt, fn)
 
-def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, use_smithchart=False, z0=50, fn=None):
+def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, use_smithchart=False, z0=50, markers=[], fn=None):
 
   rng = resolve_range(getattr(antenna_builder, nm), rng, center, fraction)
 
@@ -109,7 +109,14 @@ def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=
     setattr(antenna_builder, nm, x)
     zs.append(Antenna(antenna_builder).impedance())
 
+  marker_zs = []
+  for x in markers:
+    setattr(antenna_builder, nm, x)
+    marker_zs.append(Antenna(antenna_builder).impedance())
+
   zs = np.array(zs)
+  marker_xs = np.array(markers)
+  marker_zs = np.array(marker_zs)
 
   if use_smithchart:
     fig, ax0 = plt.subplots()
@@ -121,13 +128,21 @@ def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=
 
       skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z')
 
+    if marker_zs.shape[0] > 0:
+      normalized_zs = marker_zs/z0
+      reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
+
+      skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
+      
   else:
     fig, ax0 = plt.subplots()
     color = 'tab:red'
     ax0.set_ylabel('z real', color=color)
     ax0.tick_params(axis='y', labelcolor=color)
     for i in range(zs.shape[1]):
-      ax0.plot(xs, np.imag(zs)[:,i], color=color)
+      ax0.plot(xs, np.real(zs)[:,i], color=color)
+      if marker_zs.shape[0] > 0:
+        ax0.plot(marker_xs, np.real(marker_zs)[:,i], color=color, marker='s', linestyle='None')
 
     color = 'tab:blue'
     ax1 = ax0.twinx()
@@ -135,6 +150,9 @@ def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=
     ax1.tick_params(axis='y', labelcolor=color)
     for i in range(zs.shape[1]):
       ax1.plot(xs, np.imag(zs)[:,i], color=color)
+      if marker_zs.shape[0] > 0:
+        ax1.plot(marker_xs, np.imag(marker_zs)[:,i], color=color, marker='s', linestyle='None')
+
 
     fig.tight_layout()
 

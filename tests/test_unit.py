@@ -23,7 +23,11 @@ def test_resolve_class():
   assert check(resolve_class('dipole')) 
   assert check(resolve_class('freq_based_dipole'))
   assert not check(resolve_class('fail'))
-  
+
+  assert check(resolve_class('subdir.moxon.Builder'))
+
+  assert check(resolve_class('freq_based.invvee'))
+
 
 
 def test_unit_params():

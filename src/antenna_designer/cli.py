@@ -1,6 +1,8 @@
 from . import AntennaBuilder
 from . import sweep, sweep_gain, pattern, pattern3d, compare_patterns, optimize
 
+from icecream import ic
+
 import argparse
 from importlib import import_module
 from types import ModuleType
@@ -16,11 +18,14 @@ def resolve_class(s):
     library with implicit Builder
     """
 
+    ic(s, lst)
     def try_to_resolve(builder_name, module_name):
+        ic(builder_name, module_name)
         try:
             module = import_module(module_name)
             try:
                 res = getattr(module, builder_name)
+                ic(res)
                 return None if isinstance(res, ModuleType) else res
             except AttributeError:
                 return None
@@ -70,20 +75,21 @@ def cli(arguments=None):
 
     p = subparsers.add_parser('sweep', help='Sweep antenna')
     add_common(p)
-    p.add_argument('--param', type=str, default='freq', help='Use this sweep parameter.')
-    p.add_argument('--range', nargs=2, default=None, type=float, help='Use this sweep range.')
-    p.add_argument('--center', default=None, type=float, help='Use this to construct the sweep range.')
-    p.add_argument('--fraction', default=None, type=float, help='Use this to construct the sweep range.')
-    p.add_argument('--npoints', default=21, type=int, help='Use this as the number of points in the sweep.')
+    p.add_argument('--param', type=str, default='freq', help='Variable to sweep.')
+    p.add_argument('--range', nargs=2, default=None, type=float, help='Range for sweep.')
+    p.add_argument('--center', default=None, type=float, help='Center if range not given.')
+    p.add_argument('--fraction', default=None, type=float, help='Fraction around center for range.')
+    p.add_argument('--npoints', default=21, type=int, help='Points in the range.')
     p.add_argument('--gain', default=False, action='store_true', help='Plot gain instead of impedance.')
-    p.add_argument('--use_smithchart', default=False, action='store_true', help='Plot impedance in smithchart.')
-    p.add_argument('--z0', default=50, type=float, help='Use this reference impedance.')
+    p.add_argument('--use_smithchart', default=False, action='store_true', help='Plot impedance using a smithchart.')
+    p.add_argument('--z0', default=50, type=float, help='Reference impedance.')
+    p.add_argument('--markers', default=[], nargs='+', type=float, help='Add markers at these values.')
     def f(args):
         builder = get_builder(args.builder)
         if args.gain:
             sweep_gain(builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, fn=args.fn)
         else:
-            sweep(builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, use_smithchart=args.use_smithchart, fn=args.fn, z0=args.z0)
+            sweep(builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, use_smithchart=args.use_smithchart, fn=args.fn, z0=args.z0, markers=args.markers)
     p.set_defaults(func=f)
 
     p = subparsers.add_parser('optimize', help='Optimize antenna')

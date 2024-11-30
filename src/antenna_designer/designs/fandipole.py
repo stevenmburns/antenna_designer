@@ -32,9 +32,9 @@ class Builder(AntennaBuilder):
     'length_20': 10,
     'length_17': 10 * 14.3 / 18.157,
     'length_15': 10 * 14.3 / 21.383,
-    'length_12': 10 * 14.3 / 24.97,
-    'length_10': 10 * 14.3 / 28.57,
-    'slope': 0.604
+    'length_12': 5.6,
+    'length_10': 4.8,
+    'slope': 0
   })
 
   def build_wires(self):
