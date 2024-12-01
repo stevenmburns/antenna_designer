@@ -30,7 +30,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install setuptools numpy scipy pytest matplotlib icecream scikit.rf coverage pytest-cov
+        pip install setuptools numpy scipy pytest matplotlib icecream scikit.rf coverage
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
     - name: install swig3.0 (g++, buildtools and fortran already installed)
@@ -57,7 +57,7 @@ jobs:
     - name: Test with pytest
       run: |
         pip install -e .
-        pytest --cov=src/ -vv --durations=0 -- tests/
+        coverage run --source=src/ -m pytest tests/
 
     - name: Coverage comment
       uses: py-cov-action/python-coverage-comment-action@v3
