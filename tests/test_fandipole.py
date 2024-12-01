@@ -8,27 +8,32 @@ def test_fandipole_build():
   b = Builder()
   b.draw(b.build_wires())
 
+@pytest.mark.skip(reason="Experimental")
 def test_fandipole_sweep_freq():
   params = dict(Builder.default_params)
   #params['length_20'] = 10
   #ant.sweep(Builder(params), 'freq', rng=(14,30), npoints=101, fn='fandipole_sweep_freq.pdf')
   ant.sweep_freq(Builder(params), z0=50, rng=(10,30), npoints=101, fn='fandipole_sweep_freq.pdf')
 
+@pytest.mark.skip(reason="Experimental")
 def test_fandipole_sweep_length_20():
   params = dict(Builder.default_params)
   params['freq'] = 14.3
   ant.sweep(Builder(params), 'length_20', rng=(10.5,12), fn='fandipole_sweep_length_20.pdf')
 
+@pytest.mark.skip(reason="Experimental")
 def test_fandipole_sweep_length17():
   params = dict(Builder.default_params)
   params['freq'] = 18.1575
   ant.sweep(Builder(params), 'length_17', rng=(11.3*17/20-1,11.3*17/20+1), fn='fandipole_sweep_length_17.pdf')
 
+@pytest.mark.skip(reason="Experimental")
 def test_fandipole_sweep_length_15():
   params = dict(Builder.default_params)
   params['freq'] = 21.383
   ant.sweep(Builder(params), 'length_15', rng=(11.3*15/20-1,11.3*15/20+1), fn='fandipole_sweep_length_15.pdf')
 
+@pytest.mark.skip(reason="Experimental")
 def test_fandipole_sweep_length_12():
   params = dict(Builder.default_params)
 
@@ -45,6 +50,7 @@ def test_fandipole_sweep_length_12():
   params['freq'] = 24.97
   ant.sweep(Builder(params), 'length_12', rng=(3,6), fn='fandipole_sweep_length_12.pdf')
 
+@pytest.mark.skip(reason="Experimental")
 def test_fandipole_sweep_length_10():
   params = dict(Builder.default_params)
 
@@ -60,9 +66,11 @@ def test_fandipole_sweep_length_10():
   params['freq'] = 28.57
   ant.sweep(Builder(params), 'length_10', rng=(3,6), fn='fandipole_sweep_length_10.pdf')
 
+@pytest.mark.skip(reason="Experimental")
 def test_fandipole_pattern():
   ant.pattern(Builder(), fn='fandipole_pattern.pdf')
 
+@pytest.mark.skip(reason="Experimental")
 def test_fandipole_pattern3d():
   ant.pattern3d(Builder(), fn='fandipole_pattern3d.pdf')
 

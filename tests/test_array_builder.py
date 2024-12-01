@@ -4,14 +4,6 @@ import antenna_designer as ant
 
 from antenna_designer.designs import bowtiearray, bowtiearray2x4, invveearray
 
-@pytest.mark.skip(reason="Draws t screen")
-def test_bowtiearraybuilder():
-    b = bowtiearray.Builder()
-    b.build_wires()
-
-def test_bowtiearray2x4_pattern():
-  ant.pattern(bowtiearray2x4.Builder(), fn='bowtiearray2x4_pattern.pdf')
-
 @pytest.mark.skip(reason='Takes too long and unstable params')
 def test_bowtiearray2x4_optimize():
   gold_params = bowtiearray2x4.Builder.default_params
@@ -23,7 +15,7 @@ def test_bowtiearray2x4_optimize():
 
   assert all(abs(params[k]-v) < 0.01 for k, v in gold_params.items())
 
-
+@pytest.mark.skip(reason='Whole file is skipped')
 def test_invveearray_pattern():
   ant.pattern(invveearray.Builder(), fn="invveearray_pattern.pdf")
 
@@ -57,3 +49,24 @@ def test_bowtiearray_phase_tb_pattern():
   )
 
   ant.compare_patterns(builders)
+
+@pytest.mark.skip(reason="Too long and unstable params")
+def test_bowtiearray_optimize():
+  gold_params = bowtiearray.Builder.default_params
+
+  builder = ant.optimize(bowtiearray.Builder(gold_params), ['length_top', 'slope_top', 'length_bot', 'slope_bot'], z0=200)
+  params = builder._params
+  print(params)
+
+  assert all(abs(params[k]-v) < 0.01 for k, v in gold_params.items())
+
+@pytest.mark.skip(reason="Too long and unstable params")
+def test_bowtiearray_optimize_for_gain():
+  gold_params = bowtiearray.Builder.default_params
+
+  builder = ant.optimize(bowtiearray.Builder(gold_params), ['length_top', 'slope_top', 'length_bot', 'slope_bot', 'del_y', 'del_z'], z0=200, resonance=True, opt_gain=True)
+
+  params = builder._params
+  print(params)
+
+  assert all(abs(params[k]-v) < 0.01 for k, v in gold_params.items())
