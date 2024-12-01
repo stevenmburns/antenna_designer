@@ -25,8 +25,8 @@
 | src/antenna\_designer/far\_field.py                 |      105 |        0 |    100% |           |
 | src/antenna\_designer/opt.py                        |       36 |        0 |    100% |           |
 | src/antenna\_designer/sim.py                        |       42 |        0 |    100% |           |
-| src/antenna\_designer/sweep.py                      |      111 |       38 |     66% |31-75, 114-115, 132-135, 145, 154 |
-|                                           **TOTAL** |  **778** |   **44** | **94%** |           |
+| src/antenna\_designer/sweep.py                      |      117 |        0 |    100% |           |
+|                                           **TOTAL** |  **784** |    **6** | **99%** |           |
 
 
 ## Setup coverage badge
