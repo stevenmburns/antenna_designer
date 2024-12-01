@@ -1,6 +1,7 @@
 from . import Antenna
 from .core import save_or_show
 from .far_field import get_elevation
+from icecream import ic
 
 import numpy as np
 
@@ -118,29 +119,32 @@ def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=
   marker_xs = np.array(markers)
   marker_zs = np.array(marker_zs)
 
+  nwidth = zs.shape[1] if npoints > 0 else marker_zs.shape[1]
+  ic(nwidth, npoints, markers, zs.shape, marker_zs.shape)
+
   if use_smithchart:
     fig, ax0 = plt.subplots()
     color = 'tab:red'
     skrf.plotting.smith(draw_labels=True, chart_type='z')
-    for i in range(zs.shape[1]):
-      normalized_zs = zs/z0
-      reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
+    for i in range(nwidth):
+      if zs.shape[0] > 0:
+        normalized_zs = zs/z0
+        reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
+        skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z')
 
-      skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z')
-
-    if marker_zs.shape[0] > 0:
-      normalized_zs = marker_zs/z0
-      reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
-
-      skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
+      if marker_zs.shape[0] > 0:
+        normalized_zs = marker_zs/z0
+        reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
+        skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
       
   else:
     fig, ax0 = plt.subplots()
     color = 'tab:red'
     ax0.set_ylabel('z real', color=color)
     ax0.tick_params(axis='y', labelcolor=color)
-    for i in range(zs.shape[1]):
-      ax0.plot(xs, np.real(zs)[:,i], color=color)
+    for i in range(nwidth):
+      if zs.shape[0] > 0:
+        ax0.plot(xs, np.real(zs)[:,i], color=color)
       if marker_zs.shape[0] > 0:
         ax0.plot(marker_xs, np.real(marker_zs)[:,i], color=color, marker='s', linestyle='None')
 
@@ -148,8 +152,9 @@ def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=
     ax1 = ax0.twinx()
     ax1.set_ylabel('z imag', color=color)
     ax1.tick_params(axis='y', labelcolor=color)
-    for i in range(zs.shape[1]):
-      ax1.plot(xs, np.imag(zs)[:,i], color=color)
+    for i in range(nwidth):
+      if zs.shape[0] > 0:
+        ax1.plot(xs, np.imag(zs)[:,i], color=color)
       if marker_zs.shape[0] > 0:
         ax1.plot(marker_xs, np.imag(marker_zs)[:,i], color=color, marker='s', linestyle='None')
 

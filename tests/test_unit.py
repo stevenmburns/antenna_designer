@@ -100,5 +100,5 @@ def test_resolve_range():
   check(resolve_range(default_value=100, rng=(7,11), center=30, fraction=None), (7,11))
   check(resolve_range(default_value=100, rng=(7,11), center=None, fraction=1.5), (7,11))
   check(resolve_range(default_value=100, rng=(7,11), center=30, fraction=1.5), (7,11))
-
+  
   
