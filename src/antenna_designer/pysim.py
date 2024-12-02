@@ -55,9 +55,9 @@ wavelength = 11*4
 freq = 3e8 / wavelength
 omega = freq*2*np.pi
 
-omega = 1
-freq = omega/(2*np.pi)
-wavelength = 3e8 / freq
+#omega = 1
+#freq = omega/(2*np.pi)
+#wavelength = 3e8 / freq
 
 k_wavenumber = np.pi*2/wavelength
 jomega = (0+1j)*omega
@@ -95,6 +95,7 @@ ic(A_sigma_minus)
 
 eps = 1
 mu = 1
+wire_radius = 0.0005
 
 """
 Convert to phi_plus from sigma_plus
@@ -117,32 +118,32 @@ Build coord sys with origin n and the z axis pointing parallel to wire n
         close integral
         """
         ic('close', n, m)
-        pass
+
+        return 1/(2*np.pi*delta) * np.log(delta/wire_radius) - (0+1j)*k_wavenumber/(4*np.pi)
     else:
         """
         normal integral
         """
         ic('normal', n, m)
-        pass
 
-    return 1/eps
-
+        R = np.abs(new_m_coord[2])
+        return np.exp(-(0+1j)*k_wavenumber*R)/(4*np.pi*R)
 
 B_phi_plus = np.zeros(shape=(nsegs,nsegs), dtype=np.complex128)
 for m in range(nsegs):
     for n in range(nsegs):
         if n+1 < nsegs:
-            B_phi_plus[m,n] = Integral( (m,1), (n,1), delta_l(n, adj=1))
+            B_phi_plus[m,n] = Integral( (m,1), (n,1), delta_l(n, adj=1))/eps
         else:
-            B_phi_plus[m,n] = Integral( (m,1), (n,1), delta_l(n, adj=0))
+            B_phi_plus[m,n] = Integral( (m,1), (n,1), delta_l(n, adj=0))/eps
 
 B_phi_minus = np.zeros(shape=(nsegs,nsegs), dtype=np.complex128)
 for m in range(nsegs):
     for n in range(nsegs):
         if 0 < n:
-            B_phi_minus[m,n] = Integral( (m,-1), (n,-1), delta_l(n, adj=-1))
+            B_phi_minus[m,n] = Integral( (m,-1), (n,-1), delta_l(n, adj=-1))/eps
         else:
-            B_phi_minus[m,n] = Integral( (m,-1), (n,-1), delta_l(n, adj=0))
+            B_phi_minus[m,n] = Integral( (m,-1), (n,-1), delta_l(n, adj=0))/eps
 
 ic(B_phi_plus)
 ic(B_phi_minus)
