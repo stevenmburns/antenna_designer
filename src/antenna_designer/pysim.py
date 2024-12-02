@@ -1,4 +1,6 @@
 import numpy as np
+import scipy
+import scipy.linalg
 from icecream import ic
 
 """
@@ -18,8 +20,9 @@ ic(wires)
 midpoints = np.array([sum(w)/2 for w in wires])
 ic(midpoints)
 
-driver_wire = wires[len(wires)//2]
-ic(driver_wire)
+driver_seg_idx = len(wires)//2
+driver_seg = wires[driver_seg_idx]
+ic(driver_seg_idx, driver_seg)
 
 """
 Merge segment ends and midpoints into a single array
@@ -51,16 +54,20 @@ sigma_plus = A_sigma_plus * I
 """
 
 
-wavelength = 11*4
-freq = 3e8 / wavelength
-omega = freq*2*np.pi
+wavelength = 11*4             # meters
+freq = 3e8 / wavelength       # meters/sec / meters = 1/sec = Hz
+omega = freq*2*np.pi          # radians/sec
 
 #omega = 1
 #freq = omega/(2*np.pi)
 #wavelength = 3e8 / freq
 
-k_wavenumber = np.pi*2/wavelength
-jomega = (0+1j)*omega
+k_wavenumber = np.pi*2/wavelength       #radians/meter
+jomega = (0+1j)*omega                   #imaginary radians/sec 
+
+eps = 8.8541878188e-12
+mu = 1.25663706127e-6
+wire_radius = 0.0005
 
 
 """
@@ -93,9 +100,6 @@ For the bottom and top diagonal entries, respectively, I used the closest define
 ic(A_sigma_plus)
 ic(A_sigma_minus)
 
-eps = 1
-mu = 1
-wire_radius = 0.0005
 
 """
 Convert to phi_plus from sigma_plus
@@ -105,9 +109,9 @@ def Integral(n, m, delta):
     (n_idx, n_adj) = n
     (m_idx, m_adj) = m
 
-
     """
 Build coord sys with origin n and the z axis pointing parallel to wire n
+Hack for all wires pointing in y direction
 """
     new_m_coord = (0, 0, nodes_and_midpoints[index(m)] - nodes_and_midpoints[index(n)])
 
@@ -117,17 +121,17 @@ Build coord sys with origin n and the z axis pointing parallel to wire n
         """
         close integral
         """
-        ic('close', n, m)
-
-        return 1/(2*np.pi*delta) * np.log(delta/wire_radius) - (0+1j)*k_wavenumber/(4*np.pi)
+        res = 1/(2*np.pi*delta) * np.log(delta/wire_radius) - (0+1j)*k_wavenumber/(4*np.pi)
+        ic('close', n, m, res)
+        return res
     else:
         """
         normal integral
         """
-        ic('normal', n, m)
-
         R = np.abs(new_m_coord[2])
-        return np.exp(-(0+1j)*k_wavenumber*R)/(4*np.pi*R)
+        res = np.exp(-(0+1j)*k_wavenumber*R)/(4*np.pi*R)
+        ic('normal', n, m, R, res)
+        return res
 
 B_phi_plus = np.zeros(shape=(nsegs,nsegs), dtype=np.complex128)
 for m in range(nsegs):
@@ -147,3 +151,38 @@ for m in range(nsegs):
 
 ic(B_phi_plus)
 ic(B_phi_minus)
+
+
+z = np.zeros(shape=(nsegs,nsegs), dtype=np.complex128)
+
+for m in range(nsegs):
+    for n in range(nsegs):
+        z[m,n] += jomega * mu * distance((n,-1),(n,1)) * distance((m,-1),(m,1)) * Integral((n, 0), (m, 0), delta_l(n))
+
+        if n+1 < nsegs:
+            delta = delta_l(n, adj=1)
+        else:
+            delta = delta_l(n, adj=0)
+            
+        z[m,n] += 1/(jomega*eps) * Integral((n, 1), (m, 1), delta)
+        z[m,n] -= 1/(jomega*eps) * Integral((n, 1), (m,-1), delta)
+
+        if 0 < n:
+            delta = delta_l(n, adj=-1)
+        else:
+            delta = delta_l(n, adj=0)
+
+        z[m,n] -= 1/(jomega*eps) * Integral((n,-1), (m, 1), delta)
+        z[m,n] += 1/(jomega*eps) * Integral((n,-1), (m,-1), delta)
+
+
+ic(z)
+
+lu, p = scipy.linalg.lu_factor(z)
+
+v = np.zeros(shape=(nsegs,), dtype=np.complex128)
+v[driver_seg_idx] = 1
+
+i = scipy.linalg.lu_solve((lu, p), v)
+
+ic(lu, p, v, i)
