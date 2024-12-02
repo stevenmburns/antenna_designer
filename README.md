@@ -197,3 +197,5 @@ The tests (including a build of python-necpp from sources) are also running in G
 
 [![Ruff](https://github.com/stevenmburns/antenna_design/actions/workflows/ruff.yml/badge.svg)](https://github.com/stevenmburns/antenna_design/actions/workflows/ruff.yml)
 
+[![Coverage](https://raw.githubusercontent.com/stevenmburns/antenna_designer/python-coverage-comment-action-data/badge.svg)](https://github.com/stevenmburns/antenna_design/actions/workflows/test.yml)
+
