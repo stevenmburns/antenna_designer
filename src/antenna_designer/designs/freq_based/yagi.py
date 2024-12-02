@@ -23,8 +23,6 @@ class Builder(AntennaBuilder):
 
     def build_path(lst, ns, ex):
       return ((a,b,ns,ex) for a,b in zip(lst[:-1], lst[1:]))
-    def rx(p):
-      return -p[0],  p[1], p[2]
     def ry(p):
       return  p[0], -p[1], p[2]
 
