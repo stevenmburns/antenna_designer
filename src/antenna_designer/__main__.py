@@ -1,3 +1,3 @@
-from . import cli
+from . import cli # pragma: no cover
 
-cli()
+cli() # pragma: no cover
