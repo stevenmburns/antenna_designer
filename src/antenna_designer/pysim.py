@@ -3,13 +3,28 @@ import scipy
 import scipy.linalg
 from icecream import ic
 
+from matplotlib import pyplot as plt
+
+wavelength = 22     # meters
+freq = 3e8 / wavelength       # meters/sec / meters = 1/sec = Hz
+omega = freq*2*np.pi          # radians/sec
+
+k_wavenumber = np.pi*2/wavelength       #radians/meter
+jomega = (0+1j)*omega                   #imaginary radians/sec 
+
+eps = 8.8541878188e-12
+mu = 1.25663706127e-6
+wire_radius = 0.0005
+
+halfdriver_factor = .962
+halfdriver = halfdriver_factor*wavelength/4
+
 """
 wire split into to nsegs segments (nsegs + 1 nodes) (2*nsegs + 1 nodes and midpoints)
 """
 
-nsegs = 5
-
-y0, y1 = 0, 5
+nsegs = 101
+y0, y1 = 0, 2*halfdriver
 
 nodes = np.linspace(y0, y1, nsegs+1)
 ic(nodes)
@@ -54,57 +69,6 @@ sigma_plus = A_sigma_plus * I
 """
 
 
-wavelength = 11*4             # meters
-freq = 3e8 / wavelength       # meters/sec / meters = 1/sec = Hz
-omega = freq*2*np.pi          # radians/sec
-
-#omega = 1
-#freq = omega/(2*np.pi)
-#wavelength = 3e8 / freq
-
-k_wavenumber = np.pi*2/wavelength       #radians/meter
-jomega = (0+1j)*omega                   #imaginary radians/sec 
-
-eps = 8.8541878188e-12
-mu = 1.25663706127e-6
-wire_radius = 0.0005
-
-
-"""
-1 = freq*2*pi    [radians per sec]
-freq = 1/(2*pi)  [cycles per sec]
-wavelength/2*pi = c       [meters per sec]
-wavelength = c*2*pi       [meters]
-k = 2*pi/(c*2*pi) = 1 / c  [sec per meter]
-"""
-
-
-
-A_sigma_plus = np.zeros(shape=(nsegs,nsegs), dtype=np.complex128)
-for n in range(nsegs):
-    if n+1 < nsegs:
-        A_sigma_plus[n,n+1] = -1 / jomega / delta_l(n, adj=1)
-    A_sigma_plus[n,n] = 1 / jomega / delta_l(n, adj=0)
-
-A_sigma_minus = np.zeros(shape=(nsegs,nsegs), dtype=np.complex128)
-for n in range(nsegs):
-    A_sigma_minus[n,n] = -1 / jomega / delta_l(n, adj=0)
-    if 0 < n:
-        A_sigma_minus[n,n-1] = 1 / jomega / delta_l(n, adj=-1)
-
-"""
-Boundaries might not be right.
-For the bottom and top diagonal entries, respectively, I used the closest defined value of delta_l.
-"""
-
-ic(A_sigma_plus)
-ic(A_sigma_minus)
-
-
-"""
-Convert to phi_plus from sigma_plus
-"""
-
 def Integral(n, m, delta):
     (n_idx, n_adj) = n
     (m_idx, m_adj) = m
@@ -122,7 +86,7 @@ Hack for all wires pointing in y direction
         close integral
         """
         res = 1/(2*np.pi*delta) * np.log(delta/wire_radius) - (0+1j)*k_wavenumber/(4*np.pi)
-        ic('close', n, m, res)
+        #ic('close', n, m, res)
         return res
     else:
         """
@@ -130,27 +94,8 @@ Hack for all wires pointing in y direction
         """
         R = np.abs(new_m_coord[2])
         res = np.exp(-(0+1j)*k_wavenumber*R)/(4*np.pi*R)
-        ic('normal', n, m, R, res)
+        #ic('normal', n, m, R, res, np.abs(res), np.angle(res)*180/np.pi)
         return res
-
-B_phi_plus = np.zeros(shape=(nsegs,nsegs), dtype=np.complex128)
-for m in range(nsegs):
-    for n in range(nsegs):
-        if n+1 < nsegs:
-            B_phi_plus[m,n] = Integral( (m,1), (n,1), delta_l(n, adj=1))/eps
-        else:
-            B_phi_plus[m,n] = Integral( (m,1), (n,1), delta_l(n, adj=0))/eps
-
-B_phi_minus = np.zeros(shape=(nsegs,nsegs), dtype=np.complex128)
-for m in range(nsegs):
-    for n in range(nsegs):
-        if 0 < n:
-            B_phi_minus[m,n] = Integral( (m,-1), (n,-1), delta_l(n, adj=-1))/eps
-        else:
-            B_phi_minus[m,n] = Integral( (m,-1), (n,-1), delta_l(n, adj=0))/eps
-
-ic(B_phi_plus)
-ic(B_phi_minus)
 
 
 z = np.zeros(shape=(nsegs,nsegs), dtype=np.complex128)
@@ -178,11 +123,19 @@ for m in range(nsegs):
 
 ic(z)
 
-lu, p = scipy.linalg.lu_factor(z)
+factors = scipy.linalg.lu_factor(z)
 
 v = np.zeros(shape=(nsegs,), dtype=np.complex128)
+# might need to multiply by segment length, but that does seem to work
+#v[driver_seg_idx] = delta_l(driver_seg_idx) * 1
 v[driver_seg_idx] = 1
 
-i = scipy.linalg.lu_solve((lu, p), v)
+i = scipy.linalg.lu_solve(factors, v)
 
-ic(lu, p, v, i)
+
+ic(factors, v, np.abs(i), np.angle(i)*180/np.pi)
+driver_impedance = 1/i[driver_seg_idx]
+ic(np.abs(driver_impedance), np.angle(driver_impedance)*180/np.pi)
+
+#plt.plot(np.real(i))
+#plt.show()
