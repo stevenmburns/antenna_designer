@@ -3,7 +3,7 @@ import scipy
 import scipy.linalg
 from icecream import ic
 
-from matplotlib import pyplot as plt
+#from matplotlib import pyplot as plt
 
 wavelength = 22     # meters
 freq = 3e8 / wavelength       # meters/sec / meters = 1/sec = Hz
