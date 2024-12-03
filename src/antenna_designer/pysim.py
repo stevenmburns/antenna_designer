@@ -159,65 +159,57 @@ def vectorized_compute_impedance(wavelength=22, halfdriver_factor=.962):
     y0, y1 = 0, 2*halfdriver
 
     driver_seg_idx = nsegs//2
-    ic(driver_seg_idx)
-
-    nodes_and_midpoints = np.linspace(y0, y1, 2*nsegs+1)
-    ic(nodes_and_midpoints)
 
     p0, p1 = np.array((0, y0, 0)), np.array((0, y1, 0))
 
     delta_p = (p1-p0)/(2*nsegs)
+    """
+    exnm - extended nodes and midpoints, there is a point on either end so we can use it to compute delta_l on the boundaries
+    for a wire with nseg=3 segments extending 0 to 3 there are three wires:
+         [0, 1], [1, 2], [2, 3]
+    the exnm array would halve extra points on the boundaries and at the midpoints
+
+    -0.5, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5
+
+      0   1   2   3   4   5   6   7   8
+
+    There are 2*nseg + 3 points, nseg of the midpoints, nseg + 1 for the wire endpoints,
+    and 2 more the points outside the boundary
+
+    delta_l is the length of each segment.
+    You can find this subtract adjacent elements in the subarray with indices [1,3,5,7]
+    --- delta_l_plus, its [2,4,6,8], and delta_l_minus, its [0,2,4,6].
+
+    The points themselves are at indices: [2, 4, 6],
+    minus at [1, 3, 5] and plus at [3, 5, 7]
+"""
     exnm = np.linspace(p0-delta_p, p1+delta_p, 2*nsegs+3)
 
-    ic(exnm)
-
-    vec_delta_l_minus = exnm[0:-4:2,:] - exnm[2:-2:2,:]
+    vec_delta_l_minus = exnm[ :-4:2,:] - exnm[2:-2:2,:]
     vec_delta_l       = exnm[1:-3:2,:] - exnm[3:-1:2,:]
     vec_delta_l_plus  = exnm[2:-2:2,:] - exnm[4:  :2,:]
-
-    pts_minus = exnm[1:-3:2,:]
-    pts       = exnm[2:-2:2,:]
-    pts_plus  = exnm[3:-1:2,:]
-    ic(pts, pts_plus, pts_minus)
 
     assert vec_delta_l.shape == (nsegs,3)
     assert vec_delta_l_plus.shape == (nsegs,3)
     assert vec_delta_l_minus.shape == (nsegs,3)
-    ic(vec_delta_l)
-    ic(vec_delta_l_plus)
-    ic(vec_delta_l_minus)
+
+    pts_minus = exnm[1:-3:2,:]
+    pts       = exnm[2:-2:2,:]
+    pts_plus  = exnm[3:-1:2,:]
+
+    assert pts.shape == (nsegs,3)
+    assert pts_plus.shape == (nsegs,3)
+    assert pts_minus.shape == (nsegs,3)
 
     delta_l = np.sqrt((vec_delta_l**2).sum(axis=1))
     delta_l_plus = np.sqrt((vec_delta_l_plus**2).sum(axis=1))
     delta_l_minus = np.sqrt((vec_delta_l_minus**2).sum(axis=1))
-    ic(delta_l, delta_l_plus, delta_l_minus)
 
-    def Integral_tag(n, m, delta, tag):
-        R = np.sqrt(((n[np.newaxis, :, :] - m[:, np.newaxis, :])**2).sum(axis=2))
+    assert delta_l.shape == (nsegs,)
+    assert delta_l_plus.shape == (nsegs,)
+    assert delta_l_minus.shape == (nsegs,)
 
-        assert n.shape[0] == delta.shape[0]
-
-        if tag == 1: # above
-            indices = np.array(range(delta.shape[0]-1))
-            diag_indices = (indices, indices+1)
-            new_delta = delta[:-1]
-        elif tag == -1: # below
-            indices = np.array(range(delta.shape[0]-1))
-            diag_indices = (indices+1, indices)
-            new_delta = delta[1:]
-        else:
-            indices = np.array(range(delta.shape[0]))
-            diag_indices = (indices, indices)
-            new_delta = delta[:]
-
-        RR = R
-        RR[diag_indices] = 1
-        res = np.exp(-(0+1j)*k_wavenumber*R)/(4*np.pi*RR)
-        diag = 1/(2*np.pi*new_delta) * np.log(new_delta/wire_radius) - (0+1j)*k_wavenumber/(4*np.pi) 
-        res[diag_indices] = diag
-        return res
-
-    def Integral_test(n, m, delta, tag=0):
+    def Integral(n, m, delta):
         R = np.sqrt(((n[np.newaxis, :, :] - m[:, np.newaxis, :])**2).sum(axis=2))
 
         assert n.shape[0] == delta.shape[0]
@@ -233,18 +225,15 @@ def vectorized_compute_impedance(wavelength=22, halfdriver_factor=.962):
         res[diag_indices] = diag
         return res
 
-    Integral = Integral_test
-
     z = jomega * mu * (vec_delta_l[np.newaxis, :, :] * vec_delta_l[:, np.newaxis, :]).sum(axis=2)
 
-    z *= Integral(pts, pts, delta_l, 0)
+    z *= Integral(pts, pts, delta_l)
 
-    z += 1/(jomega*eps) * Integral(pts_plus, pts_plus, delta_l_plus,  0)
-    z -= 1/(jomega*eps) * Integral(pts_plus, pts_minus, delta_l_plus, -1) # below
-    z -= 1/(jomega*eps) * Integral(pts_minus, pts_plus, delta_l_minus, 1) # above
-    z += 1/(jomega*eps) * Integral(pts_minus, pts_minus, delta_l_minus, 0)
+    z += 1/(jomega*eps) * Integral(pts_plus, pts_plus, delta_l_plus)
+    z -= 1/(jomega*eps) * Integral(pts_plus, pts_minus, delta_l_plus)
+    z -= 1/(jomega*eps) * Integral(pts_minus, pts_plus, delta_l_minus)
+    z += 1/(jomega*eps) * Integral(pts_minus, pts_minus, delta_l_minus)
 
-    ic(z)
     factors = scipy.linalg.lu_factor(z)
 
     v = np.zeros(shape=(nsegs,), dtype=np.complex128)
@@ -254,8 +243,7 @@ def vectorized_compute_impedance(wavelength=22, halfdriver_factor=.962):
 
     i = scipy.linalg.lu_solve(factors, v)
 
-
-    ic(factors, v, np.abs(i), np.angle(i)*180/np.pi)
+    ic(np.abs(i), np.angle(i)*180/np.pi)
     driver_impedance = 1/i[driver_seg_idx]
     ic(np.abs(driver_impedance), np.angle(driver_impedance)*180/np.pi)
 

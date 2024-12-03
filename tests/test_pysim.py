@@ -47,4 +47,3 @@ def test_sweep_halfdriver():
 
 def test_vectorized():
     z, i = pysim.vectorized_compute_impedance()
-    print(i,z)
