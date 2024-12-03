@@ -1,4 +1,3 @@
-import pytest
 import time
 
 from antenna_designer import pysim
