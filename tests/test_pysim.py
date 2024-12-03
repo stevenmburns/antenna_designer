@@ -1,24 +1,51 @@
 import pytest
+import time
 
 from antenna_designer import pysim
+from matplotlib import pyplot as plt
+import numpy as np
 
-def test_unit():
-    pass
+import skrf
 
-def test_distance():
+def test_sweep_halfdriver():
 
-    delta = 2*pysim.halfdriver/pysim.nsegs
+    xs = np.linspace(.9,1,11)
 
-    assert abs(pysim.distance((0,0), (1,0)) - 1*delta) < 0.01
-    assert abs(pysim.distance((0,-1), (1,0)) - 1.5*delta) < 0.01
+    t = time.time()
+    zas = []
+    for x in xs:
+        za, _ = pysim.vectorized_compute_impedance(halfdriver_factor=x)
+        zas.append(za)
+    print('vectorized', time.time()-t)
 
-    assert abs(pysim.distance((0,-1), (pysim.nsegs-1,1)) - pysim.nsegs*delta) < 0.01
+    t = time.time()
+    zbs = []
+    for x in xs:
+        zb, _ = pysim.compute_impedance(halfdriver_factor=x)
+        zbs.append(zb)
+    print('slow', time.time()-t)
 
-    with pytest.raises(AssertionError):
-        pysim.distance((-1,-1), (0,1))
+    zas = np.array(zas)
+    zbs = np.array(zbs)
 
-    midseg_index = pysim.nsegs//2
+    z0 = 50
 
-    assert abs(pysim.delta_l(midseg_index) - delta) < 0.01
-    assert abs(pysim.delta_l(midseg_index, adj=-1) - delta) < 0.01
-    assert abs(pysim.delta_l(midseg_index, adj=1) - delta) < 0.01
+    fig, ax0 = plt.subplots()
+    skrf.plotting.smith(draw_labels=True, chart_type='z')
+
+    normalized_zs = zas/z0
+    color = 'tab:red'
+    reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
+    skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z')# , marker='s', linestyle='None')
+
+    normalized_zs = zbs/z0
+    color = 'tab:blue'
+    reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
+    skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z')# , marker='s', linestyle='None')
+
+    plt.show()
+
+
+def test_vectorized():
+    z, i = pysim.vectorized_compute_impedance()
+    print(i,z)
