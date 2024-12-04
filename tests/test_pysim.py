@@ -13,14 +13,14 @@ def test_sweep_halfdriver():
     t = time.time()
     zas = []
     for x in xs:
-        za, _ = pysim.vectorized_compute_impedance(halfdriver_factor=x)
+        za, _ = pysim.PySim(halfdriver_factor=x).vectorized_compute_impedance()
         zas.append(za)
     print('vectorized', time.time()-t)
 
     t = time.time()
     zbs = []
     for x in xs:
-        zb, _ = pysim.compute_impedance(halfdriver_factor=x)
+        zb, _ = pysim.PySim(halfdriver_factor=x).compute_impedance()
         zbs.append(zb)
     print('slow', time.time()-t)
 
@@ -35,15 +35,20 @@ def test_sweep_halfdriver():
     normalized_zs = zas/z0
     color = 'tab:red'
     reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
-    skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z')# , marker='s', linestyle='None')
+    skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
 
     normalized_zs = zbs/z0
     color = 'tab:blue'
     reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
-    skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z')# , marker='s', linestyle='None')
+    skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
 
     plt.show()
 
 
+def test_slow():
+    ps = pysim.PySim()
+    z, i = ps.compute_impedance()
+
 def test_vectorized():
-    z, i = pysim.vectorized_compute_impedance()
+    ps = pysim.PySim()
+    z, i = ps.vectorized_compute_impedance()
