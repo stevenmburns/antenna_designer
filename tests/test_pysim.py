@@ -16,8 +16,8 @@ from icecream import ic
 
 import skrf
 
-fn = None
-#fn = '/dev/null'
+#fn = None
+fn = '/dev/null'
 
 from pysim_accelerators import dist_outer_product
 
