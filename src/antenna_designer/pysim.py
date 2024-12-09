@@ -5,6 +5,8 @@ from icecream import ic
 
 from matplotlib import pyplot as plt
 
+#from pysim_accelerators import diff_outer_product
+
 class PySim:
     def __init__(self, *, wavelength=22, halfdriver_factor=.962,nsegs=101,rcond=1e-16,nsmallest=0):
         self.wavelength = wavelength
