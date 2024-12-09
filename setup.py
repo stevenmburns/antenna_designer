@@ -1,10 +1,9 @@
 from setuptools import setup, Extension, find_packages
-from Cython.Build import cythonize
 from pybind11.setup_helpers import Pybind11Extension
 
 ext_modules = [
     Pybind11Extension(
-        "pysim_accelerators",
+        "antenna_designer",
         ["src/antenna_designer/pysim_accelerators.cpp"],
         extra_compile_args=["-fopenmp", "-g"],
         extra_link_args=["-fopenmp", "-lpthread"],

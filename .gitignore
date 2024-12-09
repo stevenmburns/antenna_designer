@@ -5,11 +5,11 @@ SWEEP_SLOPE
 __pycache__/
 PyNEC/
 *~
-src/*.egg-info/
 TEST_RESULTS
 dist/
 build/
 .coverage
 src/antenna_designer/*.c
 src/antenna_designer/*.html
-src/antenna_designer/*.so
+*.egg-info/
+*.so

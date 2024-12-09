@@ -1,3 +1,4 @@
+import pytest
 import os
 os.environ["OMP_NUM_THREADS"] = "8"
 os.environ["OPENBLAS_NUM_THREADS"] = "8"
@@ -18,7 +19,7 @@ import skrf
 fn = None
 #fn = '/dev/null'
 
-from antenna_designer.dist_outer_product_pybind11 import dist_outer_product
+from pysim_accelerators import dist_outer_product
 
 def test_extension():
     nsegs = 20000
@@ -78,6 +79,7 @@ def test_impedance_nsegs():
     save_or_show(plt, fn)
 
 
+@pytest.mark.skip(reason="SVD code disabled")
 def test_svd_currents_nsmallest():
 
     nsegs=101
@@ -104,17 +106,14 @@ def test_sweep_halfdriver():
 
     nsegs=1001
 
-    xs = np.linspace(.9,1,2)
-
-    # run once for jit
-    pysim.PySim(nsegs=nsegs).jax_compute_impedance()
+    xs = np.linspace(.9,1,21)
 
     t = time.time()
     zas = []
     for x in xs:
-        z, _ = pysim.PySim(halfdriver_factor=x,nsegs=nsegs).jax_compute_impedance()
+        z, _ = pysim.PySim(halfdriver_factor=x,nsegs=nsegs).stamp_vectorized_compute_impedance()
         zas.append(z)
-    print('jax', time.time()-t)
+    print('stamp', time.time()-t)
     zas = np.array(zas)
 
     t = time.time()
@@ -162,7 +161,7 @@ def test_slow():
     z, i = ps.compute_impedance()
 
 nsegs = 1001
-nrepeat = 20
+nrepeat = 5
 
 def test_interpolated():
     ps = pysim.PySim(nsegs=nsegs)
@@ -187,36 +186,3 @@ def test_vectorized():
     for i in range(nrepeat):
         z, i = ps.vectorized_compute_impedance()
     ic('vectorized', time.time()-t)
-
-def test_jax():
-    ps = pysim.PySim(nsegs=nsegs)
-
-    t = time.time()
-    z, i = ps.numba_compute_impedance()
-    ic('jit time: jax', time.time()-t)
-
-    t = time.time()
-    for i in range(nrepeat):
-        z, i = ps.jax_compute_impedance()
-    ic('jax', time.time()-t)
-
-def test_numba():
-    ps = pysim.PySim(nsegs=nsegs)
-
-    t = time.time()
-    z, i = ps.numba_compute_impedance()
-    ic('jit time: numba', time.time()-t)
-
-    t = time.time()
-    for i in range(nrepeat):
-        z, i = ps.numba_compute_impedance()
-    ic('numba', time.time()-t)
-
-def test_cython():
-    ps = pysim.PySim(nsegs=nsegs)
-
-    t = time.time()
-    for i in range(nrepeat):
-        z, i = ps.cython_compute_impedance()
-
-    ic('cython', time.time()-t)
