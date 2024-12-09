@@ -1,5 +1,7 @@
 import pytest
 import os
+from pysim_accelerators import dist_outer_product
+
 os.environ["OMP_NUM_THREADS"] = "8"
 os.environ["OPENBLAS_NUM_THREADS"] = "8"
 os.environ["MKL_NUM_THREADS"] = "8"
@@ -19,7 +21,7 @@ import skrf
 #fn = None
 fn = '/dev/null'
 
-from pysim_accelerators import dist_outer_product
+
 
 def test_extension():
     nsegs = 20000
@@ -27,7 +29,7 @@ def test_extension():
 
     t = time.time()
     for i in range(10):
-        R = dist_outer_product(pts, pts)
+        _ = dist_outer_product(pts, pts)
     ic('dist_outer_product', time.time()-t)
 
 

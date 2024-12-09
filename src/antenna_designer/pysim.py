@@ -3,8 +3,6 @@ import scipy
 import scipy.linalg
 from icecream import ic
 
-from numba import jit
-
 from matplotlib import pyplot as plt
 
 class PySim:
