@@ -1,3 +1,10 @@
+import os
+os.environ["OMP_NUM_THREADS"] = "8"
+os.environ["OPENBLAS_NUM_THREADS"] = "8"
+os.environ["MKL_NUM_THREADS"] = "8"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "8"
+os.environ["NUMEXPR_NUM_THREADS"] = "8"
+
 import time
 
 from antenna_designer import pysim
@@ -8,11 +15,24 @@ from icecream import ic
 
 import skrf
 
-#fn = None
-fn = '/dev/null'
+fn = None
+#fn = '/dev/null'
+
+from antenna_designer.dist_outer_product_pybind11 import dist_outer_product
+
+def test_extension():
+    nsegs = 20000
+    pts = np.array([[0,0,z] for z in range(nsegs+1)])/(2*nsegs)
+
+    t = time.time()
+    for i in range(10):
+        R = dist_outer_product(pts, pts)
+    ic('dist_outer_product', time.time()-t)
+
 
 def test_impedance_nsegs():
-    xs = [11, 21, 41, 101, 201, 401, 801]
+    xs = [21, 41, 61, 81, 101, 201, 401, 801]
+
     zs = []
     for nsegs in xs:
         z, _ = pysim.PySim(nsegs=nsegs).vectorized_compute_impedance()
@@ -22,8 +42,38 @@ def test_impedance_nsegs():
     xs = np.array(xs)
     zs = np.array(zs)
 
-    plt.plot(xs, np.abs(zs), marker='s')
-    plt.plot(xs, np.imag(zs), marker='s')
+
+    z0 = 50
+
+    fig, ax0 = plt.subplots()
+    skrf.plotting.smith(draw_labels=True, chart_type='z')
+
+    normalized_zs = zs/z0
+    color = 'tab:red'
+    reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
+    skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
+
+
+    #plt.plot(xs, np.abs(zs), marker='s')
+    #plt.plot(xs, np.imag(zs), marker='s')
+
+    zs = []
+    for nsegs in xs:
+        z, _ = pysim.PySim(nsegs=nsegs).interpolated_compute_impedance()
+        ic(nsegs,z)
+        zs.append(z)
+
+    xs = np.array(xs)
+    zs = np.array(zs)
+
+    normalized_zs = zs/z0
+    color = 'tab:green'
+    reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
+    skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
+
+
+    #plt.plot(xs, np.abs(zs), marker='s')
+    #plt.plot(xs, np.imag(zs), marker='s')
 
     save_or_show(plt, fn)
 
@@ -111,6 +161,62 @@ def test_slow():
     ps = pysim.PySim()
     z, i = ps.compute_impedance()
 
+nsegs = 1001
+nrepeat = 20
+
+def test_interpolated():
+    ps = pysim.PySim(nsegs=nsegs)
+
+    t = time.time()
+    for i in range(nrepeat):
+        z, i = ps.interpolated_compute_impedance()
+    ic('interpolated', time.time()-t)
+
+def test_stamp():
+    ps = pysim.PySim(nsegs=nsegs)
+
+    t = time.time()
+    for i in range(nrepeat):
+        z, i = ps.stamp_vectorized_compute_impedance()
+    ic('interpolated', time.time()-t)
+
 def test_vectorized():
-    ps = pysim.PySim()
-    z, i = ps.vectorized_compute_impedance()
+    ps = pysim.PySim(nsegs=nsegs)
+
+    t = time.time()
+    for i in range(nrepeat):
+        z, i = ps.vectorized_compute_impedance()
+    ic('vectorized', time.time()-t)
+
+def test_jax():
+    ps = pysim.PySim(nsegs=nsegs)
+
+    t = time.time()
+    z, i = ps.numba_compute_impedance()
+    ic('jit time: jax', time.time()-t)
+
+    t = time.time()
+    for i in range(nrepeat):
+        z, i = ps.jax_compute_impedance()
+    ic('jax', time.time()-t)
+
+def test_numba():
+    ps = pysim.PySim(nsegs=nsegs)
+
+    t = time.time()
+    z, i = ps.numba_compute_impedance()
+    ic('jit time: numba', time.time()-t)
+
+    t = time.time()
+    for i in range(nrepeat):
+        z, i = ps.numba_compute_impedance()
+    ic('numba', time.time()-t)
+
+def test_cython():
+    ps = pysim.PySim(nsegs=nsegs)
+
+    t = time.time()
+    for i in range(nrepeat):
+        z, i = ps.cython_compute_impedance()
+
+    ic('cython', time.time()-t)

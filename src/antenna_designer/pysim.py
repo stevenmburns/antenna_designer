@@ -4,7 +4,9 @@ import scipy.linalg
 from icecream import ic
 import jax.numpy as jnp
 
-#from matplotlib import pyplot as plt
+from numba import jit
+
+from matplotlib import pyplot as plt
 
 class PySim:
     def __init__(self, *, wavelength=22, halfdriver_factor=.962,nsegs=101,rcond=1e-16,nsmallest=0):
@@ -72,39 +74,51 @@ class PySim:
         return x
 
     def factor_and_solve(self):
+        run_svd = False
+        run_iterative_improvement = False
+
         factors = scipy.linalg.lu_factor(self.z)
 
-        v = np.zeros(shape=(self.nsegs,), dtype=np.complex64)
+        v = np.zeros(shape=(self.nsegs,), dtype=np.complex128)
         v[self.driver_seg_idx] = 1
 
-        i_svd = self.solve_using_svd(self.z, v, rcond=self.rcond, nsmallest=self.nsmallest)
+        if run_svd:
+            i_svd = self.solve_using_svd(self.z, v, rcond=self.rcond, nsmallest=self.nsmallest)
 
-        r =  v - np.dot(self.z, i_svd)
-        ic('i_svd error (0)', np.linalg.norm(r))
+            r =  v - np.dot(self.z, i_svd)
+            ic('i_svd error (0)', np.linalg.norm(r))
 
         i = scipy.linalg.lu_solve(factors, v)
 
-        i = np.array(i, dtype=np.complex128)
-        r =  v - np.dot(self.z, i)
-        ic('i error (0)', np.linalg.norm(r))
-        i += scipy.linalg.lu_solve(factors,r)
+        if run_iterative_improvement:
+            i = np.array(i, dtype=np.complex256)
+            r =  v - np.dot(self.z, i)
+            ic('i error (0)', np.linalg.norm(r))
+            i += scipy.linalg.lu_solve(factors,r)
 
-        r =  v - np.dot(self.z, i)
-        ic('i error (1)', np.linalg.norm(r))
-        i += scipy.linalg.lu_solve(factors,r)
+            r =  v - np.dot(self.z, i)
+            ic('i error (1)', np.linalg.norm(r))
+            i += scipy.linalg.lu_solve(factors,r)
 
-        r =  v - np.dot(self.z, i)
-        ic('i error (2)', np.linalg.norm(r))
+            r =  v - np.dot(self.z, i)
+            ic('i error (2)', np.linalg.norm(r))
 
-        ic('error vs. svd', np.linalg.norm(i_svd - i))
+        if run_svd:
+            ic('error vs. svd', np.linalg.norm(i_svd - i))
 
         #ic(factors, v, np.abs(i), np.angle(i)*180/np.pi)
         driver_impedance = v[self.driver_seg_idx]/i[self.driver_seg_idx]
         ic(np.abs(driver_impedance), np.angle(driver_impedance)*180/np.pi)
-        driver_impedance_svd = v[self.driver_seg_idx]/i_svd[self.driver_seg_idx]
-        ic(np.abs(driver_impedance_svd), np.angle(driver_impedance_svd)*180/np.pi)
 
-        return driver_impedance, (i, i_svd)
+        if run_svd:
+            driver_impedance_svd = v[self.driver_seg_idx]/i_svd[self.driver_seg_idx]
+            ic(np.abs(driver_impedance_svd), np.angle(driver_impedance_svd)*180/np.pi)
+
+        if run_svd:
+            return driver_impedance, (i, i_svd)
+        else:
+            return driver_impedance, i
+
 
     def compute_impedance(self):
 
@@ -112,7 +126,7 @@ class PySim:
         wire split into to nsegs segments (nsegs + 1 nodes) (2*nsegs + 1 nodes and midpoints)
         """
 
-        y0, y1 = np.float32(0), np.float32(2*self.halfdriver)
+        y0, y1 = np.float64(0), np.float64(2*self.halfdriver)
 
         self.nodes_and_midpoints = np.linspace(y0, y1, 2*self.nsegs+1)
 
@@ -159,7 +173,7 @@ class PySim:
                 return res
 
 
-        z = np.zeros(shape=(self.nsegs,self.nsegs), dtype=np.complex64)
+        z = np.zeros(shape=(self.nsegs,self.nsegs), dtype=np.complex128)
 
         for m in range(self.nsegs):
             for n in range(self.nsegs):
@@ -186,9 +200,9 @@ class PySim:
 
     def vectorized_compute_impedance(self):
 
-        y0, y1 = np.float32(0), np.float32(2*self.halfdriver)
+        y0, y1 = np.float64(0), np.float64(2*self.halfdriver)
 
-        p0, p1 = np.array((0, y0, 0),dtype=np.float32), np.array((0, y1, 0),dtype=np.float32)
+        p0, p1 = np.array((0, y0, 0),dtype=np.float64), np.array((0, y1, 0),dtype=np.float64)
 
         delta_p = (p1-p0)/(2*self.nsegs)
         """
@@ -250,6 +264,7 @@ class PySim:
 
             RR = R
             RR[diag_indices] = 1
+ 
             res = np.exp(-(0+1j)*self.k*R)/(4*np.pi*RR)
             diag = 1/(2*np.pi*new_delta) * np.log(new_delta/self.wire_radius) - (0+1j)*self.k/(4*np.pi) 
             res[diag_indices] = diag
@@ -269,12 +284,244 @@ class PySim:
 
         return self.factor_and_solve()
 
+    def stamp_vectorized_compute_impedance(self):
+
+        y0, y1 = np.float64(0), np.float64(2*self.halfdriver)
+
+        p0, p1 = np.array((0, y0, 0),dtype=np.float64), np.array((0, y1, 0),dtype=np.float64)
+
+        delta_p = (p1-p0)/(2*self.nsegs)
+        """
+        exnm - extended nodes and midpoints, there is a point on either end so we can use it to compute delta_l on the boundaries
+        for a wire with nseg=3 segments extending 0 to 3 there are three wires:
+             [0, 1], [1, 2], [2, 3]
+        the exnm array would halve extra points on the boundaries and at the midpoints
+
+        -0.5, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5
+
+          0   1   2   3   4   5   6   7   8
+
+        There are 2*nseg + 3 points, nseg of the midpoints, nseg + 1 for the wire endpoints,
+        and 2 more the points outside the boundary
+
+        delta_l is the length of each segment.
+        You can find this subtract adjacent elements in the subarray with indices [1,3,5,7]
+        --- delta_l_plus, its [2,4,6,8], and delta_l_minus, its [0,2,4,6].
+
+        The points themselves are at indices: [2, 4, 6],
+        minus at [1, 3, 5] and plus at [3, 5, 7]
+        """
+
+        pts = np.linspace(p0+delta_p, p1-delta_p, self.nsegs)
+
+        extras = np.linspace(p0, p1, self.nsegs+1)
+
+        vec_delta_l = extras[1:] - extras[:-1]
+        assert vec_delta_l.shape == (self.nsegs,3)
+        delta_l = np.sqrt((vec_delta_l**2).sum(axis=1))
+        assert delta_l.shape == (self.nsegs,)
+
+        # hack that works for equal size segments
+        delta_l_extras = delta_l[0] * np.ones(shape=(extras.shape[0],))
+        assert delta_l_extras.shape == (self.nsegs+1,)
+
+        def Integral(n, m, delta):
+
+            diffs = n[np.newaxis, :, :] - m[:, np.newaxis, :]
+            R = np.sqrt((diffs*diffs).sum(axis=2))
+
+            assert n.shape[0] == delta.shape[0]
+
+            # not always diagonal indices
+            diag_indices = np.where(R == 0)
+            new_delta = delta[diag_indices[0]]
+
+            RR = R
+            RR[diag_indices] = 1
+ 
+            res = np.exp(-(0+1j)*self.k*R)/(4*np.pi*RR)
+            diag = 1/(2*np.pi*new_delta) * np.log(new_delta/self.wire_radius) - (0+1j)*self.k/(4*np.pi) 
+            res[diag_indices] = diag
+
+            return res
+
+        z = self.jomega * self.mu * (vec_delta_l[np.newaxis, :, :] * vec_delta_l[:, np.newaxis, :]).sum(axis=2)
+
+        z *= Integral(pts, pts, delta_l)
+
+        s = 1/(self.jomega*self.eps) * Integral(extras, extras, delta_l_extras)
+
+        z += s[:-1,:-1] + s[1:, 1:] - s[:-1, 1:] - s[1:, :-1]
+
+        self.z = z
+
+        return self.factor_and_solve()
+
+    def interpolated_compute_impedance(self):
+
+        y0, y1 = np.float64(0), np.float64(2*self.halfdriver)
+
+        p0, p1 = np.array((0, y0, 0),dtype=np.float64), np.array((0, y1, 0),dtype=np.float64)
+
+        delta_p = (p1-p0)/(2*self.nsegs)
+        """
+        exnm - extended nodes and midpoints, there is a point on either end so we can use it to compute delta_l on the boundaries
+        for a wire with nseg=3 segments extending 0 to 3 there are three wires:
+             [0, 1], [1, 2], [2, 3]
+        the exnm array would halve extra points on the boundaries and at the midpoints
+
+        -0.5, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5
+
+          0   1   2   3   4   5   6   7   8
+
+        There are 2*nseg + 3 points, nseg of the midpoints, nseg + 1 for the wire endpoints,
+        and 2 more the points outside the boundary
+
+        delta_l is the length of each segment.
+        You can find this subtract adjacent elements in the subarray with indices [1,3,5,7]
+        --- delta_l_plus, its [2,4,6,8], and delta_l_minus, its [0,2,4,6].
+
+        The points themselves are at indices: [2, 4, 6],
+        minus at [1, 3, 5] and plus at [3, 5, 7]
+        """
+        exnm = np.linspace(p0-delta_p, p1+delta_p, 2*self.nsegs+3)
+
+        vec_delta_l_minus = exnm[ :-4:2,:] - exnm[2:-2:2,:]
+        vec_delta_l       = exnm[1:-3:2,:] - exnm[3:-1:2,:]
+        vec_delta_l_plus  = exnm[2:-2:2,:] - exnm[4:  :2,:]
+
+        assert vec_delta_l.shape == (self.nsegs,3)
+        assert vec_delta_l_plus.shape == (self.nsegs,3)
+        assert vec_delta_l_minus.shape == (self.nsegs,3)
+
+        pts_minus = exnm[1:-3:2,:]
+        pts       = exnm[2:-2:2,:]
+        pts_plus  = exnm[3:-1:2,:]
+
+        assert pts.shape == (self.nsegs,3)
+        assert pts_plus.shape == (self.nsegs,3)
+        assert pts_minus.shape == (self.nsegs,3)
+
+        delta_l = np.sqrt((vec_delta_l**2).sum(axis=1))
+        delta_l_plus = np.sqrt((vec_delta_l_plus**2).sum(axis=1))
+        delta_l_minus = np.sqrt((vec_delta_l_minus**2).sum(axis=1))
+
+        assert delta_l.shape == (self.nsegs,)
+        assert delta_l_plus.shape == (self.nsegs,)
+        assert delta_l_minus.shape == (self.nsegs,)
+
+        def IntegralSlow(n, m, delta):
+
+            diffs = n[np.newaxis, :, :] - m[:, np.newaxis, :]
+            R = np.sqrt((diffs*diffs).sum(axis=2))
+
+            assert n.shape[0] == delta.shape[0]
+
+            # not always diagonal indices
+            diag_indices = np.where(R == 0)
+            new_delta = delta[diag_indices[0]]
+
+            RR = R
+            RR[diag_indices] = 1
+            res = np.exp(-(0+1j)*self.k*R)/(4*np.pi*RR)
+            diag = 1/(2*np.pi*new_delta) * np.log(new_delta/self.wire_radius) - (0+1j)*self.k/(4*np.pi) 
+            res[diag_indices] = diag
+
+            return res
+
+        def IntegralPoint(n, m, delta):
+            # we want the integral with y ranging from a to b
+            # currently being done with (b-a)*f((a+b)/2) [midpoint rule/rectangle rule]
+            # The trapezodial rule is (b-a)*(f(a)+f(b))/2
+            # The composite trapezoidal rule is (b-a)/N*f(f(a)/2 + sum_k=1^N-1 f(a+k(b-a)/N) + f(b)/2)
+
+            # looks like we need a delta_m, because delta belongs to n.
+            # probably it would be better to use indices into exnm, then we can get the delta from that array
+
+            # if we know delta_m- and delta_m+, then we can compute a and b
+            # a = m - delta_m-/2 and b = m + delta_m+/2
+            #
+            # Then b-a = delta_m+/2 + delta_m-/2
+            # N=0 (b-a)*(f((a+b)/2)
+            # N=1 (b-a)*(f(a)+f(b))/2
+            # N=2 (b-a)*(f(a)+2*f((a+b)/2)+f(b))/4
+            # N=3 (b-a)*(f(a)+2*f(2*a/3+b/3)+2*f(a/3+2*b/3)+f(b))/6
+            # N=4 (b-a)*(f(a)+2*f(3*a/4+b/4)+2*f(a/2+b/2)+2*f(a/4+3*b/4)+f(b))/8
+            #
+            # for N=2 we can pick things out of exnum
+            # exnum[m_idx] is (a+b)/2
+            # exnum[m_idx-1] is a
+            # exnum[m_idx+1] is b
+            # vec_delta_m- = exnm[m_idx-2] - exnm[m_idx]
+            # vec_delta_m+ = exnm[m_idx] - exnm[m_idx+2]
+
+            # compute R for exnm[n_idx] to exnm[m_idx-2], exnm[m_idx], and exnm[m_idx+2]
+
+
+            diffs = n[np.newaxis, :, :] - m[:, np.newaxis, :]
+            R = np.sqrt((diffs*diffs).sum(axis=2))
+
+            assert n.shape[0] == delta.shape[0]
+
+            # not always diagonal indices
+            diag_indices = np.where(R == 0)
+            new_delta = delta[diag_indices[0]]
+
+            RR = R
+            RR[diag_indices] = 1
+            res = delta[:, np.newaxis] * np.exp(-(0+1j)*self.k*R)/(4*np.pi*RR)
+            diag = 1/(2*np.pi*new_delta) * np.log(new_delta/self.wire_radius) - (0+1j)*self.k/(4*np.pi) 
+            res[diag_indices] = diag
+
+            return res
+
+        diffs = pts_minus[np.newaxis, :, :] - pts_plus[:, np.newaxis, :]
+        R = np.sqrt((diffs*diffs).sum(axis=2))
+        max_R = np.max(R)
+
+        rs = np.linspace(0, max_R, 1001)
+
+        tbl = IntegralSlow(np.array([[0,0,0]]), np.array([[0, r, 0] for r in rs]), delta_l[:1])[:,0]
+        ic(tbl.shape)
+
+        if False:
+            plt.plot(rs,np.real(tbl))
+            plt.plot(rs,np.imag(tbl))
+
+            rs = np.linspace(0, max_R, 101)
+
+            tbl = IntegralSlow(np.array([[0,0,0]]), np.array([[0, r, 0] for r in rs]), delta_l[:1])[:,0]
+            ic(tbl.shape)
+
+            ic(R.shape, rs.shape, tbl.shape)
+            plt.plot(rs,np.real(tbl))
+            plt.plot(rs,np.imag(tbl))
+            plt.show()
+
+        def Integral(n, m, delta):
+            diffs = n[np.newaxis, :, :] - m[:, np.newaxis, :]
+            R = np.sqrt((diffs*diffs).sum(axis=2))
+            return np.interp(R, rs, tbl)
+
+        z = self.jomega * self.mu * (vec_delta_l[np.newaxis, :, :] * vec_delta_l[:, np.newaxis, :]).sum(axis=2)
+
+        z *= Integral(pts, pts, delta_l)
+
+        z += 1/(self.jomega*self.eps) * Integral(pts_plus, pts_plus, delta_l_plus)
+        z -= 1/(self.jomega*self.eps) * Integral(pts_plus, pts_minus, delta_l_plus)
+        z -= 1/(self.jomega*self.eps) * Integral(pts_minus, pts_plus, delta_l_minus)
+        z += 1/(self.jomega*self.eps) * Integral(pts_minus, pts_minus, delta_l_minus)
+
+        self.z = z
+
+        return self.factor_and_solve()
+
     def jax_compute_impedance(self):
 
-        y0, y1 = jnp.float32(0), jnp.float32(2*self.halfdriver)
+        y0, y1 = jnp.float64(0), jnp.float64(2*self.halfdriver)
 
-        # make these jnp and the answer is different (default is float32 and not float32)
-        p0, p1 = jnp.array((0, y0, 0),dtype=jnp.float32), jnp.array((0, y1, 0),dtype=jnp.float32)
+        # make these jnp and the answer is different (default is float64 and not float64)
+        p0, p1 = jnp.array((0, y0, 0),dtype=jnp.float64), jnp.array((0, y1, 0),dtype=jnp.float64)
 
         delta_p = (p1-p0)/(2*self.nsegs)
         """
@@ -358,3 +605,130 @@ class PySim:
         self.z = z
 
         return self.factor_and_solve()
+
+
+    def numba_compute_impedance(self):
+
+        self.z = numba_compute_impedance_matrix(
+            halfdriver = self.halfdriver,
+            nsegs = self.nsegs,
+            k = self.k,
+            wire_radius = self.wire_radius,
+            jomega = self.jomega,
+            mu = self.mu,
+            eps = self.eps
+        )
+
+        return self.factor_and_solve()
+
+    def cython_compute_impedance(self):
+
+        self.z = cython_compute_impedance_matrix(
+            halfdriver = self.halfdriver,
+            nsegs = self.nsegs,
+            k = self.k,
+            wire_radius = self.wire_radius,
+            jomega = self.jomega,
+            mu = self.mu,
+            eps = self.eps
+        )
+
+        return self.factor_and_solve()
+
+
+@jit(nopython=True)
+def numba_compute_impedance_matrix(*, halfdriver : np.float64, nsegs : np.int64, k : np.float64, wire_radius : np.float64, jomega : np.float64, mu : np.float64, eps : np.float64):
+    y0, y1 = np.float64(0), np.float64(2*halfdriver)
+
+    p0, p1 = np.array((0, y0, 0)), np.array((0, y1, 0))
+
+    delta_p = (p1-p0)/(2*nsegs)
+    """
+    exnm - extended nodes and midpoints, there is a point on either end so we can use it to compute delta_l on the boundaries
+    for a wire with nseg=3 segments extending 0 to 3 there are three wires:
+         [0, 1], [1, 2], [2, 3]
+    the exnm array would halve extra points on the boundaries and at the midpoints
+
+    -0.5, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5
+
+      0   1   2   3   4   5   6   7   8
+
+    There are 2*nseg + 3 points, nseg of the midpoints, nseg + 1 for the wire endpoints,
+    and 2 more the points outside the boundary
+
+    delta_l is the length of each segment.
+    You can find this subtract adjacent elements in the subarray with indices [1,3,5,7]
+    --- delta_l_plus, its [2,4,6,8], and delta_l_minus, its [0,2,4,6].
+
+    The points themselves are at indices: [2, 4, 6],
+    minus at [1, 3, 5] and plus at [3, 5, 7]
+    """
+    #exnm = np.linspace(p0-delta_p, p1+delta_p, 2*nsegs+3)
+    exnm = np.empty(shape=(2*nsegs+3, 3))
+
+    exnm[0] = p0-delta_p
+    for i in range(1,2*nsegs+3):
+        exnm[i] = exnm[i-1] + delta_p
+
+    vec_delta_l_minus = exnm[ :-4:2,:] - exnm[2:-2:2,:]
+    vec_delta_l       = exnm[1:-3:2,:] - exnm[3:-1:2,:]
+    vec_delta_l_plus  = exnm[2:-2:2,:] - exnm[4:  :2,:]
+
+    assert vec_delta_l.shape == (nsegs,3)
+    assert vec_delta_l_plus.shape == (nsegs,3)
+    assert vec_delta_l_minus.shape == (nsegs,3)
+
+    pts_minus = exnm[1:-3:2,:]
+    pts       = exnm[2:-2:2,:]
+    pts_plus  = exnm[3:-1:2,:]
+
+    assert pts.shape == (nsegs,3)
+    assert pts_plus.shape == (nsegs,3)
+    assert pts_minus.shape == (nsegs,3)
+
+    delta_l = np.sqrt((vec_delta_l**2).sum(axis=1))
+    delta_l_plus = np.sqrt((vec_delta_l_plus**2).sum(axis=1))
+    delta_l_minus = np.sqrt((vec_delta_l_minus**2).sum(axis=1))
+
+    assert delta_l.shape == (nsegs,)
+    assert delta_l_plus.shape == (nsegs,)
+    assert delta_l_minus.shape == (nsegs,)
+
+    def Integral(n, m, delta):
+
+        diffs = n[np.newaxis, :, :] - m[:, np.newaxis, :]
+        R = np.sqrt((diffs*diffs).sum(axis=2))
+
+        assert n.shape[0] == delta.shape[0]
+
+        # not always diagonal indices
+        mask = R == 0
+        diag_indices = np.where(mask)
+
+        new_delta = delta[diag_indices[0]]
+
+        RR = R
+
+        for i in range(len(diag_indices[0])):
+            idx0, idx1 = diag_indices[0][i],diag_indices[1][i]
+            RR[idx0, idx1] = 1
+
+        res = np.exp(-(0+1j)*k*R)/(4*np.pi*RR)
+
+        diag = 1/(2*np.pi*new_delta) * np.log(new_delta/wire_radius) - (0+1j)*k/(4*np.pi) 
+
+        for i in range(len(diag_indices)):
+            res[diag_indices[0][i],diag_indices[1][i]] = diag[i]
+
+        return res
+
+    z = jomega * mu * (vec_delta_l[np.newaxis, :, :] * vec_delta_l[:, np.newaxis, :]).sum(axis=2)
+
+    z *= Integral(pts, pts, delta_l)
+
+    z += 1/(jomega*eps) * Integral(pts_plus, pts_plus, delta_l_plus)
+    z -= 1/(jomega*eps) * Integral(pts_plus, pts_minus, delta_l_plus)
+    z -= 1/(jomega*eps) * Integral(pts_minus, pts_plus, delta_l_minus)
+    z += 1/(jomega*eps) * Integral(pts_minus, pts_minus, delta_l_minus)
+
+    return z
