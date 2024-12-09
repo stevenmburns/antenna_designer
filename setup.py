@@ -5,7 +5,7 @@ ext_modules = [
     Pybind11Extension(
         "antenna_designer",
         ["src/antenna_designer/pysim_accelerators.cpp"],
-        extra_compile_args=["-fopenmp", "-g"],
+        extra_compile_args=["-fopenmp", "-g", "-std=gnu++11"],
         extra_link_args=["-fopenmp", "-lpthread"],
     ),
 ]
