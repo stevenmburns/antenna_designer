@@ -1,6 +1,5 @@
 import pytest
 import os
-from pysim_accelerators import dist_outer_product
 
 os.environ["OMP_NUM_THREADS"] = "8"
 os.environ["OPENBLAS_NUM_THREADS"] = "8"
@@ -12,6 +11,8 @@ import time
 
 from antenna_designer import pysim
 from antenna_designer.core import save_or_show
+from antenna_designer.pysim_accelerators import dist_outer_product
+
 from matplotlib import pyplot as plt
 import numpy as np
 from icecream import ic

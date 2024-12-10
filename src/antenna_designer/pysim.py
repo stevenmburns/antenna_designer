@@ -5,7 +5,7 @@ from icecream import ic
 
 from matplotlib import pyplot as plt
 
-#from pysim_accelerators import diff_outer_product
+from .pysim_accelerators import dist_outer_product
 
 class PySim:
     def __init__(self, *, wavelength=22, halfdriver_factor=.962,nsegs=101,rcond=1e-16,nsmallest=0):
@@ -326,8 +326,9 @@ class PySim:
 
         def Integral(n, m, delta):
 
-            diffs = n[np.newaxis, :, :] - m[:, np.newaxis, :]
-            R = np.sqrt((diffs*diffs).sum(axis=2))
+            #diffs = n[np.newaxis, :, :] - m[:, np.newaxis, :]
+            #R = np.sqrt((diffs*diffs).sum(axis=2))
+            R = dist_outer_product(n, m)
 
             assert n.shape[0] == delta.shape[0]
 
