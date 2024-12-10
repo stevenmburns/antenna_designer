@@ -1,9 +1,12 @@
+from antenna_designer.core import save_or_show
 
 import numpy as np
 import scipy
 
 from matplotlib import pyplot as plt
 
+#fn = None
+fn = '/dev/null'
 
 def test_sici():
 
@@ -69,7 +72,7 @@ def test_sici():
         ax1.plot(xxs, fs.imag)
 
     plt.xlim(0, None)
-    plt.show()
+    save_or_show(plt, fn)
 
     rects = np.array(rects)
     lrects = np.array(lrects)
@@ -104,4 +107,4 @@ def test_sici():
     plt.plot(xs, refs.imag, label='refs imag')
 
     plt.legend()
-    plt.show()
+    save_or_show(plt, fn)

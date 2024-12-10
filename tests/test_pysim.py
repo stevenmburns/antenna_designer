@@ -36,6 +36,33 @@ def test_extension():
 
 def test_impedance_nsegs():
     xs = [21, 41, 61, 81, 101, 201, 401, 801]
+    xs = np.array(xs)
+    z0 = 50
+
+
+
+    fig, ax0 = plt.subplots()
+    skrf.plotting.smith(draw_labels=True, chart_type='z')
+
+
+    #plt.plot(xs, np.abs(zs), marker='s')
+    #plt.plot(xs, np.imag(zs), marker='s')
+
+    for ntrap in [0,2,8,16]:
+
+        zs = []
+        for nsegs in xs:
+            z, _ = pysim.PySim(nsegs=nsegs).augmented_compute_impedance(ntrap=ntrap)
+            ic(nsegs,z)
+            zs.append(z)
+
+        zs = np.array(zs)
+
+        normalized_zs = zs/z0
+        color = 'tab:green'
+        reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
+        skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
+
 
     zs = []
     for nsegs in xs:
@@ -43,35 +70,12 @@ def test_impedance_nsegs():
         ic(nsegs,z)
         zs.append(z)
 
-    xs = np.array(xs)
     zs = np.array(zs)
 
 
-    z0 = 50
-
-    fig, ax0 = plt.subplots()
-    skrf.plotting.smith(draw_labels=True, chart_type='z')
 
     normalized_zs = zs/z0
     color = 'tab:red'
-    reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
-    skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
-
-
-    #plt.plot(xs, np.abs(zs), marker='s')
-    #plt.plot(xs, np.imag(zs), marker='s')
-
-    zs = []
-    for nsegs in xs:
-        z, _ = pysim.PySim(nsegs=nsegs).interpolated_compute_impedance()
-        ic(nsegs,z)
-        zs.append(z)
-
-    xs = np.array(xs)
-    zs = np.array(zs)
-
-    normalized_zs = zs/z0
-    color = 'tab:green'
     reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
     skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
 
@@ -163,8 +167,8 @@ def test_slow():
     ps = pysim.PySim()
     z, i = ps.compute_impedance()
 
-nsegs = 1001
-nrepeat = 5
+nsegs = 41
+nrepeat = 1
 
 def test_interpolated():
     ps = pysim.PySim(nsegs=nsegs)
@@ -179,8 +183,32 @@ def test_stamp():
 
     t = time.time()
     for i in range(nrepeat):
-        z, i = ps.stamp_vectorized_compute_impedance()
-    ic('interpolated', time.time()-t)
+        z, i = ps.stamp_vectorized_compute_impedance(engine='fusion')
+    ic('stamp', time.time()-t)
+
+def test_augmented():
+    ps = pysim.PySim(nsegs=nsegs)
+
+    t = time.time()
+    for i in range(nrepeat):
+        z, i = ps.augmented_compute_impedance()
+    ic('stamp', time.time()-t)
+
+def test_stamp_split():
+    ps = pysim.PySim(nsegs=nsegs)
+
+    t = time.time()
+    for i in range(nrepeat):
+        z, i = ps.stamp_vectorized_compute_impedance(engine='split')
+    ic('stamp_split', time.time()-t)
+
+def test_stamp_python():
+    ps = pysim.PySim(nsegs=nsegs)
+
+    t = time.time()
+    for i in range(nrepeat):
+        z, i = ps.stamp_vectorized_compute_impedance(engine='python')
+    ic('stamp_split', time.time()-t)
 
 def test_vectorized():
     ps = pysim.PySim(nsegs=nsegs)
