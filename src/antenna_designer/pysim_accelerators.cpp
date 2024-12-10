@@ -205,6 +205,9 @@ py::array_t<std::complex<double> > psi_fusion_trapezoid(
 
   std::complex<double> *result_ptr = static_cast<std::complex<double> *>(result_buf.ptr);
 
+  double one_over_ntrap = 1.0/ntrap;
+  double one_over_2_ntrap = 0.5*one_over_ntrap;
+
   #pragma omp parallel for
   for (size_t i = 0; i < rows; i++) {
     for (size_t j = 0; j < cols; j++) {
@@ -219,12 +222,11 @@ py::array_t<std::complex<double> > psi_fusion_trapezoid(
 	res = trapezoid_aux(0.5, n_l_endpoint_ptr, n_r_endpoint_ptr, m_center_ptr, wire_radius, k);
       } else {
 	for(size_t kk=0; kk<ntrap+1; kk++) {
-	  double theta = static_cast<double>(kk)/ntrap;
-	  double coeff = 1.0;
+	  double theta = static_cast<double>(kk)*one_over_ntrap;
+	  double coeff = one_over_2_ntrap;
 	  if (kk>0 && kk<ntrap) {
-	    coeff = 2.0;
+	    coeff = one_over_ntrap;
 	  }
-	  coeff /= 2*ntrap;
 	  res += coeff*trapezoid_aux(theta, n_l_endpoint_ptr, n_r_endpoint_ptr, m_center_ptr, wire_radius, k);
 	}
       }
