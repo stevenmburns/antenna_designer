@@ -138,7 +138,8 @@ py::array_t<std::complex<double> > psi_fusion_trapezoid(
     py::array_t<double> input1,
     py::array_t<double> delta,
     double wire_radius,
-    double k
+    double k,
+    int ntrap
 ) {
   auto buf0 = input0.request();
   auto buf1 = input1.request();
@@ -174,9 +175,6 @@ py::array_t<std::complex<double> > psi_fusion_trapezoid(
   #pragma omp parallel for
   for (size_t i = 0; i < rows; i++) {
     for (size_t j = 0; j < cols; j++) {
-      auto center = ptr0[i*vsize+kk];
-      auto del = ptrd[i];
-
       auto sumsq = 0.0;
       for (size_t kk = 0; kk < vsize; kk++) {
 	auto diff = ptr0[i*vsize+kk] - ptr1[j*vsize+kk];
@@ -246,7 +244,7 @@ PYBIND11_MODULE(pysim_accelerators, m) {
     m.def("psi", &psi, "Compute Psi (Integral) from euclidean distance",
 	  py::arg("R"), py::arg("delta"), py::kw_only(), py::arg("wire_radius"), py::arg("k"));
     m.def("psi_fusion", &psi_fusion, "Compute Psi (Integral) from point vectors", py::arg("input0"), py::arg("input1"), py::arg("delta"), py::kw_only(), py::arg("wire_radius"), py::arg("k"));
-    m.def("psi_fusion_trapezoid", &psi_fusion_trapezoid, "Compute Psi (Integral) from point vectors", py::arg("input0"), py::arg("input1"), py::arg("delta"), py::kw_only(), py::arg("wire_radius"), py::arg("k"), py::arg("N"));
+    m.def("psi_fusion_trapezoid", &psi_fusion_trapezoid, "Compute Psi (Integral) from point vectors", py::arg("input0"), py::arg("input1"), py::arg("delta"), py::kw_only(), py::arg("wire_radius"), py::arg("k"), py::arg("ntrap"));
     m.def("compute_func", py::vectorize(compute_func));
     m.def("interp_func", py::vectorize(interp_func));
     m.def("fast_interp_func", py::vectorize(fast_interp_func));
