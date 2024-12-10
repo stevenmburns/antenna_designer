@@ -134,7 +134,7 @@ py::array_t<std::complex<double> > psi_fusion(
   return result;
 }
 
-std::complex<double> trapezoid_aux(double theta, double *n_l_endpoint_ptr, double *n_r_endpoint_ptr, double *m_center_ptr, double wire_radius, double k) {
+std::complex<double> trapezoid_aux(double theta, double delta, double *n_l_endpoint_ptr, double *n_r_endpoint_ptr, double *m_center_ptr, double wire_radius, double k) {
 
   std::complex<double> minus_jk = -1i*k;
 
@@ -146,15 +146,6 @@ std::complex<double> trapezoid_aux(double theta, double *n_l_endpoint_ptr, doubl
       sumsq += diff*diff;
     }
     R = sqrt(sumsq);
-  }
-  double delta;
-  {
-    double sumsq = 0.0;
-    for (size_t kk=0; kk<3; ++kk) {
-      auto diff = n_r_endpoint_ptr[kk] - n_l_endpoint_ptr[kk];
-      sumsq += diff*diff;
-    }
-    delta = sqrt(sumsq);
   }
 
   std::complex<double> res;
@@ -210,16 +201,27 @@ py::array_t<std::complex<double> > psi_fusion_trapezoid(
 
   #pragma omp parallel for
   for (size_t i = 0; i < rows; i++) {
+    auto n_l_endpoint_ptr = ptr0 + (2*(i+0))*vsize;
+    auto n_r_endpoint_ptr = ptr0 + (2*(i+1))*vsize;
+
+    double delta;
+    {
+      double sumsq = 0.0;
+      for (size_t kk=0; kk<3; ++kk) {
+        auto diff = n_r_endpoint_ptr[kk] - n_l_endpoint_ptr[kk];
+	sumsq += diff*diff;
+      }
+      delta = sqrt(sumsq);
+    }
+
     for (size_t j = 0; j < cols; j++) {
 
-      auto n_l_endpoint_ptr = ptr0 + (2*(i+0))*vsize;
-      auto n_r_endpoint_ptr = ptr0 + (2*(i+1))*vsize;
       auto m_center_ptr = ptr1 + (2*j+1)*vsize;
 
       std::complex<double> res = 0.0;
 
       if (ntrap == 0) {
-	res = trapezoid_aux(0.5, n_l_endpoint_ptr, n_r_endpoint_ptr, m_center_ptr, wire_radius, k);
+         res = trapezoid_aux(0.5, delta, n_l_endpoint_ptr, n_r_endpoint_ptr, m_center_ptr, wire_radius, k);
       } else {
 	for(size_t kk=0; kk<ntrap+1; kk++) {
 	  double theta = static_cast<double>(kk)*one_over_ntrap;
@@ -227,7 +229,7 @@ py::array_t<std::complex<double> > psi_fusion_trapezoid(
 	  if (kk>0 && kk<ntrap) {
 	    coeff = one_over_ntrap;
 	  }
-	  res += coeff*trapezoid_aux(theta, n_l_endpoint_ptr, n_r_endpoint_ptr, m_center_ptr, wire_radius, k);
+	  res += coeff*trapezoid_aux(theta, delta, n_l_endpoint_ptr, n_r_endpoint_ptr, m_center_ptr, wire_radius, k);
 	}
       }
       result_ptr[i*cols+j] = res;

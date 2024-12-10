@@ -185,7 +185,7 @@ def test_augmented():
     t = time.time()
     for i in range(nrepeat):
         z, i = ps.augmented_compute_impedance(ntrap=ntrap, engine='accelerated')
-    ic('augmented python', time.time()-t)
+    ic('augmented accelerated', time.time()-t)
 
 def test_augmented_python():
     ps = pysim.PySim(nsegs=nsegs)
@@ -194,6 +194,14 @@ def test_augmented_python():
     for i in range(nrepeat):
         z, i = ps.augmented_compute_impedance(ntrap=ntrap, engine='python')
     ic('augmented python', time.time()-t)
+
+def test_augmented_test():
+    ps = pysim.PySim(nsegs=nsegs)
+
+    t = time.time()
+    for i in range(nrepeat):
+        z, i = ps.augmented_compute_impedance(ntrap=ntrap, engine='test')
+    ic('augmented test', time.time()-t)
 
 def test_stamp_split():
     ps = pysim.PySim(nsegs=nsegs)
