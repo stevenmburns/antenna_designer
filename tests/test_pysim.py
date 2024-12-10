@@ -19,8 +19,8 @@ from icecream import ic
 
 import skrf
 
-#fn = None
-fn = '/dev/null'
+fn = None
+#fn = '/dev/null'
 
 
 
@@ -112,51 +112,79 @@ def test_svd_currents_nsmallest():
 def test_sweep_halfdriver():
 
     nsegs=1001
-
-    xs = np.linspace(.9,1,21)
-
-    t = time.time()
-    zas = []
-    for x in xs:
-        z, _ = pysim.PySim(halfdriver_factor=x,nsegs=nsegs).stamp_vectorized_compute_impedance()
-        zas.append(z)
-    print('stamp', time.time()-t)
-    zas = np.array(zas)
-
-    t = time.time()
-    zbs = []
-    for x in xs:
-        z, _ = pysim.PySim(halfdriver_factor=x,nsegs=nsegs).vectorized_compute_impedance()
-        zbs.append(z)
-    print('vectorized', time.time()-t)
-    zbs = np.array(zbs)
-
-    if False:
-        t = time.time()
-        zcs = []
-        for x in xs:
-            z, _ = pysim.PySim(halfdriver_factor=x,nsegs=nsegs).compute_impedance()
-            zcs.append(z)
-        print('slow', time.time()-t)
-        zcs = np.array(zcs)
-
     z0 = 50
 
     fig, ax0 = plt.subplots()
     skrf.plotting.smith(draw_labels=True, chart_type='z')
 
-    normalized_zs = zas/z0
+    xs = np.linspace(.9,1,21)
+
+    t = time.time()
+    zs = []
+    for x in xs:
+        z, _ = pysim.PySim(halfdriver_factor=x,nsegs=nsegs).stamp_vectorized_compute_impedance()
+        zs.append(z)
+    print('stamp', time.time()-t)
+    zs = np.array(zs)
+
+    normalized_zs = zs/z0
     color = 'tab:red'
     reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
     skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
 
-    normalized_zs = zbs/z0
+
+    t = time.time()
+    zs = []
+    for x in xs:
+        z, _ = pysim.PySim(halfdriver_factor=x,nsegs=nsegs).vectorized_compute_impedance()
+        zs.append(z)
+    print('vectorized', time.time()-t)
+    zs = np.array(zs)
+
+    normalized_zs = zs/z0
     color = 'tab:blue'
     reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
     skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
 
+
+    t = time.time()
+    zs = []
+    for x in xs:
+        z, _ = pysim.PySim(halfdriver_factor=x,nsegs=nsegs).augmented_compute_impedance(ntrap=4)
+        zs.append(z)
+    print('augmented ntrap=4', time.time()-t)
+    zs = np.array(zs)
+
+    normalized_zs = zs/z0
+    color = 'tab:green'
+    reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
+    skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
+
+
+    t = time.time()
+    zs = []
+    for x in xs:
+        z, _ = pysim.PySim(halfdriver_factor=x,nsegs=nsegs).augmented_compute_impedance(ntrap=16)
+        zs.append(z)
+    print('augmented ntrap=16', time.time()-t)
+    zs = np.array(zs)
+
+    normalized_zs = zs/z0
+    color = 'tab:purple'
+    reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
+    skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
+
+
     if False:
-        normalized_zs = zcs/z0
+        t = time.time()
+        zs = []
+        for x in xs:
+            z, _ = pysim.PySim(halfdriver_factor=x,nsegs=nsegs).compute_impedance()
+            zs.append(z)
+        print('slow', time.time()-t)
+        zs = np.array(zs)
+
+        normalized_zs = zs/z0
         color = 'tab:green'
         reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
         skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
