@@ -5,7 +5,7 @@ from icecream import ic
 
 from matplotlib import pyplot as plt
 
-from .pysim_accelerators import dist_outer_product, psi, psi_fusion
+from .pysim_accelerators import dist_outer_product, psi, psi_fusion, psi_fusion_trapezoid
 
 class PySim:
     def __init__(self, *, wavelength=22, halfdriver_factor=.962,nsegs=101,rcond=1e-16,nsmallest=0):
@@ -197,7 +197,7 @@ class PySim:
         self.z = z
         return self.factor_and_solve()
 
-    def augmented_compute_impedance(self, ntrap=0):
+    def augmented_compute_impedance(self, *, ntrap=0, engine='accelerated'):
 
         y0, y1 = np.float64(0), np.float64(2*self.halfdriver)
 
@@ -232,7 +232,7 @@ class PySim:
         vec_delta_l = exnm[1:-3:2,:] - exnm[3:-1:2,:]
         assert vec_delta_l.shape == (self.nsegs,3)
 
-        def Integral(n, m, ntrap=ntrap):
+        def Integral_Standalone(n, m, *, ntrap, wire_radius, k):
             n_endpoints = n[::2,:]
             m_centers = m[1:-1:2,:]
 
@@ -270,11 +270,32 @@ class PySim:
 
             return res
 
+        def Integral_Test(n, m, ntrap):
+            res_python = Integral_Python(n, m, ntrap=ntrap)
+            res_accelerated = Integral_Accelerated(n, m, ntrap=ntrap)
+            assert (abs(res_python-res_accelerated) < 0.001).all()
+            return res_accelerated
+
+        def Integral_Python(n, m, ntrap):
+            return Integral_Standalone(n, m, ntrap=ntrap, wire_radius=self.wire_radius, k=self.k)
+
+        def Integral_Accelerated(n, m, ntrap):
+            return psi_fusion_trapezoid(n, m, wire_radius=self.wire_radius, k=self.k, ntrap=ntrap)
+
+        if engine == 'accelerated':
+            Integral = Integral_Accelerated
+        elif engine == 'python':
+            Integral = Integral_Python
+        elif engine == 'test':
+            Integral = Integral_Test
+        else:
+            assert False
+
         z = self.jomega * self.mu * (vec_delta_l[np.newaxis, :, :] * vec_delta_l[:, np.newaxis, :]).sum(axis=2)
 
-        z *= Integral(a_pts, a_pts)
+        z *= Integral(a_pts, a_pts, ntrap=ntrap)
 
-        s = 1/(self.jomega*self.eps) * Integral(exnm, exnm)
+        s = 1/(self.jomega*self.eps) * Integral(exnm, exnm, ntrap=ntrap)
 
         z += s[:-1,:-1] + s[1:, 1:] - s[:-1, 1:] - s[1:, :-1]
 

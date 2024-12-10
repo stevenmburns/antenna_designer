@@ -167,8 +167,8 @@ def test_slow():
     ps = pysim.PySim()
     z, i = ps.compute_impedance()
 
-nsegs = 41
-nrepeat = 1
+nsegs = 801
+nrepeat = 20
 
 def test_interpolated():
     ps = pysim.PySim(nsegs=nsegs)
@@ -191,8 +191,13 @@ def test_augmented():
 
     t = time.time()
     for i in range(nrepeat):
-        z, i = ps.augmented_compute_impedance()
-    ic('stamp', time.time()-t)
+        z, i = ps.augmented_compute_impedance(ntrap=8, engine='python')
+    ic('augmented python', time.time()-t)
+
+    t = time.time()
+    for i in range(nrepeat):
+        z, i = ps.augmented_compute_impedance(ntrap=8, engine='accelerated')
+    ic('augmented accelerated', time.time()-t)
 
 def test_stamp_split():
     ps = pysim.PySim(nsegs=nsegs)
