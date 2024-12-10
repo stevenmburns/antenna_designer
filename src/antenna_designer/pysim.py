@@ -3,8 +3,6 @@ import scipy
 import scipy.linalg
 from icecream import ic
 
-from matplotlib import pyplot as plt
-
 from .pysim_accelerators import dist_outer_product, psi, psi_fusion, psi_fusion_trapezoid
 
 class PySim:
