@@ -6,7 +6,7 @@ from icecream import ic
 from .pysim_accelerators import dist_outer_product, psi, psi_fusion, psi_fusion_trapezoid
 
 class PySim:
-    def __init__(self, *, wavelength=22, halfdriver_factor=.962,nsegs=101,rcond=1e-16,nsmallest=0):
+    def __init__(self, *, wavelength=22, halfdriver_factor=.962,nsegs=101,rcond=1e-16,nsmallest=0, run_iterative_improvement=False, run_svd=False):
         self.wavelength = wavelength
         self.halfdriver_factor = halfdriver_factor
         self.nsegs = nsegs
@@ -32,6 +32,9 @@ class PySim:
 
 
         self.driver_seg_idx = self.nsegs//2
+
+        self.run_svd = run_svd
+        self.run_iterative_improvement = run_iterative_improvement
 
 
     @staticmethod
@@ -71,15 +74,12 @@ class PySim:
         return x
 
     def factor_and_solve(self):
-        run_svd = False
-        run_iterative_improvement = False
-
         factors = scipy.linalg.lu_factor(self.z)
 
         v = np.zeros(shape=(self.nsegs,), dtype=np.complex128)
         v[self.driver_seg_idx] = 1
 
-        if run_svd:
+        if self.run_svd:
             i_svd = self.solve_using_svd(self.z, v, rcond=self.rcond, nsmallest=self.nsmallest)
 
             r =  v - np.dot(self.z, i_svd)
@@ -87,7 +87,7 @@ class PySim:
 
         i = scipy.linalg.lu_solve(factors, v)
 
-        if run_iterative_improvement:
+        if self.run_iterative_improvement:
             i = np.array(i, dtype=np.complex256)
             r =  v - np.dot(self.z, i)
             ic('i error (0)', np.linalg.norm(r))
@@ -100,18 +100,18 @@ class PySim:
             r =  v - np.dot(self.z, i)
             ic('i error (2)', np.linalg.norm(r))
 
-        if run_svd:
+        if self.run_svd:
             ic('error vs. svd', np.linalg.norm(i_svd - i))
 
         #ic(factors, v, np.abs(i), np.angle(i)*180/np.pi)
         driver_impedance = v[self.driver_seg_idx]/i[self.driver_seg_idx]
         ic(np.abs(driver_impedance), np.angle(driver_impedance)*180/np.pi)
 
-        if run_svd:
+        if self.run_svd:
             driver_impedance_svd = v[self.driver_seg_idx]/i_svd[self.driver_seg_idx]
             ic(np.abs(driver_impedance_svd), np.angle(driver_impedance_svd)*180/np.pi)
 
-        if run_svd:
+        if self.run_svd:
             return driver_impedance, (i, i_svd)
         else:
             return driver_impedance, i
@@ -287,7 +287,7 @@ class PySim:
         elif engine == 'test':
             Integral = Integral_Test
         else:
-            assert False
+            assert False # pragma: no cover
 
         z = self.jomega * self.mu * (vec_delta_l[np.newaxis, :, :] * vec_delta_l[:, np.newaxis, :]).sum(axis=2)
 
@@ -466,7 +466,7 @@ class PySim:
         elif engine == 'python':
             Integral = Integral_Python
         else:
-            assert False
+            assert False # pragma: no cover
 
         z = self.jomega * self.mu * (vec_delta_l[np.newaxis, :, :] * vec_delta_l[:, np.newaxis, :]).sum(axis=2)
 
