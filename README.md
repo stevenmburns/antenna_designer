@@ -24,9 +24,10 @@
 | src/antenna\_designer/designs/vertical.py           |       24 |        0 |     100% |           |
 | src/antenna\_designer/far\_field.py                 |      105 |        0 |     100% |           |
 | src/antenna\_designer/opt.py                        |       36 |        0 |     100% |           |
+| src/antenna\_designer/pysim.py                      |      259 |        0 |     100% |           |
 | src/antenna\_designer/sim.py                        |       42 |        0 |     100% |           |
 | src/antenna\_designer/sweep.py                      |      117 |        0 |     100% |           |
-|                                           **TOTAL** |  **778** |    **0** | **100%** |           |
+|                                           **TOTAL** | **1037** |    **0** | **100%** |           |
 
 
 ## Setup coverage badge
