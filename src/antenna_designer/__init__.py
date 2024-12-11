@@ -10,7 +10,7 @@ __all__ = [
     'optimize',
     'pattern',
     'pattern3d',
-    'cli'
+    'cli',
 ]
 
 from .builder import AntennaBuilder, Array2x2Builder, Array2x4Builder
