@@ -14,6 +14,7 @@ from antenna_designer.pysim_accelerators import dist_outer_product
 
 from matplotlib import pyplot as plt
 import numpy as np
+import scipy
 from icecream import ic
 
 import skrf
@@ -60,6 +61,41 @@ def test_impedance_nsegs():
         skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
 
     save_or_show(plt, fn)
+
+
+def test_spline_fit():
+    nsegs=1001
+    nsample = 100
+    assert (nsegs-1) % nsample == 0
+
+    halfdriver_factors = np.linspace(.9,1,6)
+
+    fig, ax0 = plt.subplots()
+    ax1 = ax0.twinx()
+
+    for halfdriver_factor in halfdriver_factors:
+
+        _, i = pysim.PySim(nsegs=nsegs, halfdriver_factor=halfdriver_factor).augmented_compute_impedance(ntrap=16)
+
+        xs = np.linspace(0,nsegs-1,nsegs)
+
+        i_sample = i[::nsample]
+        xs_sample = xs[::nsample]
+
+        interp = scipy.interpolate.CubicSpline(xs_sample, i_sample)
+
+        color = 'tab:blue'
+        ax0.plot(xs, np.abs(i), color=color)
+        color = 'tab:purple'
+        ax0.plot(xs, np.abs(interp(xs)), color=color)
+
+
+        color = 'tab:green'
+        ax1.plot(xs, np.angle(i)*180/np.pi, color=color)
+        color = 'tab:olive'
+        ax1.plot(xs, np.angle(interp(xs))*180/np.pi, color=color)
+    plt.show()
+
 
 
 def test_svd_currents_nsmallest():
