@@ -10,39 +10,44 @@ fn = None
 
 def gen_matrix(N=3):
 
-    rows = []
+    constraint = scipy.sparse.dok_array((4*N,4*N))
+    row = 0
 
-    """make f(x) 0 on left boundary"""
-    rows.append( [1, -1/2, 1/4, -1/8] + [0]*4*(N-1) )
+    """match f(x) at startpoint"""
+    constraint[row, 0:4] = [1, -1/2, 1/4, -1/8]
+    row += 1
 
-    """match f(x) between splines"""
+    """match f(x) between interior points"""
     for i in range(N-1):
-        rows.append( [0]*4*i + [1, 1/2, 1/4, 1/8] +  [-1, 1/2, -1/4, 1/8] + [0]*4*(N-2-i) )
+        constraint[row, 4*i:4*(i+2)] = [1, 1/2, 1/4, 1/8] + [-1, 1/2, -1/4, 1/8]
+        row += 1
 
-    """make f(x) 0 on right boundary"""
-    rows.append( [0]*4*(N-1) + [1, 1/2, 1/4, 1/8] )
+    """match f(x) at endpoint"""
+    constraint[row, 4*(N-1):4*N] = [1, 1/2, 1/4, 1/8]
+    row += 1
 
     """match f'(x) between splines"""
     for i in range(N-1):
-        rows.append( [0]*4*i + [0, 1, 1, 3/4] +  [0, -1, 1, -3/4] + [0]*4*(N-2-i) )
+        constraint[row, 4*i:4*(i+2)] = [0, 1, 1, 3/4] + [0, -1, 1, -3/4]
+        row += 1    
 
     """match f''(x) between splines"""
     for i in range(N-1):
-        rows.append( [0]*4*i + [0, 0, 2, 3] +  [0, 0, -2, 3] + [0]*4*(N-2-i) )
-
+        constraint[row, 4*i:4*(i+2)] = [0, 0, 2, 3] +  [0, 0, -2, 3]
+        row += 1    
 
     """make these driven"""
     for i in range(N):    
-        rows.append( [0]*4*i + [1, 0, 0, 0] + [0]*4*(N-1-i) )
+        constraint[row, 4*i:4*(i+1)] = [1, 0, 0, 0]
+        row += 1    
 
     """make f''(x) on left boundary driven"""
-    rows.append( [0, 0, 2, 3] + [0]*4*(N-1) )
-        
+    constraint[row, 0:4] = [0, 0, 2, 3]
+    row += 1    
 
+    ic(constraint)
 
-    ic(len(rows), len(rows[0]), rows)
-
-    constrain_coeffs = np.array(rows)
+    constrain_coeffs = constraint.toarray()
 
     inv = np.linalg.inv(constrain_coeffs)
 
@@ -54,12 +59,14 @@ def gen_matrix(N=3):
     xs = np.linspace(0,N,N*nrepeats+1)
     ic(xs)
 
-    v = np.zeros(shape=(xs.shape[0],4*N))
+    v = scipy.sparse.dok_array((xs.shape[0], 4*N))
     for i,x in enumerate(xs):
         j = min(i // nrepeats, N-1)
         for k in range(4):
             v[i,4*j+k] = (x-j-1/2)**k
-    
+
+    v = v.tocsr()
+
     ic(v)
 
     #ys = np.sin(np.pi/N*xs)
@@ -67,30 +74,42 @@ def gen_matrix(N=3):
 
     eval_mat = v @ S
 
-    def pseudo_inverse(A):
+    ic(eval_mat)
+
+    def pseudo_solve(A, b):
         U, s, VT = scipy.linalg.svd(A)
         ic(s)
-        s_inv = np.zeros(shape=(VT.shape[0], U.shape[0]))
-        s_inv[:s.shape[0], :s.shape[0]] = np.diag(1/s)
-        return VT.T @ s_inv @ U.T
+        s_inv = scipy.sparse.dok_array((VT.shape[0], U.shape[0]))
+        for i, ss in enumerate(s):
+            s_inv[i, i] = 1/s[i]
+        s_inv = s_inv.tocsr()
+        return VT.T @ (s_inv @ (U.T @ b))
 
-    coeffs = pseudo_inverse(eval_mat) @ ys
+    coeffs = pseudo_solve(eval_mat, ys)
 
     ic(coeffs.shape, coeffs)
 
     new_ys = eval_mat @ coeffs
 
-    return xs, ys, new_ys
+    return xs, ys, new_ys, coeffs
 
 def test_gen_matrix():
 
     N = 3
-    xs, ys, new_ys = gen_matrix(N)
+    xs, ys, _, _ = gen_matrix(N)
     plt.plot(xs/N, ys)
 
-    for N in range(4, 10):
-        xs, _, new_ys = gen_matrix(N)
+    for N in range(4, 5):
+        xs, _, new_ys, coeffs = gen_matrix(N)
         plt.plot(xs/N, new_ys)
+
+        coeffs = coeffs[:-1]
+        delta = 1/(N)
+        ic(N, coeffs.shape, delta)
+
+        xxs = np.linspace(delta/2, 1-delta/2, N)
+        ic(xxs)
+        plt.plot(xxs, coeffs, marker='s')
 
 
 
