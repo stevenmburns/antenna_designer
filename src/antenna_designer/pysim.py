@@ -3,7 +3,7 @@ import scipy
 import scipy.linalg
 from icecream import ic
 
-from .pysim_accelerators import dist_outer_product, psi, psi_fusion, psi_fusion_trapezoid
+from .pysim_accelerators import psi_fusion_trapezoid
 
 class PySim:
     def __init__(self, *, wavelength=22, halfdriver_factor=.962,nsegs=101,rcond=1e-16,nsmallest=0, run_iterative_improvement=False, run_svd=False):
@@ -152,43 +152,6 @@ class PySim:
         vec_delta_l = exnm[1:-3:2,:] - exnm[3:-1:2,:]
         assert vec_delta_l.shape == (self.nsegs,3)
 
-        def Integral_Standalone(n, m, *, ntrap, wire_radius, k):
-            n_endpoints = n[::2,:]
-            m_centers = m[1:-1:2,:]
-
-            vec_delta = n_endpoints[1:,:] - n_endpoints[:-1,:]
-            delta = np.sqrt((vec_delta*vec_delta).sum(axis=1))
-            assert n_endpoints.shape[0] - 1 == delta.shape[0]
-
-            def Aux(theta):
-                local_n = n_endpoints[:-1,:]*(1-theta) + theta*n_endpoints[1:,:]
-
-                diffs = local_n[np.newaxis, :, :] - m_centers[:, np.newaxis, :]
-                R = np.sqrt((diffs*diffs).sum(axis=2))
-
-                # not always diagonal indices
-                diag_indices = np.where(R < 0.00001)
-                new_delta = delta[diag_indices[0]]
-
-                RR = R
-                RR[diag_indices] = 1
-
-                local_res = np.exp(-(0+1j)*self.k*R)/(4*np.pi*RR)
-                diag = 1/(2*np.pi*new_delta) * np.log(new_delta/self.wire_radius) - (0+1j)*self.k/(4*np.pi) 
-                local_res[diag_indices] = diag
-
-                return local_res
-
-            res = np.zeros(shape=(n_endpoints.shape[0]-1, m_centers.shape[0]),dtype=np.complex128)
-            if ntrap == 0:
-                res += Aux(0.5)
-            else:
-                for i in range(0, ntrap+1):
-                    theta = i/ntrap
-                    coeff = (2 if i > 0 and i < ntrap else 1)/(2*ntrap)
-                    res += coeff * Aux(theta)
-
-            return res
 
         def Integral_Test(n, m, ntrap):
             res_python = Integral_Python(n, m, ntrap=ntrap)
@@ -222,3 +185,41 @@ class PySim:
         self.z = z
 
         return self.factor_and_solve()
+
+def Integral_Standalone(n, m, *, ntrap, wire_radius, k):
+    n_endpoints = n[::2,:]
+    m_centers = m[1:-1:2,:]
+
+    vec_delta = n_endpoints[1:,:] - n_endpoints[:-1,:]
+    delta = np.sqrt((vec_delta*vec_delta).sum(axis=1))
+    assert n_endpoints.shape[0] - 1 == delta.shape[0]
+
+    def Aux(theta):
+        local_n = n_endpoints[:-1,:]*(1-theta) + theta*n_endpoints[1:,:]
+
+        diffs = local_n[np.newaxis, :, :] - m_centers[:, np.newaxis, :]
+        R = np.sqrt((diffs*diffs).sum(axis=2))
+
+        # not always diagonal indices
+        diag_indices = np.where(R < 0.00001)
+        new_delta = delta[diag_indices[0]]
+
+        RR = R
+        RR[diag_indices] = 1
+
+        local_res = np.exp(-(0+1j)*k*R)/(4*np.pi*RR)
+        diag = 1/(2*np.pi*new_delta) * np.log(new_delta/wire_radius) - (0+1j)*k/(4*np.pi) 
+        local_res[diag_indices] = diag
+
+        return local_res
+
+    res = np.zeros(shape=(n_endpoints.shape[0]-1, m_centers.shape[0]),dtype=np.complex128)
+    if ntrap == 0:
+        res += Aux(0.5)
+    else:
+        for i in range(0, ntrap+1):
+            theta = i/ntrap
+            coeff = (2 if i > 0 and i < ntrap else 1)/(2*ntrap)
+            res += coeff * Aux(theta)
+
+    return res
