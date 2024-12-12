@@ -79,9 +79,11 @@ def gen_matrix(N=3):
     def pseudo_solve(A, b):
         U, s, VT = scipy.linalg.svd(A)
         ic(s)
-        s_inv = scipy.sparse.dok_array((VT.shape[0], U.shape[0]))
-        for i, ss in enumerate(s):
-            s_inv[i, i] = 1/s[i]
+        diag_indices = np.array(range(s.shape[0]))
+        s_inv = scipy.sparse.coo_array(
+            (1/s, (diag_indices, diag_indices)),
+            shape=(VT.shape[0], U.shape[0])
+        )        
         s_inv = s_inv.tocsr()
         return VT.T @ (s_inv @ (U.T @ b))
 
@@ -99,7 +101,7 @@ def test_gen_matrix():
     xs, ys, _, _ = gen_matrix(N)
     plt.plot(xs/N, ys)
 
-    for N in range(4, 5):
+    for N in range(3, 9):
         xs, _, new_ys, coeffs = gen_matrix(N)
         plt.plot(xs/N, new_ys)
 
