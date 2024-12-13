@@ -10,7 +10,7 @@ fn = None
 
 def gen_matrix(N=3):
 
-    constraint = scipy.sparse.dok_array((4*N,4*N))
+    constraint = scipy.sparse.dok_array((3*N-1,4*N))
     row = 0
 
     """match f(x) at startpoint"""
@@ -36,16 +36,6 @@ def gen_matrix(N=3):
         constraint[row, 4*i:4*(i+2)] = [0, 0, 2, 3] +  [0, 0, -2, 3]
         row += 1    
 
-    """make these driven"""
-    for i in range(N):    
-        constraint[row, 4*i:4*(i+1)] = [1, 0, 0, 0]
-        row += 1    
-
-    """make another variable driven (left most a1 term)"""
-    constraint[row, 0:4] = [0, 1, 0, 0]
-    row += 1    
-    
-    
     """Reorder to put driven variables at the end"""
     driven = [4*i for i in range(N)] + [1]
 
@@ -57,25 +47,17 @@ def gen_matrix(N=3):
 
     order = lst + driven
 
-    ic(order)
+    ic(order, len(order), constraint.shape)
 
     constraint = constraint.tocsc()[:, order]
 
-    ic(constraint)
+    ic(constraint.shape, 3*N-1)
 
-    lu = scipy.sparse.linalg.splu(constraint[:3*N-1, :3*N-1])
+    lu = scipy.sparse.linalg.splu(constraint[:, :3*N-1])
     ic(lu.shape, lu.nnz, lu)
 
-    SS = -lu.solve(constraint[:3*N-1, 3*N-1:].toarray())
-    SSS = np.vstack((SS, np.eye(N+1)))
-
-    inv = np.linalg.inv(constraint.toarray())
-    # one driving variable for each N and the remaining second derivative
-    S = inv[:, -(N+1):]
-
-    assert (np.abs(SSS - S) < 0.0001).all()
-
-    ic(inv, S, S.shape, SSS, SSS.shape)
+    SS = -lu.solve(constraint[:, 3*N-1:].toarray())
+    S = np.vstack((SS, np.eye(N+1)))
 
     deriv_op = scipy.sparse.dok_array((4*N, 4*N))
     for i in range(N):
