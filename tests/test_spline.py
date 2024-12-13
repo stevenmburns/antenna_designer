@@ -8,7 +8,7 @@ from icecream import ic
 fn = None
 #fn = '/dev/null'
 
-def gen_matrix(N=3):
+def gen_matrix(N=3, fitting=True):
 
     constraint = scipy.sparse.dok_array((3*N-1,4*N))
     row = 0
@@ -85,7 +85,7 @@ def gen_matrix(N=3):
     ic(Vandermonde)
     Vandermonde = Vandermonde.tocsc()[:,order]
 
-    if False: # fitting
+    if fitting:
         #ys = np.sin(np.pi/N*xs)
         ys = (lambda x: x-x**10)(xs/N)
         ys2 = ys
@@ -120,14 +120,36 @@ def gen_matrix(N=3):
 
     return xs, ys2, new_ys, coeffs
 
-def test_gen_matrix():
+def test_solve():
 
     N = 3
-    xs, ys, _, _ = gen_matrix(N)
+    xs, ys, _, _ = gen_matrix(N,fitting=False)
     plt.plot(xs/N, ys, label='solution/known')
 
     for N in range(3, 4):
-        xs, _, new_ys, coeffs = gen_matrix(N)
+        xs, _, new_ys, coeffs = gen_matrix(N, fitting=False)
+        plt.plot(xs/N, new_ys, label=f'{N} predicted')
+
+        coeffs = coeffs[:-1]
+        delta = 1/(N)
+        ic(N, coeffs.shape, delta)
+
+        xxs = np.linspace(delta/2, 1-delta/2, N)
+        ic(xxs)
+        plt.plot(xxs, coeffs, marker='s', linestyle='None')
+
+
+    plt.legend()
+    plt.show()
+
+def test_fit():
+
+    N = 3
+    xs, ys, _, _ = gen_matrix(N, fitting=True)
+    plt.plot(xs/N, ys, label='solution/known')
+
+    for N in range(3, 4):
+        xs, _, new_ys, coeffs = gen_matrix(N, fitting=True)
         plt.plot(xs/N, new_ys, label=f'{N} predicted')
 
         coeffs = coeffs[:-1]
