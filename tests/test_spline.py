@@ -1,8 +1,5 @@
 
 from matplotlib import pyplot as plt
-import numpy as np
-import scipy
-from icecream import ic
 
 from antenna_designer.spline import gen_matrix
 
