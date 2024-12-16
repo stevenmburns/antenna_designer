@@ -26,6 +26,10 @@ def gen_matrix(N=3, nrepeats=10, model='fitting', midderivs_free=False):
     constraint[row, 4*(N-1):4*N] = [1, 1/2, 1/4, 1/8]
     row += 1
 
+    assert not midderivs_free or nrepeats % 2 == 0
+
+
+
     """match f'(x) between splines"""
     for i in range(N-1):
         if not midderivs_free or i+1 != N//2:
@@ -59,9 +63,6 @@ def gen_matrix(N=3, nrepeats=10, model='fitting', midderivs_free=False):
 
     xs = np.linspace(0,N,N*nrepeats+1)
     #ic(xs)
-
-    assert nrepeats % 2 == 0
-    coarse_xs = xs[nrepeats//2::nrepeats]
 
     Vandermonde = scipy.sparse.dok_array((xs.shape[0], 4*N))
     for i,x in enumerate(xs):
