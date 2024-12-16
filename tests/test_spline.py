@@ -8,14 +8,12 @@ from icecream import ic
 fn = None
 #fn = '/dev/null'
 
-def gen_matrix(N=3, nrepeats=10, model='fitting'):
+def gen_matrix(N=3, nrepeats=10, model='fitting', midderivs_free=False):
 
-    ndriven = N+2
-
-    constraint = scipy.sparse.dok_array((4*N-ndriven,4*N))
+    constraint = scipy.sparse.dok_array((4*N, 4*N))
     row = 0
 
-    """match f(x) at startpoint"""
+    """match f(x) to zero at startpoint"""
     constraint[row, 0:4] = [1, -1/2, 1/4, -1/8]
     row += 1
 
@@ -24,61 +22,46 @@ def gen_matrix(N=3, nrepeats=10, model='fitting'):
         constraint[row, 4*i:4*(i+2)] = [1, 1/2, 1/4, 1/8] + [-1, 1/2, -1/4, 1/8]
         row += 1
 
-    """match f(x) at endpoint"""
+    """match f(x) to zero at endpoint"""
     constraint[row, 4*(N-1):4*N] = [1, 1/2, 1/4, 1/8]
     row += 1
 
     """match f'(x) between splines"""
     for i in range(N-1):
-        constraint[row, 4*i:4*(i+2)] = [0, 1, 1, 3/4] + [0, -1, 1, -3/4]
-        row += 1    
+        if not midderivs_free or i+1 != N//2:
+            constraint[row, 4*i:4*(i+2)] = [0, 1, 1, 3/4] + [0, -1, 1, -3/4]
+            row += 1    
 
     """match f''(x) between splines"""
     for i in range(N-1):
-        ic(i, N//2, i != N//2)
-        constraint[row, 4*i:4*(i+2)] = [0, 0, 2, 3] +  [0, 0, -2, 3]
-        row += 1    
+        if not midderivs_free or i+1 != N//2:
+            constraint[row, 4*i:4*(i+2)] = [0, 0, 2, 3] +  [0, 0, -2, 3]
+            row += 1
 
-    assert row == 4*N - ndriven
-
-    """Reorder to put driven variables at the end"""
-    driven = [4*i for i in range(N)] + [1,5]
-
-    assert ndriven == len(driven)
-
-    set_driven = set(driven)
-    lst = []
-    for i in range(4*N):
-        if i not in set_driven:
-            lst.append(i)
-
-    order = lst + driven
-
-    ic(order, len(order), constraint.shape)
-
-    constraint = constraint.tocsc()[:, order]
-
+    constraint.resize((row, 4*N))
+    constraint = constraint.toarray()
     ic(constraint.shape)
 
-    lu = scipy.sparse.linalg.splu(constraint[:, :4*N-ndriven])
-    ic(lu.shape, lu.nnz, lu)
-
-    SS = -lu.solve(constraint[:, 4*N-ndriven:].toarray())
-    S = np.vstack((SS, np.eye(ndriven)))
+    S = scipy.linalg.null_space(constraint, rcond=1e-8)
+    ic(S.shape)
+    ic(scipy.linalg.svd(S)[1])
 
     deriv_op = scipy.sparse.dok_array((4*N, 4*N))
     for i in range(N):
         for j in range(1,4):
             deriv_op[4*i+j-1, 4*i+j] = j
 
-    deriv_op = deriv_op.tocsc()[:, order][order, :]
+    deriv_op = deriv_op.tocsc()
     deriv2_op = deriv_op @ deriv_op
 
-    ic(deriv_op.todok())
-    ic(deriv2_op.todok())
+    #ic(deriv_op.todok())
+    #ic(deriv2_op.todok())
 
     xs = np.linspace(0,N,N*nrepeats+1)
-    ic(xs)
+    #ic(xs)
+
+    assert nrepeats % 2 == 0
+    coarse_xs = xs[nrepeats//2::nrepeats]
 
     Vandermonde = scipy.sparse.dok_array((xs.shape[0], 4*N))
     for i,x in enumerate(xs):
@@ -86,8 +69,9 @@ def gen_matrix(N=3, nrepeats=10, model='fitting'):
         for k in range(4):
             Vandermonde[i,4*j+k] = (x-j-1/2)**k
 
-    ic(Vandermonde)
-    Vandermonde = Vandermonde.tocsc()[:,order]
+    Vandermonde = Vandermonde.tocsc()
+    ic(Vandermonde.shape)
+    ic(scipy.linalg.svd(Vandermonde.toarray())[1])
 
     if model == 'fit':
         #ys = np.sin(np.pi/N*xs)
@@ -127,54 +111,67 @@ def gen_matrix(N=3, nrepeats=10, model='fitting'):
         for i in range(ys.shape[0]):
             ys[i] = 1 - 2*abs(i-ys.shape[0]//2)/(ys.shape[0]-1)
 """
+        ys[0] = -1/2
         ys[ys.shape[0]//2] = 1
+        ys[-1] = -1/2
+
+        ic(G.todok())
+        lu = scipy.linalg.lu_factor(G.toarray())
+        ys2 = scipy.linalg.lu_solve(lu, ys)
 
         eval_mat = G @ Vandermonde @ S
-
-        ys2 = ys
         eval_mat2 = Vandermonde @ S
 
     else:
         assert False # pragma: no cover
 
-    ic(eval_mat)
+    ic(eval_mat.shape)
 
     def pseudo_solve(A, b):
         U, s, VT = scipy.linalg.svd(A)
         ic(s)
-        diag_indices = np.array(range(s.shape[0]))
+
+        mask = s > 1e-8
+        nnz = np.count_nonzero(mask)
+        ic(mask, nnz, VT.shape[0], U.shape[0])
+        diag_indices = np.array(range(nnz))
+
         s_inv = scipy.sparse.coo_array(
-            (1/s, (diag_indices, diag_indices)),
+            (1/s[:nnz], (diag_indices, diag_indices)),
             shape=(VT.shape[0], U.shape[0])
         )        
         s_inv = s_inv.tocsc()
+        ic(s_inv.todok())
         return VT.T @ (s_inv @ (U.T @ b))
 
     coeffs = pseudo_solve(eval_mat, ys)
 
     ic(coeffs.shape, coeffs)
 
-    new_ys = eval_mat2 @ coeffs
+    new_ys = eval_mat @ coeffs
 
-    return xs, ys2, new_ys, coeffs
+    norm = np.sqrt(((new_ys - ys)**2).sum(axis=0))
+    ic(norm)
+
+    new_ys2 = eval_mat2 @ coeffs
+
+    return xs, ys, ys2, new_ys, new_ys2
 
 def test_solve():
 
-    N = 3
-    xs, ys, _, _ = gen_matrix(N,model='solve')
-    plt.plot(xs/N, ys, label='solution/known')
+    N = 4
+    nrepeats = 20
 
-    for N in range(3, 4):
-        xs, _, new_ys, coeffs = gen_matrix(N, model='solve')
-        plt.plot(xs/N, new_ys, label=f'{N} predicted')
+    for NN in range(N, N+1, 2):
+        xs, ys, ys2, new_ys, new_ys2 = gen_matrix(NN, nrepeats=nrepeats, model='solve')
+        plt.plot(xs/N, ys, label='known rhs')
+        plt.plot(xs/N, ys2, label='expected solution')
+        plt.plot(xs/NN, new_ys, label=f'{NN} predicted rhs')
+        plt.plot(xs/NN, new_ys2, label=f'{NN} solution')
 
-        coeffs = coeffs[:N]
-        delta = 1/(N)
-        ic(N, coeffs.shape, delta)
-
-        xxs = np.linspace(delta/2, 1-delta/2, N)
-        ic(xxs)
-        plt.plot(xxs, coeffs, marker='s', linestyle='None')
+        coarse_xs = xs[nrepeats//2::nrepeats]
+        coarse_new_ys = new_ys[nrepeats//2::nrepeats]
+        plt.plot(coarse_xs/NN, coarse_new_ys, marker='s', linestyle='None')
 
 
     plt.legend()
@@ -182,21 +179,18 @@ def test_solve():
 
 def test_fit():
 
-    N = 3
-    xs, ys, _, _ = gen_matrix(N, model='fit')
+    N = 4
+    nrepeats = 20
+    xs, _, ys, _, _ = gen_matrix(N, nrepeats=nrepeats, model='fit')
     plt.plot(xs/N, ys, label='solution/known')
 
-    for N in range(3, 4):
-        xs, _, new_ys, coeffs = gen_matrix(N, model='fit')
-        plt.plot(xs/N, new_ys, label=f'{N} predicted')
+    for NN in range(N, N+1, 2):
+        xs, _, _, new_ys, new_ys2 = gen_matrix(NN, nrepeats=nrepeats, model='fit')
+        plt.plot(xs/NN, new_ys, label=f'{NN} predicted')
 
-        coeffs = coeffs[:N]
-        delta = 1/(N)
-        ic(N, coeffs.shape, delta)
-
-        xxs = np.linspace(delta/2, 1-delta/2, N)
-        ic(xxs)
-        plt.plot(xxs, coeffs, marker='s', linestyle='None')
+        coarse_xs = xs[nrepeats//2::nrepeats]
+        coarse_new_ys = new_ys[nrepeats//2::nrepeats]
+        plt.plot(coarse_xs/NN, coarse_new_ys, marker='s', linestyle='None')
 
 
     plt.legend()
@@ -206,20 +200,23 @@ def test_vector():
 
     N = 4
     nrepeats = 20
-    xs, ys, _, _ = gen_matrix(N, nrepeats=nrepeats, model='vector')
-    plt.plot(xs/N, ys, label='solution/known')
 
-    for N in range(N, N+1):
-        xs, _, new_ys, coeffs = gen_matrix(N, nrepeats=nrepeats, model='vector')
-        plt.plot(xs/N, new_ys, label=f'{N} predicted')
+    fig, ax0 = plt.subplots()
+    ax1 = ax0.twinx()
 
-        coeffs = coeffs[:N]
-        delta = 1/(N)
-        ic(N, coeffs.shape, delta)
+    for NN in range(N, N+9, 2):
+        xs, ys, ys2, new_ys, new_ys2 = gen_matrix(NN, nrepeats=nrepeats, model='vector', midderivs_free=True)
 
-        xxs = np.linspace(delta/2, 1-delta/2, N)
-        ic(xxs)
-        plt.plot(xxs, coeffs, marker='s', linestyle='None')
+        ax1.plot(xs/NN, ys, label=f'{NN} driven current')
+        ax1.plot(xs/NN, ys2, label=f'{NN} expected voltage')
+        ax1.plot(xs/NN, new_ys, label=f'{NN} estimated current')
+        ax0.plot(xs/NN, new_ys2, label=f'{NN} voltage')
 
-    plt.legend()
+        coarse_xs = xs[nrepeats//2::nrepeats]
+        coarse_new_ys = new_ys[nrepeats//2::nrepeats]
+        ax1.plot(coarse_xs/NN, coarse_new_ys, marker='s', linestyle='None')
+
+
+    ax0.legend(loc='upper right')
+    ax1.legend(loc='upper left')
     plt.show()
