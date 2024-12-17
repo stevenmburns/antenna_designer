@@ -7,30 +7,6 @@
 
 namespace py = pybind11;
 
-std::complex<double> interp[] = {0+0i, 1+1i, 2+2i, 3+3i};
-
-std::complex<double> interp_func(double r) {
-  auto scaled_r = r * 4;
-  auto index = static_cast<int>(scaled_r);
-  auto fraction = scaled_r - index;
-  return interp[index]*(1-fraction) + interp[index+1]*fraction;
-}
-
-std::complex<double> fast_interp_func(double r) {
-  auto scaled_r = r * 4;
-  auto index = static_cast<int>(scaled_r);
-  return interp[index];
-}
-
-std::complex<double> compute_func(double r) {
-  std::complex<double> jk = 1i * 2.0 * M_PI;
-  if (r == 0.0) {
-    return 0.0;
-  } else {
-    return exp(-jk*r)/(4*M_PI*r);
-  }
-}
-
 py::array_t<std::complex<double> > psi(py::array_t<double> input, py::array_t<double> delta, double wire_radius, double k) {
   auto buf = input.request();
   auto bufd = delta.request();
@@ -287,7 +263,4 @@ PYBIND11_MODULE(pysim_accelerators, m) {
 	  py::arg("R"), py::arg("delta"), py::kw_only(), py::arg("wire_radius"), py::arg("k"));
     m.def("psi_fusion", &psi_fusion, "Compute Psi (Integral) from point vectors", py::arg("input0"), py::arg("input1"), py::arg("delta"), py::kw_only(), py::arg("wire_radius"), py::arg("k"));
     m.def("psi_fusion_trapezoid", &psi_fusion_trapezoid, "Compute Psi (Integral) from point vectors using trapezoidal method", py::arg("input0"), py::arg("input1"), py::kw_only(), py::arg("wire_radius"), py::arg("k"), py::arg("ntrap"));
-    m.def("compute_func", py::vectorize(compute_func));
-    m.def("interp_func", py::vectorize(interp_func));
-    m.def("fast_interp_func", py::vectorize(fast_interp_func));
 }
