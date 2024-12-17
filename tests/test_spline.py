@@ -1,69 +1,72 @@
-
+import pytest
 from matplotlib import pyplot as plt
 
-from antenna_designer.spline import gen_matrix
+from antenna_designer.spline import fit_test_case, solve_test_case, vector_test_case
 
 
 fn = None
 #fn = '/dev/null'
 
-def test_solve():
+spline_models = ('natural', 'piecewise_quadratic', 'piecewise_linear', 'piecewise_constant')
+
+@pytest.mark.parametrize("tag", spline_models)
+def test_solve(tag):
 
     N = 4
     nrepeats = 20
 
     for NN in range(N, N+1, 2):
-        xs, ys, ys2, new_ys, new_ys2 = gen_matrix(NN, nrepeats=nrepeats, model='solve')
-        plt.plot(xs/N, ys, label='known rhs')
-        plt.plot(xs/N, ys2, label='expected solution')
-        plt.plot(xs/NN, new_ys, label=f'{NN} predicted rhs')
-        plt.plot(xs/NN, new_ys2, label=f'{NN} solution')
+        xs, rhs, exact_solution, estimated_rhs, estimated_solution = solve_test_case(tag=tag, N=NN, nrepeats=nrepeats)
+        plt.plot(xs/N, rhs, label='known rhs')
+        plt.plot(xs/N, exact_solution, label='exact solution')
+        plt.plot(xs/NN, estimated_rhs, label=f'{NN} estimated rhs')
+        plt.plot(xs/NN, estimated_solution, label=f'{NN} estimated solution')
 
         coarse_xs = xs[nrepeats//2::nrepeats]
-        coarse_new_ys = new_ys[nrepeats//2::nrepeats]
+        coarse_new_ys = estimated_rhs[nrepeats//2::nrepeats]
         plt.plot(coarse_xs/NN, coarse_new_ys, marker='s', linestyle='None')
 
 
     plt.legend()
     plt.show()
 
-def test_fit():
+@pytest.mark.parametrize("tag", spline_models)
+def test_fit(tag):
 
-    N = 4
+    N = 3
     nrepeats = 20
-    xs, _, ys, _, _ = gen_matrix(N, nrepeats=nrepeats, model='fit')
-    plt.plot(xs/N, ys, label='solution/known')
 
     for NN in range(N, N+1, 2):
-        xs, _, _, new_ys, new_ys2 = gen_matrix(NN, nrepeats=nrepeats, model='fit')
-        plt.plot(xs/NN, new_ys, label=f'{NN} predicted')
+        xs, rhs, _, estimated_rhs, _ = fit_test_case(tag=tag, N=NN, nrepeats=nrepeats)
+        plt.plot(xs/NN, rhs, label=f'{NN} known rhs')
+        plt.plot(xs/NN, estimated_rhs, label=f'{NN} estimated rhs')
 
         coarse_xs = xs[nrepeats//2::nrepeats]
-        coarse_new_ys = new_ys[nrepeats//2::nrepeats]
+        coarse_new_ys = estimated_rhs[nrepeats//2::nrepeats]
         plt.plot(coarse_xs/NN, coarse_new_ys, marker='s', linestyle='None')
 
 
     plt.legend()
     plt.show()
 
-def test_vector():
-
-    N = 4
+@pytest.mark.parametrize("tag", spline_models)
+def test_vector(tag):
+    N = 10
     nrepeats = 20
 
-    fig, ax0 = plt.subplots()
-    ax1 = ax0.twinx()
+    fig, (ax0, ax1)  = plt.subplots(1, 2)
 
-    for NN in range(N, N+9, 2):
-        xs, ys, ys2, new_ys, new_ys2 = gen_matrix(NN, nrepeats=nrepeats, model='vector', midderivs_free=True)
+    for NN in range(N, N+1, 2):
+        xs, rhs, exact_solution, estimated_rhs, estimated_solution = vector_test_case(tag=tag, N=NN, nrepeats=nrepeats)
 
-        ax1.plot(xs/NN, ys, label=f'{NN} driven current')
-        ax1.plot(xs/NN, ys2, label=f'{NN} expected voltage')
-        ax1.plot(xs/NN, new_ys, label=f'{NN} estimated current')
-        ax0.plot(xs/NN, new_ys2, label=f'{NN} voltage')
+        ax1.plot(xs/NN, rhs, label=f'{NN} driven current')
+        ax1.plot(xs/NN, estimated_rhs, label=f'{NN} estimated current')
+
+        ax0.plot(xs/NN, exact_solution, label=f'{NN} expected voltage')
+        ax0.plot(xs/NN, estimated_solution, label=f'{NN} voltage')
 
         coarse_xs = xs[nrepeats//2::nrepeats]
-        coarse_new_ys = new_ys[nrepeats//2::nrepeats]
+        coarse_new_ys = estimated_rhs[nrepeats//2::nrepeats]
         ax1.plot(coarse_xs/NN, coarse_new_ys, marker='s', linestyle='None')
 
 

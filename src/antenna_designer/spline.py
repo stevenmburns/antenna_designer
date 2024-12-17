@@ -3,126 +3,45 @@ import numpy as np
 import scipy
 from icecream import ic
 
-def gen_matrix(N=3, nrepeats=10, model='fitting', midderivs_free=False):
+class AbstractSpline:
+    def __init__(self, N=3, degree=3):
+        self.N = N
+        self.degree = degree
 
-    constraint = scipy.sparse.dok_array((4*N, 4*N))
-    row = 0
+    def gen_deriv_ops(self):
+        N = self.N
+        D = self.degree
 
-    """match f(x) to zero at startpoint"""
-    constraint[row, 0:4] = [1, -1/2, 1/4, -1/8]
-    row += 1
+        self.deriv_op = scipy.sparse.dok_array((D*N, D*N))
+        for i in range(N):
+            for j in range(1,D):
+                self.deriv_op[D*i+j-1, D*i+j] = j
 
-    """match f(x) between interior points"""
-    for i in range(N-1):
-        constraint[row, 4*i:4*(i+2)] = [1, 1/2, 1/4, 1/8] + [-1, 1/2, -1/4, 1/8]
-        row += 1
+        self.deriv_op = self.deriv_op.tocsc()
+        self.deriv2_op = self.deriv_op @ self.deriv_op
 
-    """match f(x) to zero at endpoint"""
-    constraint[row, 4*(N-1):4*N] = [1, 1/2, 1/4, 1/8]
-    row += 1
+        #ic(self.deriv_op.todok())
+        #ic(self.deriv2_op.todok())
 
-    assert not midderivs_free or nrepeats % 2 == 0
+    def gen_Vandermonde(self, nrepeats):
+        self.nrepeats = nrepeats
+        N = self.N
+        D = self.degree
 
+        self.xs = np.linspace(0,N,N*nrepeats+1)
+        #ic(self.xs)
 
+        self.Vandermonde = scipy.sparse.dok_array((self.xs.shape[0], D*N))
+        for i,x in enumerate(self.xs):
+            j = min(i // nrepeats, N-1)
+            for k in range(D):
+                self.Vandermonde[i,D*j+k] = (x-j-1/2)**k
 
-    """match f'(x) between splines"""
-    for i in range(N-1):
-        if not midderivs_free or i+1 != N//2:
-            constraint[row, 4*i:4*(i+2)] = [0, 1, 1, 3/4] + [0, -1, 1, -3/4]
-            row += 1    
+        self.Vandermonde = self.Vandermonde.tocsc()
+        ic(self.Vandermonde.shape)
+        ic(scipy.linalg.svd(self.Vandermonde.toarray())[1])
 
-    """match f''(x) between splines"""
-    for i in range(N-1):
-        if not midderivs_free or i+1 != N//2:
-            constraint[row, 4*i:4*(i+2)] = [0, 0, 2, 3] +  [0, 0, -2, 3]
-            row += 1
-
-    constraint.resize((row, 4*N))
-    constraint = constraint.toarray()
-    ic(constraint.shape)
-
-    S = scipy.linalg.null_space(constraint, rcond=1e-8)
-    ic(S.shape)
-    ic(scipy.linalg.svd(S)[1])
-
-    deriv_op = scipy.sparse.dok_array((4*N, 4*N))
-    for i in range(N):
-        for j in range(1,4):
-            deriv_op[4*i+j-1, 4*i+j] = j
-
-    deriv_op = deriv_op.tocsc()
-    deriv2_op = deriv_op @ deriv_op
-
-    #ic(deriv_op.todok())
-    #ic(deriv2_op.todok())
-
-    xs = np.linspace(0,N,N*nrepeats+1)
-    #ic(xs)
-
-    Vandermonde = scipy.sparse.dok_array((xs.shape[0], 4*N))
-    for i,x in enumerate(xs):
-        j = min(i // nrepeats, N-1)
-        for k in range(4):
-            Vandermonde[i,4*j+k] = (x-j-1/2)**k
-
-    Vandermonde = Vandermonde.tocsc()
-    ic(Vandermonde.shape)
-    ic(scipy.linalg.svd(Vandermonde.toarray())[1])
-
-    if model == 'fit':
-        #ys = np.sin(np.pi/N*xs)
-        ys = (lambda x: x-x**10)(xs/N)
-        ys2 = ys
-        eval_mat = Vandermonde @ S
-        eval_mat2 = eval_mat
-    elif model == 'solve': # solve harrington's DE
-        # rhs
-        ys = (lambda x: 4*x**2 + 1)(xs/N)
-        # solution (should figure out why we need the factor of N*N)
-        ys2 = (lambda x: N*N*(5/6*x - x**2/2 - x**4/3))(xs/N)
-        eval_mat = Vandermonde @ - deriv2_op @ S
-        eval_mat2 = Vandermonde @ S
-    elif model == 'vector':
-        """Assume I want to create a vector of voltages caused by the current at a bunch of points
-    This is a matrix if there is one value representing the current at each point.
-    So we can compose the matrices to get a vector of voltages from the vector of spline coefficients.
-    V = Z @ (Vandermonde @ S @ coeff)
-    S expands the driven coefficients into the full set, and Vandermonde evaluates these coefficient at all the points
-"""
-        G = scipy.sparse.dok_array((xs.shape[0],xs.shape[0]))
-        for i in range(xs.shape[0]):
-            #G[i,i] += 1
-            if i+1 < xs.shape[0]:
-                G[i,i] += 1
-                G[i+1,i+1] += 1
-                G[i,i+1] -= 1
-                G[i+1,i] -= 1
-
-        G = G.tocsc()
-        #Z = scipy.sparse.linalg.inv(G)
-
-        ys = np.zeros(xs.shape)
-        
-        """
-        for i in range(ys.shape[0]):
-            ys[i] = 1 - 2*abs(i-ys.shape[0]//2)/(ys.shape[0]-1)
-"""
-        ys[0] = -1/2
-        ys[ys.shape[0]//2] = 1
-        ys[-1] = -1/2
-
-        ic(G.todok())
-        lu = scipy.linalg.lu_factor(G.toarray())
-        ys2 = scipy.linalg.lu_solve(lu, ys)
-
-        eval_mat = G @ Vandermonde @ S
-        eval_mat2 = Vandermonde @ S
-
-    else:
-        assert False # pragma: no cover
-
-    ic(eval_mat.shape)
-
+    @staticmethod
     def pseudo_solve(A, b):
         U, s, VT = scipy.linalg.svd(A)
         ic(s)
@@ -140,15 +59,251 @@ def gen_matrix(N=3, nrepeats=10, model='fitting', midderivs_free=False):
         ic(s_inv.todok())
         return VT.T @ (s_inv @ (U.T @ b))
 
-    coeffs = pseudo_solve(eval_mat, ys)
+    def backend(self, *, eval_mat, rhs):
+        ic(eval_mat.shape)
 
-    ic(coeffs.shape, coeffs)
+        coeffs = self.pseudo_solve(eval_mat, rhs)
 
-    new_ys = eval_mat @ coeffs
+        ic(coeffs.shape, coeffs)
 
-    norm = np.sqrt(((new_ys - ys)**2).sum(axis=0))
-    ic(norm)
+        estimated_rhs = eval_mat @ coeffs
 
-    new_ys2 = eval_mat2 @ coeffs
+        norm = np.sqrt(((estimated_rhs - rhs)**2).sum(axis=0))
+        ic(norm)
 
-    return xs, ys, ys2, new_ys, new_ys2
+        estimated_solution = self.Vandermonde @ self.S @ coeffs
+
+        return estimated_rhs, estimated_solution
+
+class NaturalSpline(AbstractSpline):
+    def __init__(self, N=3):
+        super().__init__(N, 4)
+
+    def gen_constraint(self, midderivs_free=False):
+        N = self.N
+        D = self.degree
+        constraint = scipy.sparse.dok_array((D*N, D*N))
+        row = 0
+
+        """match f(x) to zero at startpoint"""
+        constraint[row, 0:D] = [1, -1/2, 1/4, -1/8]
+        row += 1
+
+        """match f(x) between interior points"""
+        for i in range(N-1):
+            constraint[row, D*i:D*(i+2)] = [1, 1/2, 1/4, 1/8] + [-1, 1/2, -1/4, 1/8]
+            row += 1
+
+        """match f(x) to zero at endpoint"""
+        constraint[row, D*(N-1):D*N] = [1, 1/2, 1/4, 1/8]
+        row += 1
+
+        assert not midderivs_free or N % 2 == 0
+
+        """match f'(x) between splines"""
+        for i in range(N-1):
+            if not midderivs_free or i+1 != N//2:
+                constraint[row, D*i:D*(i+2)] = [0, 1, 1, 3/4] + [0, -1, 1, -3/4]
+                row += 1    
+
+        """match f''(x) between splines"""
+        for i in range(N-1):
+            if not midderivs_free or i+1 != N//2:
+                constraint[row, D*i:D*(i+2)] = [0, 0, 2, 3] +  [0, 0, -2, 3]
+                row += 1
+
+        constraint.resize((row, D*N))
+        constraint = constraint.toarray()
+        ic(constraint.shape)
+
+        self.constraint = constraint
+        
+        self.S = scipy.linalg.null_space(self.constraint, rcond=1e-8)
+        ic(self.S.shape)
+        ic(scipy.linalg.svd(self.S)[1])
+
+
+class PiecewiseQuadratic(AbstractSpline):
+    def __init__(self, N=3):
+        super().__init__(N, 3)
+
+    def gen_constraint(self, midderivs_free=False):
+        N = self.N
+        D = self.degree
+        constraint = scipy.sparse.dok_array((D*N, D*N))
+        row = 0
+
+        """match f(x) to zero at startpoint"""
+        constraint[row, 0:D] = [1, -1/2, 1/4]
+        row += 1
+
+        """match f(x) between interior points"""
+        for i in range(N-1):
+            constraint[row, D*i:D*(i+2)] = [1, 1/2, 1/4] + [-1, 1/2, -1/4]
+            row += 1
+
+        """match f(x) to zero at endpoint"""
+        constraint[row, D*(N-1):D*N] = [1, 1/2, 1/4]
+        row += 1
+
+        assert not midderivs_free or N % 2 == 0
+
+        """match f'(x) between splines"""
+        for i in range(N-1):
+            if not midderivs_free or i+1 != N//2:
+                constraint[row, D*i:D*(i+2)] = [0, 1, 1] + [0, -1, 1]
+                row += 1    
+
+        constraint.resize((row, D*N))
+        constraint = constraint.toarray()
+        ic(constraint.shape)
+
+        self.constraint = constraint
+        
+        self.S = scipy.linalg.null_space(self.constraint, rcond=1e-8)
+        ic(self.S.shape)
+        ic(scipy.linalg.svd(self.S)[1])
+
+
+class PiecewiseLinear(AbstractSpline):
+    def __init__(self, N=3):
+        super().__init__(N, 2)
+
+    def gen_constraint(self, midderivs_free=False):
+        N = self.N
+        constraint = scipy.sparse.dok_array((2*N, 2*N))
+        row = 0
+
+        """match f(x) to zero at startpoint"""
+        constraint[row, 0:2] = [1, -1/2]
+        row += 1
+
+        """match f(x) between interior points"""
+        for i in range(N-1):
+            constraint[row, 2*i:2*(i+2)] = [1, 1/2] + [-1, 1/2]
+            row += 1
+
+        """match f(x) to zero at endpoint"""
+        constraint[row, 2*(N-1):2*N] = [1, 1/2]
+        row += 1
+
+        constraint.resize((row, 2*N))
+        constraint = constraint.toarray()
+        ic(constraint.shape)
+
+        self.constraint = constraint
+        
+        self.S = scipy.linalg.null_space(self.constraint, rcond=1e-8)
+        ic(self.S.shape)
+        ic(scipy.linalg.svd(self.S)[1])
+
+class PiecewiseConstant(AbstractSpline):
+    def __init__(self, N=3):
+        super().__init__(N, 1)
+
+    def gen_constraint(self, midderivs_free=False):
+        N = self.N
+        constraint = scipy.sparse.dok_array((N, N))
+        row = 0
+
+        """match f(x) to zero at startpoint"""
+        constraint[row, 0:1] = [1]
+        row += 1
+
+        """match f(x) to zero at endpoint"""
+        constraint[row, (N-1):N] = [1]
+        row += 1
+
+        """match f(x) match at midpoint"""
+        if midderivs_free: 
+            mid = N//2-1
+            constraint[row, mid:mid+2] = [1] + [-1]
+            row += 1
+
+        constraint.resize((row, N))
+        constraint = constraint.toarray()
+        ic(constraint.shape)
+
+        self.constraint = constraint
+        
+        self.S = scipy.linalg.null_space(self.constraint, rcond=1e-8)
+        ic(self.S.shape)
+        ic(scipy.linalg.svd(self.S)[1])
+
+def SplineFactory(tag):
+    if tag == 'natural':
+        return NaturalSpline
+    elif tag == 'piecewise_quadratic':
+        return PiecewiseQuadratic
+    elif tag == 'piecewise_linear':
+        return PiecewiseLinear
+    elif tag == 'piecewise_constant':
+        return PiecewiseConstant
+    else:
+        assert False # pragma: no cover
+
+def fit_test_case(*, tag='natural', N=3, nrepeats=10):
+
+    spl = SplineFactory(tag)(N)
+
+    spl.gen_constraint()
+    spl.gen_Vandermonde(nrepeats)
+
+    #rhs = np.sin(np.pi/N*spl.xs)
+    rhs = (lambda x: x-x**10)(spl.xs/N)
+    exact_solution = rhs
+    eval_mat = spl.Vandermonde @ spl.S
+
+    estimated_rhs, estimated_solution = spl.backend(eval_mat=eval_mat, rhs=rhs)
+    return spl.xs, rhs, exact_solution, estimated_rhs, estimated_solution
+
+def solve_test_case(*, tag='natural', N=3, nrepeats=10):
+
+    spl = SplineFactory(tag)(N)
+
+    spl.gen_constraint()
+    spl.gen_Vandermonde(nrepeats)
+
+    spl.gen_deriv_ops()
+    rhs = (lambda x: 4*x**2 + 1)(spl.xs/N)
+    # solution (should figure out why we need the factor of N*N)
+    exact_solution = (lambda x: N*N*(5/6*x - x**2/2 - x**4/3))(spl.xs/N)
+    ic(spl.Vandermonde.shape, spl.deriv2_op.shape, spl.S.shape)
+    eval_mat = spl.Vandermonde @ - spl.deriv2_op @ spl.S
+
+    estimated_rhs, estimated_solution = spl.backend(eval_mat=eval_mat, rhs=rhs)
+    return spl.xs, rhs, exact_solution, estimated_rhs, estimated_solution
+
+def vector_test_case(*, tag='natural', N=3, nrepeats=10):
+
+    spl = SplineFactory(tag)(N)
+
+    spl.gen_constraint(midderivs_free=True)
+    spl.gen_Vandermonde(nrepeats)
+
+    G = scipy.sparse.dok_array((spl.xs.shape[0],spl.xs.shape[0]))
+    for i in range(spl.xs.shape[0]):
+        #G[i,i] += 1
+        if i+1 < spl.xs.shape[0]:
+            G[i,i] += 1
+            G[i+1,i+1] += 1
+            G[i,i+1] -= 1
+            G[i+1,i] -= 1
+
+    G = G.tocsc()
+
+    rhs = np.zeros(spl.xs.shape)
+
+    rhs[0] = -1/2
+    rhs[rhs.shape[0]//2] = 1
+    rhs[-1] = -1/2
+
+    ic(G.todok())
+    lu = scipy.linalg.lu_factor(G.toarray())
+    exact_solution = scipy.linalg.lu_solve(lu, rhs)
+    ic(exact_solution)
+
+    eval_mat = G @ spl.Vandermonde @ spl.S
+
+    estimated_rhs, estimated_solution = spl.backend(eval_mat=eval_mat, rhs=rhs)
+    return spl.xs, rhs, exact_solution, estimated_rhs, estimated_solution
