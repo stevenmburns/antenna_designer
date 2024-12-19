@@ -12,52 +12,50 @@ spline_models = ('natural', 'piecewise_quadratic', 'piecewise_linear', 'piecewis
 @pytest.mark.parametrize("tag", spline_models)
 def test_solve(tag):
 
-    N = 4
-    nrepeats = 20
+    N = 3
+    nsegs = 11
+
+    fig, (ax0, ax1)  = plt.subplots(1, 2)
 
     for NN in range(N, N+1, 2):
-        xs, rhs, exact_solution, estimated_rhs, estimated_solution = solve_test_case(tag=tag, N=NN, nrepeats=nrepeats)
-        plt.plot(xs/N, rhs, label='known rhs')
-        plt.plot(xs/N, exact_solution, label='exact solution')
-        plt.plot(xs/NN, estimated_rhs, label=f'{NN} estimated rhs')
-        plt.plot(xs/NN, estimated_solution, label=f'{NN} estimated solution')
+        xs, rhs, exact_solution, estimated_rhs, estimated_solution = solve_test_case(tag=tag, N=NN, nsegs=nsegs)
+        ax1.plot(xs/N, rhs, label='known rhs')
+        ax1.plot(xs/NN, estimated_rhs, label=f'{NN} estimated rhs')
 
-        coarse_xs = xs[nrepeats//2::nrepeats]
-        coarse_new_ys = estimated_rhs[nrepeats//2::nrepeats]
-        plt.plot(coarse_xs/NN, coarse_new_ys, marker='s', linestyle='None')
+        ax0.plot(xs/N, exact_solution, label='exact solution')
+        ax0.plot(xs/NN, estimated_solution, label=f'{NN} estimated solution')
 
-
-    plt.legend()
+    fig.suptitle(f'solve {tag} N={N} nsegs={nsegs}')
+    ax0.legend(loc='upper right')
+    ax1.legend(loc='upper left')
     plt.show()
 
 @pytest.mark.parametrize("tag", spline_models)
 def test_fit(tag):
 
     N = 3
-    nrepeats = 20
+    nsegs = 11
+
+    fig, (ax0,)  = plt.subplots(1, 1)
 
     for NN in range(N, N+1, 2):
-        xs, rhs, _, estimated_rhs, _ = fit_test_case(tag=tag, N=NN, nrepeats=nrepeats)
-        plt.plot(xs/NN, rhs, label=f'{NN} known rhs')
-        plt.plot(xs/NN, estimated_rhs, label=f'{NN} estimated rhs')
+        xs, rhs, _, estimated_rhs, _ = fit_test_case(tag=tag, N=NN, nsegs=nsegs)
+        ax0.plot(xs/NN, rhs, label=f'{NN} known rhs')
+        ax0.plot(xs/NN, estimated_rhs, label=f'{NN} estimated rhs')
 
-        coarse_xs = xs[nrepeats//2::nrepeats]
-        coarse_new_ys = estimated_rhs[nrepeats//2::nrepeats]
-        plt.plot(coarse_xs/NN, coarse_new_ys, marker='s', linestyle='None')
-
-
+    fig.suptitle(f'fit {tag} N={N} nsegs={nsegs}')
     plt.legend()
     plt.show()
 
 @pytest.mark.parametrize("tag", spline_models)
 def test_vector(tag):
-    N = 10
-    nrepeats = 20
+    N = 12
+    nsegs = 10
 
     fig, (ax0, ax1)  = plt.subplots(1, 2)
 
     for NN in range(N, N+1, 2):
-        xs, rhs, exact_solution, estimated_rhs, estimated_solution = vector_test_case(tag=tag, N=NN, nrepeats=nrepeats)
+        xs, rhs, exact_solution, estimated_rhs, estimated_solution = vector_test_case(tag=tag, N=NN, nsegs=nsegs)
 
         ax1.plot(xs/NN, rhs, label=f'{NN} driven current')
         ax1.plot(xs/NN, estimated_rhs, label=f'{NN} estimated current')
@@ -65,11 +63,8 @@ def test_vector(tag):
         ax0.plot(xs/NN, exact_solution, label=f'{NN} expected voltage')
         ax0.plot(xs/NN, estimated_solution, label=f'{NN} voltage')
 
-        coarse_xs = xs[nrepeats//2::nrepeats]
-        coarse_new_ys = estimated_rhs[nrepeats//2::nrepeats]
-        ax1.plot(coarse_xs/NN, coarse_new_ys, marker='s', linestyle='None')
 
-
+    fig.suptitle(f'vector {tag} N={N} nsegs={nsegs}')
     ax0.legend(loc='upper right')
     ax1.legend(loc='upper left')
     plt.show()
