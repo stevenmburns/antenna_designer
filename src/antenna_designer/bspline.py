@@ -20,34 +20,13 @@ def gen_bspline(N, xs, x):
         
         return BB
 
-    lhs = (x[:, np.newaxis] - xs[np.newaxis, :-2]) / (xs[1:-1] - xs[:-2])[np.newaxis, :]
-
-    rhs = (xs[np.newaxis, 2:] - x[:, np.newaxis]) / (xs[2:] - xs[1:-1])[np.newaxis, :]
-
-    B1 = lhs * B0[:,:-1] + rhs * B0[:, 1:]
-
-    assert (B1 == aux(B0, 1)).all()
-
+    B1 = aux(B0, 1)
     ic(B1.shape)
 
-    lhs = (x[:, np.newaxis] - xs[np.newaxis, :-3]) / (xs[2:-1] - xs[:-3])[np.newaxis, :]
-
-    rhs = (xs[np.newaxis, 3:] - x[:, np.newaxis]) / (xs[3:] - xs[1:-2])[np.newaxis, :]
-
-    B2 = lhs * B1[:,:-1] + rhs * B1[:, 1:]
-
-    assert (B2 == aux(B1, 2)).all()
-
+    B2 = aux(B1, 2)
     ic(B2.shape)
 
-    lhs = (x[:, np.newaxis] - xs[np.newaxis, :-4]) / (xs[3:-1] - xs[:-4])[np.newaxis, :]
-
-    rhs = (xs[np.newaxis, 4:] - x[:, np.newaxis]) / (xs[4:] - xs[1:-3])[np.newaxis, :]
-
-    B3 = lhs * B2[:,:-1] + rhs * B2[:, 1:]
-
-    assert (B3 == aux(B2, 3)).all()
-
+    B3 = aux(B2, 3)
     ic(B3.shape)
 
     return B0, B1, B2, B3
