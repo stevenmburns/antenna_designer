@@ -4,10 +4,15 @@ from icecream import ic
 def gen_bspline(N, xs, x):
 
     B0 = np.empty(shape=(x.shape[0],N))
+    B00 = np.logical_and(x[:, np.newaxis] >= xs[np.newaxis, :-1],
+                         x[:, np.newaxis] <  xs[np.newaxis, 1:])
+
+
+
     for j in range(N):
         B0[:, j] = np.logical_and(xs[j] <= x, x < xs[j+1])
 
-    ic(B0.shape)
+    assert (B00 == B0).all()
 
     def aux(B, k):
         lhs = (x[:, np.newaxis] - xs[np.newaxis, :-(k+1)]) / (xs[k:-1] - xs[:-(k+1)])[np.newaxis, :]
@@ -16,17 +21,10 @@ def gen_bspline(N, xs, x):
 
         BB = lhs * B[:,:-1] + rhs * B[:, 1:]
 
-        ic(BB.shape)
-        
         return BB
 
-    B1 = aux(B0, 1)
-    ic(B1.shape)
+    Bs = [B0]
+    for i in range(1, 4):
+        Bs.append(aux(Bs[-1], i))
 
-    B2 = aux(B1, 2)
-    ic(B2.shape)
-
-    B3 = aux(B2, 3)
-    ic(B3.shape)
-
-    return B0, B1, B2, B3
+    return tuple(Bs)
