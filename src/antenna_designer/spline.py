@@ -3,6 +3,7 @@ import numpy as np
 import scipy
 from icecream import ic
 
+
 class AbstractSpline:
     def __init__(self, N=3, degree=3):
         self.N = N
@@ -23,17 +24,30 @@ class AbstractSpline:
         #ic(self.deriv_op.todok())
         #ic(self.deriv2_op.todok())
 
-    def gen_Vandermonde(self, nrepeats):
-        self.nrepeats = nrepeats
+    def gen_Vandermonde(self, nsegs, midpoints=False):
+        self.nsegs = nsegs
         N = self.N
         D = self.degree
 
-        self.xs = np.linspace(0,N,N*nrepeats+1)
+        if midpoints:
+            delta = N/nsegs
+            self.xs = np.linspace(delta/2,N-delta/2,nsegs)            
+        else:
+            self.xs = np.linspace(0,N,nsegs+1)
         #ic(self.xs)
 
+        # There are N splines and nsegs segments
+        # what are the coordinates of the segment endpoints?
+
+        # if N is 6 and nsegs is 9,
+        spline_idx = (self.xs + 0.0001).astype(np.int64)
+        ic(spline_idx, spline_idx.dtype)
+        spline_idx[-1] = N-1
+        remainder = self.xs - spline_idx
+        ic(spline_idx, remainder, self.xs)
+        
         self.Vandermonde = scipy.sparse.dok_array((self.xs.shape[0], D*N))
-        for i,x in enumerate(self.xs):
-            j = min(i // nrepeats, N-1)
+        for i,(x,j) in enumerate(zip(self.xs,spline_idx)):
             for k in range(D):
                 self.Vandermonde[i,D*j+k] = (x-j-1/2)**k
 
@@ -43,6 +57,7 @@ class AbstractSpline:
 
     @staticmethod
     def pseudo_solve(A, b):
+        ic(A.shape, b.shape)
         U, s, VT = scipy.linalg.svd(A)
         ic(s)
 
@@ -242,12 +257,12 @@ def SplineFactory(tag):
     else:
         assert False # pragma: no cover
 
-def fit_test_case(*, tag='natural', N=3, nrepeats=10):
+def fit_test_case(*, tag='natural', N=3, nsegs=11):
 
     spl = SplineFactory(tag)(N)
 
     spl.gen_constraint()
-    spl.gen_Vandermonde(nrepeats)
+    spl.gen_Vandermonde(nsegs=nsegs)
 
     #rhs = np.sin(np.pi/N*spl.xs)
     rhs = (lambda x: x-x**10)(spl.xs/N)
@@ -257,12 +272,12 @@ def fit_test_case(*, tag='natural', N=3, nrepeats=10):
     estimated_rhs, estimated_solution = spl.backend(eval_mat=eval_mat, rhs=rhs)
     return spl.xs, rhs, exact_solution, estimated_rhs, estimated_solution
 
-def solve_test_case(*, tag='natural', N=3, nrepeats=10):
+def solve_test_case(*, tag='natural', N=3, nsegs=11):
 
     spl = SplineFactory(tag)(N)
 
     spl.gen_constraint()
-    spl.gen_Vandermonde(nrepeats)
+    spl.gen_Vandermonde(nsegs=nsegs)
 
     spl.gen_deriv_ops()
     rhs = (lambda x: 4*x**2 + 1)(spl.xs/N)
@@ -274,21 +289,23 @@ def solve_test_case(*, tag='natural', N=3, nrepeats=10):
     estimated_rhs, estimated_solution = spl.backend(eval_mat=eval_mat, rhs=rhs)
     return spl.xs, rhs, exact_solution, estimated_rhs, estimated_solution
 
-def vector_test_case(*, tag='natural', N=3, nrepeats=10):
+def vector_test_case(*, tag='natural', N=4, nsegs=11):
 
     spl = SplineFactory(tag)(N)
 
     spl.gen_constraint(midderivs_free=True)
-    spl.gen_Vandermonde(nrepeats)
+    spl.gen_Vandermonde(nsegs=nsegs)
 
     G = scipy.sparse.dok_array((spl.xs.shape[0],spl.xs.shape[0]))
     for i in range(spl.xs.shape[0]):
-        #G[i,i] += 1
         if i+1 < spl.xs.shape[0]:
             G[i,i] += 1
             G[i+1,i+1] += 1
             G[i,i+1] -= 1
             G[i+1,i] -= 1
+
+    G[0,0] += 1
+    G[-1,-1] += 1
 
     G = G.tocsc()
 
