@@ -1,3 +1,4 @@
+import pytest
 import os
 
 os.environ["OMP_NUM_THREADS"] = "8"
@@ -8,7 +9,10 @@ os.environ["NUMEXPR_NUM_THREADS"] = "8"
 
 import time
 
-from antenna_designer import pysim
+from antenna_designer.pysim import PySim
+from antenna_designer.augmented_spline_pysim import AugmentedSplinePySim
+from antenna_designer.spline_pysim import SplinePySim
+
 from antenna_designer.core import save_or_show
 from antenna_designer.pysim_accelerators import dist_outer_product
 
@@ -50,7 +54,7 @@ def test_impedance_nsegs():
 
         zs = []
         for nsegs in xs:
-            z, _ = pysim.PySim(nsegs=nsegs).augmented_compute_impedance(ntrap=ntrap)
+            z, _ = PySim(nsegs=nsegs).compute_impedance(ntrap=ntrap)
             ic(nsegs,z)
             zs.append(z)
 
@@ -82,7 +86,7 @@ def test_spline_impedance_nsegs():
     ]:
         zs = []
         for nsegs in xs:
-            z, _ = pysim.PySim(nsegs=nsegs).spline_compute_impedance(ntrap=ntrap)
+            z, _ = SplinePySim(nsegs=nsegs).compute_impedance(ntrap=ntrap)
             ic(nsegs,z)
             zs.append(z)
 
@@ -108,7 +112,7 @@ def test_spline_fit():
 
     for halfdriver_factor in halfdriver_factors:
 
-        _, i = pysim.PySim(nsegs=nsegs, halfdriver_factor=halfdriver_factor).augmented_compute_impedance(ntrap=16)
+        _, i = PySim(nsegs=nsegs, halfdriver_factor=halfdriver_factor).compute_impedance(ntrap=16)
 
         xs = np.linspace(0,nsegs-1,nsegs)
 
@@ -135,7 +139,7 @@ def test_svd_currents_nsmallest():
 
     nsegs=101
 
-    _, (i, i_svd_all) = pysim.PySim(nsegs=nsegs, run_svd=True).augmented_compute_impedance(ntrap=0)
+    _, (i, i_svd_all) = PySim(nsegs=nsegs, run_svd=True).compute_impedance(ntrap=0)
 
     color = 'tab:blue'
     plt.plot(np.abs(i), color=color)
@@ -144,7 +148,7 @@ def test_svd_currents_nsmallest():
     plt.plot(np.abs(i_svd_all), color=color)
 
     for nsmallest, color in [(1,'tab:green'), (2,'tab:purple')]:
-        _, (_, i_svd) = pysim.PySim(nsegs=nsegs,nsmallest=nsmallest, run_svd=True).augmented_compute_impedance(ntrap=0)
+        _, (_, i_svd) = PySim(nsegs=nsegs,nsmallest=nsmallest, run_svd=True).compute_impedance(ntrap=0)
         ic(nsmallest, np.linalg.norm(i_svd-i_svd_all))
         plt.plot(np.abs(i_svd), color=color)
 
@@ -162,7 +166,7 @@ def test_spline_currents():
 #            (40,'tab:blue'),
 #            (80,'tab:orange'),
     ]:
-        _, (i, orig_i, matched_i) = pysim.PySim(nsegs=nsegs).augmented_spline_compute_impedance(ntrap=2, N=N)
+        _, (i, orig_i, matched_i) = AugmentedSplinePySim(nsegs=nsegs).compute_impedance(ntrap=2, N=N)
 
         ax[0][0].plot(np.abs(i), color=color, label=f'{N}' )
         ax[0][1].plot(np.angle(i)*180/np.pi, color=color, label=f'{N}')
@@ -183,7 +187,7 @@ def test_spline_currents():
 
 
 def test_iterative_improvement():
-    pysim.PySim(nsegs=401, run_iterative_improvement=True).augmented_compute_impedance(ntrap=0)
+    PySim(nsegs=401, run_iterative_improvement=True).compute_impedance(ntrap=0)
 
 
 def test_sweep_halfdriver():
@@ -201,7 +205,7 @@ def test_sweep_halfdriver():
         t = time.time()
         zs = []
         for x in xs:
-            z, _ = pysim.PySim(halfdriver_factor=x,nsegs=nsegs).augmented_compute_impedance(ntrap=4)
+            z, _ = PySim(halfdriver_factor=x,nsegs=nsegs).compute_impedance(ntrap=4)
             zs.append(z)
         print('augmented ntrap=4', time.time()-t)
         zs = np.array(zs)
@@ -216,34 +220,20 @@ nsegs = 801
 nrepeat = 1
 ntrap = 8
 
-def test_augmented_python_ntrap0():
-    ps = pysim.PySim(nsegs=nsegs)
+def test_python_ntrap0():
+    ps = PySim(nsegs=nsegs)
 
     t = time.time()
     for i in range(nrepeat):
-        z, i = ps.augmented_compute_impedance(ntrap=0, engine='python')
+        z, i = ps.compute_impedance(ntrap=0, engine='python')
     ic('augmented python ntrap=0', time.time()-t)
 
-def test_augmented():
-    ps = pysim.PySim(nsegs=nsegs)
+@pytest.mark.parametrize('engine,ntrap', [('python', 0), ('python', ntrap), ('accelerated', ntrap), ('test', ntrap)])
+def test_param(engine, ntrap):
+    ps = PySim(nsegs=nsegs)
 
     t = time.time()
     for i in range(nrepeat):
-        z, i = ps.augmented_compute_impedance(ntrap=ntrap, engine='accelerated')
-    ic('augmented accelerated', time.time()-t)
+        z, i = ps.compute_impedance(ntrap=ntrap, engine=engine)
 
-def test_augmented_python():
-    ps = pysim.PySim(nsegs=nsegs)
-
-    t = time.time()
-    for i in range(nrepeat):
-        z, i = ps.augmented_compute_impedance(ntrap=ntrap, engine='python')
-    ic('augmented python', time.time()-t)
-
-def test_augmented_test():
-    ps = pysim.PySim(nsegs=nsegs)
-
-    t = time.time()
-    for i in range(nrepeat):
-        z, i = ps.augmented_compute_impedance(ntrap=ntrap, engine='test')
-    ic('augmented test', time.time()-t)
+    ic(f'engine {engine}', time.time()-t)
