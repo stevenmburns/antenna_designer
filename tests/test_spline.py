@@ -36,12 +36,12 @@ def test_fit(tag):
     N = 3
     nsegs = 11
 
-    fig, (ax0,)  = plt.subplots(1, 1)
+    fig, ax  = plt.subplots(1, 1)
 
     for NN in range(N, N+1, 2):
         xs, rhs, _, estimated_rhs, _ = fit_test_case(tag=tag, N=NN, nsegs=nsegs)
-        ax0.plot(xs/NN, rhs, label=f'{NN} known rhs')
-        ax0.plot(xs/NN, estimated_rhs, label=f'{NN} estimated rhs')
+        ax.plot(xs/NN, rhs, label=f'{NN} known rhs')
+        ax.plot(xs/NN, estimated_rhs, label=f'{NN} estimated rhs')
 
     fig.suptitle(f'fit {tag} N={N} nsegs={nsegs}')
     plt.legend()
