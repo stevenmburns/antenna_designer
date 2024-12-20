@@ -1,18 +1,13 @@
 import numpy as np
 from icecream import ic
 
-def gen_bspline(N, xs, x):
+from .spline import AbstractSpline
 
-    B0 = np.empty(shape=(x.shape[0],N))
-    B00 = np.logical_and(x[:, np.newaxis] >= xs[np.newaxis, :-1],
+
+def gen_bspline(xs, x, *, K=4):
+
+    B0 = np.logical_and(x[:, np.newaxis] >= xs[np.newaxis, :-1],
                          x[:, np.newaxis] <  xs[np.newaxis, 1:])
-
-
-
-    for j in range(N):
-        B0[:, j] = np.logical_and(xs[j] <= x, x < xs[j+1])
-
-    assert (B00 == B0).all()
 
     def aux(B, k):
         lhs = (x[:, np.newaxis] - xs[np.newaxis, :-(k+1)]) / (xs[k:-1] - xs[:-(k+1)])[np.newaxis, :]
@@ -23,8 +18,16 @@ def gen_bspline(N, xs, x):
 
         return BB
 
-    Bs = [B0]
-    for i in range(1, 4):
-        Bs.append(aux(Bs[-1], i))
+    B = B0
+    for i in range(1, K):
+        B = aux(B, i)
 
-    return tuple(Bs)
+    ic(B)
+
+    return B
+
+def fit_bspline(xs, x, y):
+    B = gen_bspline(xs, x)
+    coeffs = AbstractSpline.pseudo_solve(B, y)
+
+    return coeffs, np.linalg.norm(y- B @ coeffs), B
