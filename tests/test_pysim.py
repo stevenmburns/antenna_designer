@@ -11,7 +11,6 @@ import time
 
 from antenna_designer.pysim import PySim
 from antenna_designer.augmented_spline_pysim import AugmentedSplinePySim
-from antenna_designer.spline_pysim import SplinePySim
 
 from antenna_designer.core import save_or_show
 from antenna_designer.pysim_accelerators import dist_outer_product
@@ -86,7 +85,7 @@ def test_spline_impedance_nsegs():
     ]:
         zs = []
         for nsegs in xs:
-            z, _ = SplinePySim(nsegs=nsegs).compute_impedance(ntrap=ntrap)
+            z, _ = AugmentedSplinePySim(nsegs=nsegs).compute_impedance(ntrap=ntrap)
             ic(nsegs,z)
             zs.append(z)
 
@@ -219,14 +218,6 @@ def test_sweep_halfdriver():
 nsegs = 801
 nrepeat = 1
 ntrap = 8
-
-def test_python_ntrap0():
-    ps = PySim(nsegs=nsegs)
-
-    t = time.time()
-    for i in range(nrepeat):
-        z, i = ps.compute_impedance(ntrap=0, engine='python')
-    ic('augmented python ntrap=0', time.time()-t)
 
 @pytest.mark.parametrize('engine,ntrap', [('python', 0), ('python', ntrap), ('accelerated', ntrap), ('test', ntrap)])
 def test_param(engine, ntrap):
