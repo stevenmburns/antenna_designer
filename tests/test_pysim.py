@@ -10,6 +10,9 @@ os.environ["NUMEXPR_NUM_THREADS"] = "8"
 import time
 
 from antenna_designer.pysim import PySim
+from antenna_designer.newpysim import PySim as NewPySim
+
+
 from antenna_designer.augmented_spline_pysim import AugmentedSplinePySim
 
 from antenna_designer.core import save_or_show
@@ -176,6 +179,35 @@ def test_spline_currents():
 
         ax[1][0].plot(np.abs(matched_i), color=color, label=f'{N} matched' )
         ax[1][1].plot(np.angle(matched_i)*180/np.pi, color=color, label=f'{N} matched')
+
+
+    ax[0][0].legend()
+    ax[0][1].legend()
+    ax[1][0].legend()
+    ax[1][1].legend()
+    save_or_show(plt, fn)
+
+def test_new_currents():
+
+    fig, ax = plt.subplots(2, 2)
+
+    for nsegs, color in [
+            (21,'tab:green'),
+            (41,'tab:purple'),
+            (81,'tab:blue'),
+            (121,'tab:orange'),
+    ]:
+        xs = np.linspace(0, 1, nsegs)
+
+        _, i = NewPySim(nsegs=nsegs).compute_impedance(ntrap=2)
+
+        ax[0][0].plot(xs, np.abs(i), color=color, label=f'{nsegs}' )
+        ax[0][1].plot(xs, np.angle(i)*180/np.pi, color=color, label=f'{nsegs}')
+
+        _, i = PySim(nsegs=nsegs).compute_impedance(ntrap=2)
+
+        ax[1][0].plot(xs, np.abs(i), color=color, label=f'{nsegs}' )
+        ax[1][1].plot(xs, np.angle(i)*180/np.pi, color=color, label=f'{nsegs}')
 
 
     ax[0][0].legend()
