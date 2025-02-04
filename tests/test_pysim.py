@@ -192,19 +192,21 @@ def test_new_currents():
     fig, ax = plt.subplots(2, 2)
 
     for nsegs, color in [
-            (21,'tab:green'),
-            (41,'tab:purple'),
-            (81,'tab:blue'),
+            (31,'tab:green'),
+            (51,'tab:purple'),
+            (71,'tab:blue'),
             (121,'tab:orange'),
     ]:
         xs = np.linspace(0, 1, nsegs)
 
-        _, i = NewPySim(nsegs=nsegs).compute_impedance(ntrap=2)
+        _, i = NewPySim(nsegs=nsegs).compute_impedance(ntrap=2, engine='python')
 
         ax[0][0].plot(xs, np.abs(i), color=color, label=f'{nsegs}' )
         ax[0][1].plot(xs, np.angle(i)*180/np.pi, color=color, label=f'{nsegs}')
 
-        _, i = PySim(nsegs=nsegs).compute_impedance(ntrap=2)
+        _, i = NewPySim(nsegs=nsegs).compute_impedance(ntrap=2, engine='accelerated')
+
+        xs = np.linspace(0, 1, i.shape[0])
 
         ax[1][0].plot(xs, np.abs(i), color=color, label=f'{nsegs}' )
         ax[1][1].plot(xs, np.angle(i)*180/np.pi, color=color, label=f'{nsegs}')

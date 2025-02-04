@@ -74,8 +74,11 @@ class AbstractPySim:
     def factor_and_solve(self):
         factors = scipy.linalg.lu_factor(self.z)
 
-        v = np.zeros(shape=(self.nsegs,), dtype=np.complex128)
+        v = np.zeros(shape=(self.z.shape[0],), dtype=np.complex128)
         v[self.driver_seg_idx] = 1
+
+        
+
 
         if self.run_svd:
             i_svd = self.solve_using_svd(self.z, v, rcond=self.rcond, nsmallest=self.nsmallest)
