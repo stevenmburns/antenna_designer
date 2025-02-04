@@ -1,53 +1,21 @@
 import numpy as np
+import scipy
+import scipy.linalg
+from icecream import ic
 
 from .abstract_pysim import AbstractPySim
 
+from .spline import NaturalSpline # , PiecewiseLinear
 from .pysim_accelerators import psi_fusion_trapezoid
-from icecream import ic
 
-def Integral_Standalone(m, n, *, ntrap, wire_radius, k):
-    m_centers = m[1:-1:2,:]
-    n_endpoints = n[::2,:]
+from .pysim import Integral_Standalone
 
-    vec_delta = n_endpoints[1:,:] - n_endpoints[:-1,:]
-    delta = np.sqrt((vec_delta*vec_delta).sum(axis=1))
-    assert n_endpoints.shape[0] - 1 == delta.shape[0]
-
-    def Aux(theta):
-        local_n = n_endpoints[:-1,:]*(1-theta) + theta*n_endpoints[1:,:]
-
-        diffs = local_n[np.newaxis, :, :] - m_centers[:, np.newaxis, :]
-        R = np.sqrt((diffs*diffs).sum(axis=2))
-
-        # not always diagonal indices
-        diag_indices = np.where(R < 0.00001)
-        new_delta = delta[diag_indices[0]]
-
-        RR = R
-        RR[diag_indices] = 1
-
-        local_res = np.exp(-(0+1j)*k*R)/(4*np.pi*RR)
-        diag = 1/(2*np.pi*new_delta) * np.log(new_delta/wire_radius) - (0+1j)*k/(4*np.pi) 
-        local_res[diag_indices] = diag
-
-        return local_res
-
-    res = np.zeros(shape=(m_centers.shape[0], n_endpoints.shape[0]-1),dtype=np.complex128)
-    if ntrap == 0:
-        res += Aux(0.5)
-    else:
-        for i in range(0, ntrap+1):
-            theta = i/ntrap
-            coeff = (2 if i > 0 and i < ntrap else 1)/(2*ntrap)
-            res += coeff * Aux(theta)
-
-    return res
-
-class PySim(AbstractPySim):
+class AugmentedSplinePySim(AbstractPySim):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def compute_impedance(self, *, ntrap=0, engine='accelerated'):
+
+    def compute_impedance(self, *, ntrap=0, engine='accelerated', N=4):
 
         y0, y1 = np.float64(0), np.float64(2*self.halfdriver)
 
@@ -114,5 +82,44 @@ class PySim(AbstractPySim):
         
         self.z = z
 
-        return self.factor_and_solve()
+        factors = scipy.linalg.lu_factor(self.z)
 
+        v = np.zeros(shape=(self.nsegs,), dtype=np.complex128)
+        v[self.driver_seg_idx] = 1
+
+        orig_i = scipy.linalg.lu_solve(factors, v)
+
+        spl = NaturalSpline(N=N)
+        #spl = PiecewiseLinear(N=N)
+        spl.gen_constraint(midderivs_free=True)
+        spl.gen_Vandermonde(nsegs=self.nsegs, midpoints=True)
+
+        matched_coeffs = spl.pseudo_solve(spl.Vandermonde @ spl.S, orig_i)
+
+        matched_i = spl.Vandermonde @ spl.S @ matched_coeffs
+
+        ic(np.linalg.norm(orig_i - matched_i))
+
+        matched_v = self.z @ matched_i
+        ic(np.linalg.norm(matched_v - v))
+
+        ic(z.shape, spl.Vandermonde.shape, spl.S.shape)
+
+        compressed_z = z @ spl.Vandermonde @ spl.S
+
+        ic(compressed_z.shape, self.nsegs)
+
+        compressed_coeffs = spl.pseudo_solve(compressed_z, v)
+
+        i = spl.Vandermonde @ spl.S @ compressed_coeffs
+        ic(i.shape)
+        compressed_v = self.z @ i
+
+        ic(np.linalg.norm(matched_i- orig_i), np.linalg.norm(i- orig_i), np.linalg.norm(matched_v - v), np.linalg.norm(compressed_v - v))
+
+        i_driver = i[self.driver_seg_idx]
+
+        driver_impedance = v[self.driver_seg_idx]/i_driver
+        ic(np.abs(driver_impedance), np.angle(driver_impedance)*180/np.pi)
+
+        return driver_impedance, (i, orig_i, matched_i)
