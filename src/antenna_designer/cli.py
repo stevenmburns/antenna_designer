@@ -108,19 +108,21 @@ def cli(arguments=None):
     p = subparsers.add_parser('pattern', help='Display far field of antenna')
     add_common(p)
     p.add_argument('--wireframe', default=False, action='store_true', help='Draw wireframe.')
+    p.add_argument('--elevation_angle', default=15, type=float, help='Elevation angle for azimuth plot.')
     def f(args):
         builder = get_builder(args.builder)
         if args.wireframe:
             pattern3d(builder(), fn=args.fn)
         else:
-            pattern(builder(), fn=args.fn)
+            pattern(builder(), elevation_angle=args.elevation_angle, fn=args.fn)
     p.set_defaults(func=f)
 
     p = subparsers.add_parser('compare_patterns', help='Display far field of multiple antennas')
+    p.add_argument('--elevation_angle', default=15, type=float, help='Elevation angle for azimuth plot.')
     add_common(p, use_builders=True)
     def f(args):
         builders = get_builders(args.builders)
-        compare_patterns((builder() for builder in builders), fn=args.fn)
+        compare_patterns((builder() for builder in builders), elevation_angle=args.elevation_angle, fn=args.fn)
     p.set_defaults(func=f)
 
     args = parser.parse_args(args=arguments)

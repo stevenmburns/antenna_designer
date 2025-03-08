@@ -29,21 +29,26 @@ class Builder(AntennaBuilder):
   default_params = MappingProxyType({
     'freq': 28.57,
     'base': 7,
-    'length_20': 10,
-    'length_17': 10 * 14.3 / 18.157,
-    'length_15': 10 * 14.3 / 21.383,
-    'length_12': 5.6,
-    'length_10': 4.8,
-    'slope': 0
+    'length_20': 8.1437,
+    'length_17': 6.5164,
+    'length_15': 5.5075,
+    'length_12': 4.6646,
+    'length_10': 4.1186,
+    'freq_20': 14.300,
+    'freq_17': 18.1575,
+    'freq_15': 21.383,
+    'freq_12': 24.97,
+    'freq_10': 28.47,
+    'slope': 0.5
   })
 
   def build_wires(self):
-    eps = 0.05
+    eps = 0.01
 
-    radius = .3
-    t0 = .5
+    radius = .1
+    t0 = radius / math.sqrt(2)
 
-    n = 2
+    n = 5
 
     lst = [(math.cos(math.pi*i/180),math.sin(math.pi*i/180)) for i in range(360//(2*n), 360, 360//n)]
         
@@ -62,8 +67,15 @@ class Builder(AntennaBuilder):
           C[2]+radius*y*math.sqrt(1+self.slope**2)
     ) for (x, y) in lst]
 
+    def dist(p0, p1):
+      return math.sqrt(sum((x0-x1)**2 for x0, x1 in zip(p0, p1)))
 
-    ls = [q/2 for q in [self.length_10, self.length_12, self.length_15, self.length_17, self.length_20]]
+    
+    print(f"radius: {radius} dists: {[dist(S, a) for a in A]}")
+
+    lengths = [self.length_10, self.length_12, self.length_15, self.length_17, self.length_20]
+
+    ls = [(q/2 - dist(S, a)) for (q,a) in zip(lengths, A)]
 
     Ds = [(0, S[1]+q*math.sqrt(1+self.slope**2), -self.slope*q*math.sqrt(1+self.slope**2)) for q in ls]
 
@@ -74,6 +86,13 @@ class Builder(AntennaBuilder):
 
     Ay = [ry(p) for p in A]
     By = [ry(p) for p in B]
+
+    
+    for i in range(n):
+      wire_length = dist(S, A[i]) + dist(A[i], B[i])
+
+      print( f"{i} length {wire_length} {lengths[i]/2} {(wire_length-lengths[i]/2)/lengths[i]}")
+
 
     n_seg0 = 21
     n_seg1 = 1
