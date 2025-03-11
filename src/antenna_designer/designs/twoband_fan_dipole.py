@@ -286,7 +286,14 @@ if __name__ == "__main__":
 
   def tofeet_inches(m):
     f, i = divmod(m/0.0254, 12)
-    return f"{m*100:.1f} cm {f:.0f} ft {i:.3f} in"
+
+    ii, frac16 = divmod(i*16, 16)
+
+    frac16 = int(frac16+0.5)
+
+    g = math.gcd(frac16, 16)
+
+    return f"{m*100:.1f} cm {f:.0f} ft {i:.3f} in ({ii:.0f} {frac16//g}/{16//g} in)"
 
   params = Builder.default_params
   print(f"Quarter wave element on 12m: {tofeet_inches(params['length_12']/2)}")

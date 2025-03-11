@@ -4,36 +4,14 @@ from types import MappingProxyType
 # from icecream import ic
 
 class Builder(AntennaBuilder):
-  old_params = MappingProxyType({
-    'freq': 28.57,
-    'base': 7,
-    'length_20': 5.084 * 20 / 10,
-    'length_17': 5.084 * 17 / 10,
-    'length_15': 5.084 * 15 / 10,
-    'length_12': 5.084 * 12 / 10,
-    'length_10': 5.084,
-    'slope': 0.604
-  })
-
-  default_params0 = MappingProxyType({
-    'freq': 28.57,
-    'base': 7,
-    'length_20': 11.3,
-    'length_17': 11.3 * 17 / 20,
-    'length_15': 11.3 * 15 / 20,
-    'length_12': 11.3 * 12 / 20,
-    'length_10': 11.3 * 10 / 20,
-    'slope': 0.604
-  })
-
   default_params = MappingProxyType({
     'freq': 28.57,
     'base': 7,
-    'length_20': 8.1437,
-    'length_17': 6.5164,
-    'length_15': 5.5075,
-    'length_12': 4.6646,
-    'length_10': 4.1186,
+    'length_20': 10.2520,
+    'length_17': 8.2437,
+    'length_15': 6.9832,
+    'length_12': 5.9632,
+    'length_10': 5.2666,
     'freq_20': 14.300,
     'freq_17': 18.1575,
     'freq_15': 21.383,
@@ -45,8 +23,8 @@ class Builder(AntennaBuilder):
   def build_wires(self):
     eps = 0.01
 
-    radius = .1
-    t0 = radius / math.sqrt(2)
+    radius = .12
+    t0 = radius * math.sqrt(2)
 
     n = 5
 
@@ -57,32 +35,35 @@ class Builder(AntennaBuilder):
     def ry(p):
       return  p[0], -p[1], p[2]
 
+    Zc = 1/math.sqrt(1+self.slope**2)
+    Zs = self.slope*Zc
+
+
     S = (0, eps, 0) 
     T = ry(S)
 
-    C = (0, S[1]+t0*math.sqrt(1+self.slope**2), -self.slope*t0*math.sqrt(1+self.slope**2))
+
+    C = (S[0], S[1]+t0*Zc, S[2]-t0*Zs)
+
+
 
     A = [(C[0]+radius*x,
-          C[1]+radius*y*self.slope*math.sqrt(1+self.slope**2),
-          C[2]+radius*y*math.sqrt(1+self.slope**2)
+          C[1]+radius*y*Zs,
+          C[2]+radius*y*Zc
     ) for (x, y) in lst]
 
     def dist(p0, p1):
       return math.sqrt(sum((x0-x1)**2 for x0, x1 in zip(p0, p1)))
-
     
-    print(f"radius: {radius} dists: {[dist(S, a) for a in A]}")
+    print(f"t0: {t0} dist: {dist(S, C)}")
+    print(f"t0: {t0} dists from C: {[dist(C, a) for a in A]}")
+    print(f"radius: {radius} dists from S: {[dist(S, a) for a in A]}")
 
     lengths = [self.length_10, self.length_12, self.length_15, self.length_17, self.length_20]
 
     ls = [(q/2 - dist(S, a)) for (q,a) in zip(lengths, A)]
 
-    Ds = [(0, S[1]+q*math.sqrt(1+self.slope**2), -self.slope*q*math.sqrt(1+self.slope**2)) for q in ls]
-
-    B = [(D[0]+radius*x,
-          D[1]+radius*y*self.slope*math.sqrt(1+self.slope**2),
-          D[2]+radius*y*math.sqrt(1+self.slope**2)
-    ) for (x, y), D in zip(lst, Ds)]
+    B = [(AA[0], AA[1]+q*Zc, AA[2]-q*Zs) for q, AA in zip(ls, A)]
 
     Ay = [ry(p) for p in A]
     By = [ry(p) for p in B]
@@ -108,3 +89,26 @@ class Builder(AntennaBuilder):
       new_tups.extend([((x0+xoff, y0+yoff, z0+zoff), (x1+xoff, y1+yoff, z1+zoff), ns, ev) for ((x0, y0, z0), (x1, y1, z1), ns, ev) in tups])
 
     return new_tups
+
+if __name__ == "__main__":
+
+  def tofeet_inches(m):
+    f, i = divmod(m/0.0254, 12)
+
+    ii, frac16 = divmod(i*16, 16)
+
+    frac16 = int(frac16+0.5)
+
+    g = math.gcd(frac16, 16)
+
+    return f"{m*100:.1f} cm {f:.0f} ft {i:.3f} in ({ii:.0f} {frac16//g}/{16//g} in)"
+
+  params = Builder.default_params
+
+  bands = [20, 17, 15, 12, 10]
+  lengths = [f'length_{b}' for b in bands]
+
+  for b in bands:
+    length = f"length_{b}"
+    print(f"Quarter wave element on {b}m: {tofeet_inches(params[length]/2)}")
+
