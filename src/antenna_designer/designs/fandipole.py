@@ -7,11 +7,11 @@ class Builder(AntennaBuilder):
   default_params = MappingProxyType({
     'freq': 28.57,
     'base': 7,
-    'length_20': 10.2520,
-    'length_17': 8.2437,
-    'length_15': 6.9832,
-    'length_12': 5.9632,
-    'length_10': 5.2666,
+    'length_20': 10.2551,
+    'length_17': 8.2461,
+    'length_15': 6.9880,
+    'length_12': 5.9681,
+    'length_10': 5.2691,
     'freq_20': 14.300,
     'freq_17': 18.1575,
     'freq_15': 21.383,
@@ -100,8 +100,9 @@ if __name__ == "__main__":
     frac16 = int(frac16+0.5)
 
     g = math.gcd(frac16, 16)
+    factor = 1/1.05
 
-    return f"{m*100:.1f} cm {f:.0f} ft {i:.3f} in ({ii:.0f} {frac16//g}/{16//g} in)"
+    return f"{m*100:.1f} ({m*100*factor+1:.1f}) ({489.3+90-(m*100*factor+1):.1f}) cm {f:.0f} ft {i:.3f} in ({ii:.0f} {frac16//g}/{16//g} in)"
 
   params = Builder.default_params
 
