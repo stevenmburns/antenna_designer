@@ -6,7 +6,7 @@
 |---------------------------------------------------- | -------: | -------: | ------: | --------: |
 | src/antenna\_designer/\_\_init\_\_.py               |        7 |        0 |    100% |           |
 | src/antenna\_designer/\_\_main\_\_.py               |        0 |        0 |    100% |           |
-| src/antenna\_designer/builder.py                    |      100 |        0 |    100% |           |
+| src/antenna\_designer/builder.py                    |      131 |       28 |     79% |150-151, 154-190 |
 | src/antenna\_designer/cli.py                        |       96 |        0 |    100% |           |
 | src/antenna\_designer/core.py                       |        6 |        0 |    100% |           |
 | src/antenna\_designer/designs/bowtie.py             |       26 |        0 |    100% |           |
@@ -15,7 +15,7 @@
 | src/antenna\_designer/designs/dipole.py             |       17 |        0 |    100% |           |
 | src/antenna\_designer/designs/fandipole.py          |       59 |       13 |     78% |    95-114 |
 | src/antenna\_designer/designs/freq\_based/invvee.py |       14 |        0 |    100% |           |
-| src/antenna\_designer/designs/freq\_based/yagi.py   |       32 |        0 |    100% |           |
+| src/antenna\_designer/designs/freq\_based/yagi.py   |       38 |        0 |    100% |           |
 | src/antenna\_designer/designs/hexbeam.py            |       45 |        0 |    100% |           |
 | src/antenna\_designer/designs/invvee.py             |       13 |        0 |    100% |           |
 | src/antenna\_designer/designs/invveearray.py        |        8 |        0 |    100% |           |
@@ -27,7 +27,7 @@
 | src/antenna\_designer/pysim.py                      |      259 |        0 |    100% |           |
 | src/antenna\_designer/sim.py                        |       42 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                      |      117 |        0 |    100% |           |
-|                                           **TOTAL** | **1068** |   **14** | **99%** |           |
+|                                           **TOTAL** | **1105** |   **42** | **96%** |           |
 
 
 ## Setup coverage badge
