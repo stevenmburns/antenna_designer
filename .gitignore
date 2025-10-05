@@ -14,3 +14,4 @@ src/antenna_designer/*.html
 *.egg-info/
 *.so
 .venv/
+pg/
