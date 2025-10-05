@@ -20,3 +20,6 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/stevenmburns/antenna_designer"
 Issues = "https://github.com/stevenmburns/antenna_designer/issues"
+
+[tool.ruff.lint]
+ignore = ["E741"]

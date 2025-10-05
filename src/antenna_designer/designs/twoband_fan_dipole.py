@@ -239,7 +239,7 @@ class Builder(AntennaBuilder):
     G = (self.s/sqrt(2.0), eps+self.s/sqrt(2.0), 0)
     H = rx(G)
 
-    Icap = ry(G)
+    I = ry(G)
     J = ry(H)
 
     A = ( x_12+G[0], y_12+G[1], -z_12)
@@ -267,9 +267,9 @@ class Builder(AntennaBuilder):
     tups.append((G, A, n_seg0, None))
     tups.append((H, B, n_seg0, None))
 
-    tups.append((T, Icap, 5, None))
+    tups.append((T, I, 5, None))
     tups.append((T, J, 5, None))
-    tups.append((Icap, C, n_seg0, None))
+    tups.append((I, C, n_seg0, None))
     tups.append((J, D, n_seg0, None))
 
     tups.append((T, S, n_seg1, 1+0j))
