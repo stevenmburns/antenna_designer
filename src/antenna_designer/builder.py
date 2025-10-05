@@ -145,3 +145,48 @@ class Array2x4Builder(AntennaBuilder):
 
     return new_tups
 
+class Array1x2Builder(AntennaBuilder):
+  def __init__(self, element_builder, params=None):
+    self.__dict__['element_builder'] = element_builder
+    super().__init__(params)
+
+  def build_wires(self):
+    elem_params = self.element_builder.default_params
+    elem_params_keys = set(elem_params.keys())
+
+    changed_keys = set()
+    for k,v in self._params.items():
+      if k not in elem_params_keys:
+        if k.endswith('_top'):
+          elem_key = k[:-4]
+          assert elem_key in elem_params_keys
+          changed_keys.add(elem_key)
+
+    def build_element_wires(suffix):
+      local_element_params = dict(elem_params)
+      for k,v in self._params.items():    
+        if k in elem_params_keys and k not in changed_keys:
+          local_element_params[k] = v
+
+      for k in changed_keys:
+        local_element_params[k] = self._params[k + suffix]
+
+      element_builder_local = self.element_builder(local_element_params)
+
+      return element_builder_local.build_wires()
+
+    tups_top = build_element_wires('_top')
+
+    phasor_lr, = (
+      np.exp((0+1j)*np.pi*getattr(self, p)/180) if hasattr(self, p) else 1 for p in ('phase_lr',)
+    )
+
+    new_tups = []
+    for yoff, ph0 in ((-self.del_y, 1), (self.del_y, phasor_lr)):
+      for zoff, tups, ph1 in ((self.del_z, tups_top, 1),):
+        for (x0, y0, z0), (x1, y1, z1), ns, ex in tups:
+          new_tups.extend([((x0, y0+yoff, z0+zoff), (x1, y1+yoff, z1+zoff), ns, ph0*ph1 if ex is not None else ex)])
+
+    return new_tups
+
+

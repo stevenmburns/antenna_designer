@@ -4,10 +4,10 @@ from types import MappingProxyType
 
 class Builder(AntennaBuilder):
   default_params = MappingProxyType({
-    'freq': 28.57,
-    'slope': .363,
-    'base': 7,
-    'length': 5.185
+    'freq': 28.47,
+    'slope': .5376,
+    'base': 9,
+    'length': 5.4213
   })
 
   def build_wires(self):
