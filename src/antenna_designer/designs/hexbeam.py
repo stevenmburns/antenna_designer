@@ -5,12 +5,11 @@ from types import MappingProxyType
 
 class Builder(AntennaBuilder):
   default_params = MappingProxyType({
-    'freq': 28.57,
+    'freq': 28.47,
     'base': 7,
-    #'halfdriver': 2.6416,
-    'halfdriver': 2.841,
-    'tipspacer_factor': 0.1900,
-    't0_factor': 0.1171
+    'halfdriver': 2.82,
+    'tipspacer_factor': 0.1312,
+    't0_factor': 0.1243,
   })
 
   opt_params = MappingProxyType({'freq': 28.57, 'base': 7, 'halfdriver': 2.782539354535098, 'tipspacer_factor': 0.20803460322922357, 't0_factor': 0.07058920808116927})

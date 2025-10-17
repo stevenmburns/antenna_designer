@@ -13,7 +13,7 @@ __all__ = [
     'cli',
 ]
 
-from .builder import AntennaBuilder, Array2x2Builder, Array2x4Builder
+from .builder import AntennaBuilder, Array2x2Builder, Array2x4Builder, Array1x4Builder
 from .sim import Antenna
 from .opt import optimize
 from .sweep import sweep, sweep_freq, sweep_gain

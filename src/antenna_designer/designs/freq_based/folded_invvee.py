@@ -5,6 +5,7 @@ from types import MappingProxyType
 
 class Builder(AntennaBuilder):
   default_params = MappingProxyType({
+    'design_freq': 28.47,
     'freq': 28.47,
     'base': 7,
     'length_factor': 0.955,
@@ -19,7 +20,7 @@ class Builder(AntennaBuilder):
     b = self.base
 
 
-    wavelength = 299.792458/self.freq
+    wavelength = 299.792458/self.design_freq
 
     driver_y = 0.25*wavelength*self.length_factor
 
