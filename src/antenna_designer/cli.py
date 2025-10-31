@@ -1,5 +1,5 @@
 from . import AntennaBuilder
-from . import sweep, sweep_gain, pattern, pattern3d, compare_patterns, optimize
+from . import sweep, sweep_gain, sweep_patterns, pattern, pattern3d, compare_patterns, optimize
 
 from icecream import ic
 
@@ -84,9 +84,14 @@ def cli(arguments=None):
     p.add_argument('--use_smithchart', default=False, action='store_true', help='Plot impedance using a smithchart.')
     p.add_argument('--z0', default=50, type=float, help='Reference impedance.')
     p.add_argument('--markers', default=[], nargs='+', type=float, help='Add markers at these values.')
+
+    p.add_argument('--patterns', default=False, action='store_true', help='Compare patterns generated for each swept value.')
+
     def f(args):
         builder = get_builder(args.builder)
-        if args.gain:
+        if args.patterns:
+            sweep_patterns(builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, fn=args.fn)            
+        elif args.gain:
             sweep_gain(builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, fn=args.fn)
         else:
             sweep(builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, use_smithchart=args.use_smithchart, fn=args.fn, z0=args.z0, markers=args.markers)

@@ -1,6 +1,6 @@
 from . import Antenna
 from .core import save_or_show
-from .far_field import get_elevation
+from .far_field import get_elevation, get_pattern_rings
 from icecream import ic
 
 import numpy as np
@@ -75,6 +75,55 @@ def sweep_freq(antenna_builder, *, z0=200, rng=None, center=None, fraction=None,
 
   save_or_show(plt, fn)
 
+
+def sweep_patterns(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=3, fn=None):
+
+  elevation_angle = 15
+
+  rng = resolve_range(getattr(antenna_builder, nm), rng, center, fraction)
+
+  xs = np.linspace(rng[0],rng[1],npoints)
+
+  rings_lst = []
+
+  for x in xs:
+    setattr(antenna_builder, nm, x)
+    rings, max_gain, min_gain, thetas, phis = get_pattern_rings(antenna_builder)
+    rings_lst.append(rings)
+
+  fig, axes = plt.subplots(ncols=2, subplot_kw={'projection': 'polar'})
+
+  axes[0].set_rticks([-12, -6, 0, 6, 12])
+
+  for x, rings in zip(xs, rings_lst):
+    for theta, ring in list(zip(thetas, rings)):
+      if abs(theta-(90-elevation_angle)) < 0.1:
+        axes[0].plot(np.deg2rad(phis),ring,marker='',label=f"{(90-theta):.0f} {x:.3f}")
+
+  axes[0].legend(loc="lower left")
+
+  print(len(rings),len(rings[0]))
+
+  n = len(rings_lst[0][0])
+  assert (n-1) % 2 == 0
+
+  azimuth_f = 0
+  azimuth_r = (n-1)//2
+
+  delta_azimuth = 0
+  azimuth_f = n-1-delta_azimuth
+  azimuth_r = azimuth_r + delta_azimuth
+
+
+  elevations = [list(reversed([ring[azimuth_f] for ring in rings]))+[ring[azimuth_r] for ring in rings] for rings in rings_lst]
+  el_thetas = list(reversed(list(90-thetas))) + list(90+thetas)
+
+  axes[1].set_rticks([-12, -6, 0, 6, 12])
+
+  for elevation in elevations:
+    axes[1].plot(np.deg2rad(el_thetas),elevation,marker='')
+
+  save_or_show(plt, fn)
 
 def sweep_gain(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, fn=None):
 
