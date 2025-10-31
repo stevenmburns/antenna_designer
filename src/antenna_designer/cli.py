@@ -127,7 +127,7 @@ def cli(arguments=None):
     add_common(p, use_builders=True)
     def f(args):
         builders = get_builders(args.builders)
-        compare_patterns((builder() for builder in builders), elevation_angle=args.elevation_angle, fn=args.fn)
+        compare_patterns((builder() for builder in builders), elevation_angle=args.elevation_angle, fn=args.fn, builder_names=args.builders)
     p.set_defaults(func=f)
 
     args = parser.parse_args(args=arguments)

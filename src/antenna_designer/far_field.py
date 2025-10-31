@@ -64,7 +64,10 @@ def get_elevation(a):
 
   return rings, max_gain, min_gain, thetas, phis
 
-def compare_patterns(antenna_builders, elevation_angle=15, fn=None):
+def compare_patterns(antenna_builders, elevation_angle=15, fn=None, builder_names=None):
+  if builder_names is None:
+    builder_names = ['Unknown' for _ in antenna_builders]
+
   rings_lst = []
 
   for antenna_builder in antenna_builders:
@@ -75,16 +78,14 @@ def compare_patterns(antenna_builders, elevation_angle=15, fn=None):
 
   axes[0].set_rticks([-12, -6, 0, 6, 12])
 
-  for rings in rings_lst:
+  for nm, rings in zip(builder_names, rings_lst):
     for theta, ring in list(zip(thetas, rings)):
       if abs(theta-(90-elevation_angle)) < 0.1:
-        axes[0].plot(np.deg2rad(phis),ring,marker='',label=f"{(90-theta):.0f}")
+        axes[0].plot(np.deg2rad(phis),ring,marker='',label=f"{(90-theta):.0f} {nm}")
 
   axes[0].legend(loc="lower left")
 
   print(len(rings),len(rings[0]))
-
-
 
   n = len(rings_lst[0][0])
   assert (n-1) % 2 == 0
