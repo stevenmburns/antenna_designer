@@ -82,9 +82,22 @@ def compare_patterns(antenna_builders, elevation_angle=15, fn=None):
 
   axes[0].legend(loc="lower left")
 
+  print(len(rings),len(rings[0]))
+
+
+
   n = len(rings_lst[0][0])
   assert (n-1) % 2 == 0
-  elevations = [list(reversed([ring[0] for ring in rings]))+[ring[(n-1)//2] for ring in rings] for rings in rings_lst]
+
+  azimuth_f = 0
+  azimuth_r = (n-1)//2
+
+  delta_azimuth = 0
+  azimuth_f = n-1-delta_azimuth
+  azimuth_r = azimuth_r + delta_azimuth
+
+
+  elevations = [list(reversed([ring[azimuth_f] for ring in rings]))+[ring[azimuth_r] for ring in rings] for rings in rings_lst]
   el_thetas = list(reversed(list(90-thetas))) + list(90+thetas)
 
   axes[1].set_rticks([-12, -6, 0, 6, 12])

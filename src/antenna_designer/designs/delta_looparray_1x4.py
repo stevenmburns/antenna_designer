@@ -13,7 +13,7 @@ class Builder(Array1x4Builder):
     'angle_radians_otop': 0.8911,
     'base': 7,
     'del_y': 4,
-    'del_z': 2,
+    'del_z': 0,
   })
 
   def __init__(self, params = None):
