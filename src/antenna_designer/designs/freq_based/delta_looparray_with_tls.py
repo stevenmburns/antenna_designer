@@ -3,8 +3,6 @@ import math
 
 from ... import Transform, TransformStack
 
-import numpy as np
-
 from types import MappingProxyType
 
 class Builder(AntennaBuilder):

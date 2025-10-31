@@ -1,4 +1,3 @@
-import pytest
 import numpy as np
 from antenna_designer import Transform, TransformStack
 
