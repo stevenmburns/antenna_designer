@@ -11,6 +11,7 @@ __all__ = [
     'sweep',
     'sweep_freq',
     'sweep_gain',
+    'sweep_patterns',
     'optimize',
     'pattern',
     'pattern3d',
