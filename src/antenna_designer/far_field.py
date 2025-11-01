@@ -88,10 +88,10 @@ def plot_patterns(rings_lst, names, thetas, phis, elevation_angle=15, fn=None):
   if False:
     delta_azimuth = 0
     azimuth_f -= delta_azimuth
-    asimuth_f %= n-1
+    azimuth_f %= n-1
 
     azimuth_r += delta_azimuth
-    asimuth_r %= n-1
+    azimuth_r %= n-1
 
     assert 0 <= azimuth_f < n-1
     assert 0 <= azimuth_r < n-1

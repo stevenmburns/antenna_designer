@@ -26,6 +26,11 @@ def resolve_range(default_value, rng, center, fraction):
 
   return rng
 
+def gen_xs(default_value, rng, center, fraction, npoints):
+  rng = resolve_range(default_value, rng, center, fraction)
+  if npoints == 1 and rng[0] < rng[1]:
+    print("Range includes more than just a point and npoints == 1. Using the lower range bound.")
+  return np.linspace(rng[0],rng[1],npoints)
 
 def sweep_freq(antenna_builder, *, z0=200, rng=None, center=None, fraction=None, npoints=21, fn=None):
 
@@ -78,11 +83,7 @@ def sweep_freq(antenna_builder, *, z0=200, rng=None, center=None, fraction=None,
 
 def sweep_patterns(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=3, fn=None):
 
-  elevation_angle = 15
-
-  rng = resolve_range(getattr(antenna_builder, nm), rng, center, fraction)
-
-  xs = np.linspace(rng[0],rng[1],npoints)
+  xs = gen_xs(getattr(antenna_builder, nm), rng, center, fraction, npoints)
 
   rings_lst = []
 
@@ -91,13 +92,11 @@ def sweep_patterns(antenna_builder, nm, *, rng=None, center=None, fraction=None,
     rings, max_gain, min_gain, thetas, phis = get_pattern_rings(antenna_builder)
     rings_lst.append(rings)
 
-  plot_patterns(rings_lst, (f'{x:.3f}' for x in xs), thetas, phis, elevation_angle, fn)
+  plot_patterns(rings_lst, (f'{x:.3f}' for x in xs), thetas, phis, elevation_angle=15, fn=fn)
 
 def sweep_gain(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, fn=None):
 
-  rng = resolve_range(getattr(antenna_builder, nm), rng, center, fraction)
-
-  xs = np.linspace(rng[0],rng[1],npoints)
+  xs = gen_xs(getattr(antenna_builder, nm), rng, center, fraction, npoints)
 
   gs = []
   for x in xs:
@@ -119,9 +118,7 @@ def sweep_gain(antenna_builder, nm, *, rng=None, center=None, fraction=None, npo
 
 def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, use_smithchart=False, z0=50, markers=[], fn=None):
 
-  rng = resolve_range(getattr(antenna_builder, nm), rng, center, fraction)
-
-  xs = np.linspace(rng[0],rng[1],npoints)
+  xs = gen_xs(getattr(antenna_builder, nm), rng, center, fraction, npoints)
 
   zs = []
   for x in xs:
