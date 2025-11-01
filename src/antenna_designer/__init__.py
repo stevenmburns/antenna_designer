@@ -7,6 +7,7 @@ __all__ = [
     'Array2x4Builder',
     'Array1x4Builder',
     'Array1x4GroupedBuilder',
+    'plot_patterns',
     'compare_patterns',
     'sweep',
     'sweep_freq',
@@ -23,5 +24,5 @@ from .transform import Transform, TransformStack
 from .sim import Antenna
 from .opt import optimize
 from .sweep import sweep, sweep_freq, sweep_gain, sweep_patterns
-from .far_field import compare_patterns, pattern, pattern3d
+from .far_field import compare_patterns, plot_patterns, pattern, pattern3d
 from .cli import cli

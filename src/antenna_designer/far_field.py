@@ -64,21 +64,13 @@ def get_elevation(a):
 
   return rings, max_gain, min_gain, thetas, phis
 
-def compare_patterns(antenna_builders, elevation_angle=15, fn=None, builder_names=None):
-  if builder_names is None:
-    builder_names = ['Unknown' for _ in antenna_builders]
 
-  rings_lst = []
-
-  for antenna_builder in antenna_builders:
-    rings, max_gain, min_gain, thetas, phis = get_pattern_rings(antenna_builder)
-    rings_lst.append(rings)
-
+def plot_patterns(rings_lst, names, thetas, phis, elevation_angle=15, fn=None):
   fig, axes = plt.subplots(ncols=2, subplot_kw={'projection': 'polar'})
 
   axes[0].set_rticks([-12, -6, 0, 6, 12])
 
-  for nm, rings in zip(builder_names, rings_lst):
+  for nm, rings in zip(names, rings_lst):
     for theta, ring in list(zip(thetas, rings)):
       if abs(theta-(90-elevation_angle)) < 0.1:
         axes[0].plot(np.deg2rad(phis),ring,marker='',label=f"{(90-theta):.0f} {nm}")
@@ -93,10 +85,16 @@ def compare_patterns(antenna_builders, elevation_angle=15, fn=None, builder_name
   azimuth_f = 0
   azimuth_r = (n-1)//2
 
-  delta_azimuth = 0
-  azimuth_f = n-1-delta_azimuth
-  azimuth_r = azimuth_r + delta_azimuth
+  if False:
+    delta_azimuth = 0
+    azimuth_f -= delta_azimuth
+    asimuth_f %= n-1
 
+    azimuth_r += delta_azimuth
+    asimuth_r %= n-1
+
+    assert 0 <= azimuth_f < n-1
+    assert 0 <= azimuth_r < n-1
 
   elevations = [list(reversed([ring[azimuth_f] for ring in rings]))+[ring[azimuth_r] for ring in rings] for rings in rings_lst]
   el_thetas = list(reversed(list(90-thetas))) + list(90+thetas)
@@ -107,6 +105,20 @@ def compare_patterns(antenna_builders, elevation_angle=15, fn=None, builder_name
     axes[1].plot(np.deg2rad(el_thetas),elevation,marker='')
 
   save_or_show(plt, fn)
+
+
+def compare_patterns(antenna_builders, elevation_angle=15, fn=None, builder_names=None):
+  if builder_names is None:
+    builder_names = ['Unknown' for _ in antenna_builders]
+
+  rings_lst = []
+
+  for antenna_builder in antenna_builders:
+    rings, max_gain, min_gain, thetas, phis = get_pattern_rings(antenna_builder)
+    rings_lst.append(rings)
+
+  plot_patterns(rings_lst, builder_names, thetas, phis, elevation_angle, fn)
+
 
 def pattern(antenna_builder, elevation_angle=15, fn=None):
 
