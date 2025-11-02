@@ -66,6 +66,12 @@ def cli(arguments=None):
             p.add_argument('--builder', type=str, default='dipole', help='Use this antenna builder.')
 
 
+    def add_pattern_common(p):
+        p.add_argument('--elevation_angle', default=15, type=float, help='Elevation angle for azimuth plot.')
+        p.add_argument('--azimuth_f', default=0, type=int, help='Azimuth angle (front) for the elevation plot.')
+        p.add_argument('--azimuth_r', default=0, type=int, help='Azimuth angle (rear) for the elevation plot.')
+
+
     p = subparsers.add_parser('draw', help='Draw antenna')
     add_common(p)
     def f(args):
@@ -75,6 +81,7 @@ def cli(arguments=None):
 
     p = subparsers.add_parser('sweep', help='Sweep antenna')
     add_common(p)
+    add_pattern_common(p)
     p.add_argument('--param', type=str, default='freq', help='Variable to sweep.')
     p.add_argument('--range', nargs=2, default=None, type=float, help='Range for sweep.')
     p.add_argument('--center', default=None, type=float, help='Center if range not given.')
@@ -90,7 +97,7 @@ def cli(arguments=None):
     def f(args):
         builder = get_builder(args.builder)
         if args.patterns:
-            sweep_patterns(builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, fn=args.fn)            
+            sweep_patterns(builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, fn=args.fn, elevation_angle=args.elevation_angle, azimuth_f=args.azimuth_f, azimuth_r=args.azimuth_r)
         elif args.gain:
             sweep_gain(builder(), args.param, rng=args.range, npoints=args.npoints, center=args.center, fraction=args.fraction, fn=args.fn)
         else:
@@ -123,11 +130,11 @@ def cli(arguments=None):
     p.set_defaults(func=f)
 
     p = subparsers.add_parser('compare_patterns', help='Display far field of multiple antennas')
-    p.add_argument('--elevation_angle', default=15, type=float, help='Elevation angle for azimuth plot.')
     add_common(p, use_builders=True)
+    add_pattern_common(p)
     def f(args):
         builders = get_builders(args.builders)
-        compare_patterns((builder() for builder in builders), elevation_angle=args.elevation_angle, fn=args.fn, builder_names=args.builders)
+        compare_patterns((builder() for builder in builders), elevation_angle=args.elevation_angle, fn=args.fn, builder_names=args.builders, azimuth_f=args.azimuth_f, azimuth_r=args.azimuth_r)
     p.set_defaults(func=f)
 
     args = parser.parse_args(args=arguments)

@@ -81,7 +81,7 @@ def sweep_freq(antenna_builder, *, z0=200, rng=None, center=None, fraction=None,
   save_or_show(plt, fn)
 
 
-def sweep_patterns(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=3, fn=None):
+def sweep_patterns(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=3, fn=None, elevation_angle=15, azimuth_f=0, azimuth_r=180):
 
   xs = gen_xs(getattr(antenna_builder, nm), rng, center, fraction, npoints)
 
@@ -92,7 +92,7 @@ def sweep_patterns(antenna_builder, nm, *, rng=None, center=None, fraction=None,
     rings, max_gain, min_gain, thetas, phis = get_pattern_rings(antenna_builder)
     rings_lst.append(rings)
 
-  plot_patterns(rings_lst, (f'{x:.3f}' for x in xs), thetas, phis, elevation_angle=15, fn=fn)
+  plot_patterns(rings_lst, (f'{x:.3f}' for x in xs), thetas, phis, fn=fn, elevation_angle=elevation_angle, azimuth_f=azimuth_f, azimuth_r=azimuth_r)
 
 def sweep_gain(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, fn=None):
 
