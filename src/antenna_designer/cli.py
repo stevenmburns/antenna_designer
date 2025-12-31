@@ -69,7 +69,7 @@ def cli(arguments=None):
     def add_pattern_common(p):
         p.add_argument('--elevation_angle', default=15, type=float, help='Elevation angle for azimuth plot.')
         p.add_argument('--azimuth_f', default=0, type=int, help='Azimuth angle (front) for the elevation plot.')
-        p.add_argument('--azimuth_r', default=0, type=int, help='Azimuth angle (rear) for the elevation plot.')
+        p.add_argument('--azimuth_r', default=180, type=int, help='Azimuth angle (rear) for the elevation plot.')
 
 
     p = subparsers.add_parser('draw', help='Draw antenna')

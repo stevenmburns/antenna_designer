@@ -93,7 +93,7 @@ def plot_patterns(rings_lst, names, thetas, phis, elevation_angle=15, fn=None, a
     azimuth_r += delta_azimuth
     azimuth_r %= n-1
 
-  #print(n, delta_azimuth, azimuth_f, azimuth_r)
+  print(n, azimuth_f, azimuth_r)
 
   assert 0 <= azimuth_f < n-1
   assert 0 <= azimuth_r < n-1
