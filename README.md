@@ -147,13 +147,13 @@ sudo apt-get install \
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install setuptools numpy scipy pytest matplotlib icecream
+pip install setuptools numpy scipy pytest matplotlib icecream scikit-rf
 ```
 
 3. Clone repo, update the submodules (for python-necpp) and install from sources (can't do just a pip install PyNEC). Do this in the virtual environment.
 ```bash
-git clone https://github.com/stevenmburns/antenna_design
-cd antenna_design
+git clone https://github.com/stevenmburns/antenna_designer
+cd antenna_designer
 git submodule init
 git submodule update --remote
 pushd python-necpp

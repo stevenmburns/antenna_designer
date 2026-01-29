@@ -29,16 +29,16 @@ RUN \
     /bin/bash -c "python3 -m venv /opt/.venv && \
     source /opt/.venv/bin/activate && \
     pip install --upgrade pip -q && \
-    pip install setuptools numpy scipy pytest matplotlib icecream -q"
+    pip install setuptools numpy scipy pytest matplotlib icecream scikit-rf -q"
 
 FROM antenna_design_base_with_python as antenna_design_base
 
-COPY . /opt/antenna_design
+COPY . /opt/antenna_designer
 
 RUN \
     /bin/bash -c "source /opt/.venv/bin/activate && \
     cd /opt && \
-    cd antenna_design && \
+    cd antenna_designer && \
     git submodule init && \
     git submodule update --remote && \
     pushd python-necpp && \    
