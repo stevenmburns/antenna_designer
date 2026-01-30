@@ -160,7 +160,7 @@ pushd python-necpp
 git submodule init
 git submodule update --remote
 cd PyNEC
-ln -s ../necpp_src .
+ln -sfn ../necpp_src .
 pushd ../necpp_src
 make -f Makefile.git
 /configure --without-lapack
