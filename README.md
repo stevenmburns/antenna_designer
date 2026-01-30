@@ -160,7 +160,7 @@ pushd python-necpp
 git submodule init
 git submodule update --remote
 cd PyNEC
-ln -s ../necpp_src .
+ln -sfn ../necpp_src .
 pushd ../necpp_src
 make -f Makefile.git
 /configure --without-lapack
@@ -185,11 +185,11 @@ There are dockerfiles to automate and document the necessary packages installati
 
 To build the docker image locally, try:
 ```bash
-docker build -f Dockerfile --target antenna_design_base --tag stevenmburns/antenna_design_base .
+docker build -f Dockerfile --target antenna_designer --tag stevenmburns/antenna_designer .
 ```
 To run some of the test in docker, try:
 ```bash
-docker run -it stevenmburns/antenna_design_base /bin/bash -c "source /opt/.venv/bin/activate && cd /opt/antenna_design && pytest -vv --durations=0 -- tests/test_dipole.py tests/test_invvee.py" 
+docker run -it stevenmburns/antenna_designer /bin/bash -c "source /opt/.venv/bin/activate && cd /opt/antenna_designer && pytest -vv --durations=0 -- tests/" 
 ```
 
 The tests (including a build of python-necpp from sources) are also running in Github Actions on every push and pull request:
