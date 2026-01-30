@@ -1,7 +1,7 @@
 #
 # Base container starts here
 #
-FROM ubuntu:24.04 as antenna_design_base
+FROM ubuntu:24.04 AS antenna_designer_base
 
 # Update packages
 RUN apt-get -qq update && DEBIAN_FRONTEND=noninterative apt-get -qq install \
@@ -20,7 +20,7 @@ RUN apt-get -qq update && DEBIAN_FRONTEND=noninterative apt-get -qq install \
     libtool \
 &&    apt-get -qq clean
 
-FROM antenna_design_base as antenna_design_base_with_python
+FROM antenna_designer_base AS antenna_designer_base_with_python
 
 # Create virtual environment and install python packages
 # Upgrade pip & install testing dependencies
@@ -31,7 +31,7 @@ RUN \
     pip install --upgrade pip -q && \
     pip install setuptools numpy scipy pytest matplotlib icecream scikit-rf -q"
 
-FROM antenna_design_base_with_python as antenna_design_base
+FROM antenna_designer_base_with_python as antenna_designer
 
 COPY . /opt/antenna_designer
 
@@ -54,4 +54,4 @@ RUN \
     python setup.py build && \
     python setup.py install && \
     popd && \
-    pip install -i https://test.pypi.org/simple/ antenna-designer-stevenmburns==0.0.1"
+    pip install -e ."
