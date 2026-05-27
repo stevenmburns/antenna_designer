@@ -6,9 +6,6 @@
 |---------------------------------------------------- | -------: | -------: | ------: | --------: |
 | src/antenna\_designer/\_\_init\_\_.py               |        8 |        0 |    100% |           |
 | src/antenna\_designer/\_\_main\_\_.py               |        0 |        0 |    100% |           |
-| src/antenna\_designer/abstract\_pysim.py            |       69 |        0 |    100% |           |
-| src/antenna\_designer/augmented\_spline\_pysim.py   |       65 |        9 |     86% |55-58, 61, 68-71 |
-| src/antenna\_designer/bspline.py                    |       19 |        0 |    100% |           |
 | src/antenna\_designer/builder.py                    |      195 |       84 |     57% |153-154, 157-195, 199-200, 203-242, 246-247, 250-286 |
 | src/antenna\_designer/cli.py                        |      104 |        1 |     99% |       100 |
 | src/antenna\_designer/core.py                       |        6 |        0 |    100% |           |
@@ -26,14 +23,11 @@
 | src/antenna\_designer/designs/rawdipole.py          |       12 |        0 |    100% |           |
 | src/antenna\_designer/designs/vertical.py           |       24 |        0 |    100% |           |
 | src/antenna\_designer/far\_field.py                 |      113 |        0 |    100% |           |
-| src/antenna\_designer/newpysim.py                   |       52 |        1 |     98% |        34 |
 | src/antenna\_designer/opt.py                        |       39 |        1 |     97% |        53 |
-| src/antenna\_designer/pysim.py                      |      124 |       56 |     55% |120-156, 162, 166-219 |
 | src/antenna\_designer/sim.py                        |       45 |        1 |     98% |        33 |
-| src/antenna\_designer/spline.py                     |      228 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                      |      128 |        7 |     95% |     86-95 |
 | src/antenna\_designer/transform.py                  |       42 |        1 |     98% |        73 |
-| **TOTAL**                                           | **1553** |  **174** | **89%** |           |
+| **TOTAL**                                           |  **996** |  **108** | **89%** |           |
 
 
 ## Setup coverage badge
