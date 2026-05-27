@@ -21,5 +21,8 @@ classifiers = [
 Homepage = "https://github.com/stevenmburns/antenna_designer"
 Issues = "https://github.com/stevenmburns/antenna_designer/issues"
 
+[tool.ruff]
+extend-exclude = ["python-necpp"]
+
 [tool.ruff.lint]
 ignore = ["E741"]
