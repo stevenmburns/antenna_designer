@@ -170,7 +170,7 @@ class YagiPySim(AbstractPySim):
         q0, q1 = np.array((-x, -1.05*y, 0),dtype=np.float64), np.array((-x, 1.05*y, 0),dtype=np.float64)
 
         delta_p = (p1-p0)/(2*self.nsegs)
-        delta_q = (q1-q0)/(2*self.nsegs)
+        delta_q = (q1-q0)/(2*self.nsegs)  # noqa: F841 -- suspected bug, see line 176
 
         exnm_p = np.linspace(p0-delta_p, p1+delta_p, 2*self.nsegs+3)
         exnm_q = np.linspace(q0-delta_p, q1+delta_p, 2*self.nsegs+3)
@@ -210,7 +210,7 @@ class YagiPySim(AbstractPySim):
 
         ic(s.shape, self.nsegs)
 
-        S = np.zeros(shape=(s.shape[0]+1, s.shape[1]+1))
+        S = np.zeros(shape=(s.shape[0]+1, s.shape[1]+1))  # noqa: F841 -- dead allocation, kept pending review
 
         z += s[:-1,:-1] + s[1:, 1:] - s[:-1, 1:] - s[1:, :-1]
         

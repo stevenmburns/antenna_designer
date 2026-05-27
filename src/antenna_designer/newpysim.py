@@ -2,8 +2,6 @@ import numpy as np
 
 from .abstract_pysim import AbstractPySim
 
-from .pysim_accelerators import psi_fusion_trapezoid
-from icecream import ic
 
 def Integral_Standalone(l_endpoints, r_endpoints, *, ntrap, wire_radius, k):
     m_centers = (l_endpoints + r_endpoints) / 2
