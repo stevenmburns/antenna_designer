@@ -26,3 +26,9 @@ extend-exclude = ["python-necpp"]
 
 [tool.ruff.lint]
 ignore = ["E741"]
+# Keep "imported but unused" as a warning instead of auto-stripping.
+# Without this, multi-pass edits (add imports first, then add code that
+# uses them) can have the import deleted between edits — by the editor's
+# format-on-save, the project's auto-fix hook, or a pre-commit run —
+# producing a broken next edit. Manual cleanup of unused imports is fine.
+unfixable = ["F401"]
