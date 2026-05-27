@@ -7,4 +7,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/ruff-action@v1
         with:
-          args: "check --exclude python-necpp/"
+          args: "check"
