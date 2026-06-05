@@ -11,7 +11,6 @@ import skrf.plotting
 
 def build_and_get_elevation(antenna_builder):
   a = Antenna(antenna_builder)
-  a.set_freq_and_execute()
   return get_elevation(a)
 
 def resolve_range(default_value, rng, center, fraction):
@@ -39,20 +38,12 @@ def sweep_freq(antenna_builder, *, z0=200, rng=None, center=None, fraction=None,
   min_freq = rng[0]
   max_freq = rng[1]
   n_freq = npoints-1
-  del_freq = (max_freq- min_freq)/n_freq
 
   xs = np.linspace(min_freq, max_freq, n_freq+1)
-  
+
   a = Antenna(antenna_builder)
-
-  a.c.fr_card(0, n_freq+1, min_freq, del_freq)
-  a.c.xq_card(0) # Execute simulation
-  
-  zs = np.array([a.impedance(freq_index,sweep=True) for freq_index in range(len(xs))])
-
+  zs = a.impedance_sweep(xs)
   del a
-
-  zs = np.array(zs)
 
   reflection_coefficient = (zs - z0) / (zs + z0)
   rho = np.abs(reflection_coefficient)

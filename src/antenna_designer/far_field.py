@@ -7,62 +7,13 @@ import matplotlib.pyplot as plt
 
 def get_pattern_rings(antenna_builder):
   a = Antenna(antenna_builder)
-  a.set_freq_and_execute()
-
-  del_theta = 1
-  del_phi = 1
-  n_theta = 90
-  n_phi = 360
-
-  assert 90 % n_theta == 0 and 90 == del_theta * n_theta
-  assert 360 % n_phi == 0 and 360 == del_phi * n_phi
-
-
-  a.c.rp_card(0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0)
-
-  thetas = np.linspace(0,90-del_theta,n_theta)
-  phis = np.linspace(0,360,n_phi+1)
-
-  rings = []
-
-  for theta_index, theta in enumerate(thetas):
-    ring = [a.c.get_gain(0, theta_index, phi_index) for phi_index, phi in enumerate(phis)]
-    rings.append(ring)
-             
-  max_gain = a.c.get_gain_max(0)
-  min_gain = a.c.get_gain_min(0)
-
+  ff = a.far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
   del a
-
-  return rings, max_gain, min_gain, thetas, phis
+  return ff.rings, ff.max_gain, ff.min_gain, ff.thetas, ff.phis
 
 def get_elevation(a):
-  del_theta = 1
-  del_phi = 360
-  n_theta = 90
-  n_phi = 1
-
-  assert 90 % n_theta == 0 and 90 == del_theta * n_theta
-  assert 360 % n_phi == 0 and 360 == del_phi * n_phi
-
-
-  a.c.rp_card(0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0)
-
-  thetas = np.linspace(0,90-del_theta,n_theta)
-  phis = np.linspace(0,360,n_phi+1)
-
-  rings = []
-
-  for theta_index, theta in enumerate(thetas):
-    ring = [a.c.get_gain(0, theta_index, phi_index) for phi_index, phi in enumerate(phis)]
-    rings.append(ring)
-             
-  max_gain = a.c.get_gain_max(0)
-  min_gain = a.c.get_gain_min(0)
-
-  del a
-
-  return rings, max_gain, min_gain, thetas, phis
+  ff = a.far_field(n_theta=90, n_phi=1, del_theta=1, del_phi=360)
+  return ff.rings, ff.max_gain, ff.min_gain, ff.thetas, ff.phis
 
 
 def plot_patterns(rings_lst, names, thetas, phis, elevation_angle=15, fn=None, azimuth_f=0, azimuth_r=180):
@@ -76,8 +27,6 @@ def plot_patterns(rings_lst, names, thetas, phis, elevation_angle=15, fn=None, a
         axes[0].plot(np.deg2rad(phis),ring,marker='',label=f"{(90-theta):.0f} {nm}")
 
   axes[0].legend(loc="lower left")
-
-  #print(len(rings),len(rings[0]))
 
   n = len(rings_lst[0][0])
   assert (n-1) % 2 == 0
@@ -152,30 +101,16 @@ def pattern(antenna_builder, elevation_angle=15, fn=None):
 
 def pattern3d(antenna_builder, fn=None):
   a = Antenna(antenna_builder)
-  a.set_freq_and_execute()
-
-  del_theta = 3
-  del_phi = 6
-  n_theta = 30
-  n_phi = 60
-
-  assert 90 % n_theta == 0 and 90 == del_theta * n_theta
-  assert 360 % n_phi == 0 and 360 == del_phi * n_phi
-
-  a.c.rp_card(0, n_theta, n_phi+1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0)
-
-  thetas = np.linspace(0,90-del_theta,n_theta)
-  phis = np.linspace(0,360,n_phi+1)
-
-  rhos = [[a.c.get_gain(0, theta_index, phi_index) for theta_index, _ in enumerate(thetas)] for phi_index, _ in enumerate(phis)]
-             
+  ff = a.far_field(n_theta=30, n_phi=60, del_theta=3, del_phi=6)
   del a
+
+  rhos = [[ff.rings[theta_index][phi_index] for theta_index, _ in enumerate(ff.thetas)] for phi_index, _ in enumerate(ff.phis)]
 
   fig = plt.figure()
   ax = fig.add_subplot(111, projection='3d')
 
 
-  Theta, Phi = np.meshgrid(np.deg2rad(thetas),np.deg2rad(phis))
+  Theta, Phi = np.meshgrid(np.deg2rad(ff.thetas),np.deg2rad(ff.phis))
   Rho = 10**(np.array(rhos)/10)
 
   X = Rho * np.sin(Theta)*np.cos(Phi)
@@ -190,6 +125,3 @@ def pattern3d(antenna_builder, fn=None):
   ax.set_zlabel('Z')
 
   save_or_show(plt, fn)
-
-
-
