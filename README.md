@@ -22,12 +22,15 @@
 | src/antenna\_designer/designs/moxon.py              |       33 |        0 |    100% |           |
 | src/antenna\_designer/designs/rawdipole.py          |       12 |        0 |    100% |           |
 | src/antenna\_designer/designs/vertical.py           |       24 |        0 |    100% |           |
-| src/antenna\_designer/far\_field.py                 |      113 |        0 |    100% |           |
+| src/antenna\_designer/engine.py                     |       10 |        1 |     90% |        30 |
+| src/antenna\_designer/engines/\_\_init\_\_.py       |        2 |        0 |    100% |           |
+| src/antenna\_designer/engines/pynec.py              |       75 |        4 |     95% |40, 76, 78, 83 |
+| src/antenna\_designer/far\_field.py                 |       74 |        0 |    100% |           |
 | src/antenna\_designer/opt.py                        |       39 |        1 |     97% |        53 |
-| src/antenna\_designer/sim.py                        |       45 |        1 |     98% |        33 |
-| src/antenna\_designer/sweep.py                      |      128 |        7 |     95% |     86-95 |
+| src/antenna\_designer/sim.py                        |        2 |        0 |    100% |           |
+| src/antenna\_designer/sweep.py                      |      123 |        7 |     94% |     77-86 |
 | src/antenna\_designer/transform.py                  |       42 |        1 |     98% |        73 |
-| **TOTAL**                                           |  **996** |  **108** | **89%** |           |
+| **TOTAL**                                           |  **996** |  **112** | **89%** |           |
 
 
 ## Setup coverage badge
