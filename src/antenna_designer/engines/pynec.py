@@ -4,13 +4,25 @@ import PyNEC as nec
 from ..engine import FarField, SimulationEngine
 
 
+DEFAULT_GROUND = ("finite", 10.0, 0.002)  # (kind, dielectric, conductivity)
+
+
 class PyNECEngine(SimulationEngine):
     supports_far_field = True
 
-    def __init__(self, builder):
+    def __init__(self, builder, *, ground=DEFAULT_GROUND):
+        """
+        ground:
+          None or "free"               — no gn_card (free space)
+          "pec"                        — perfectly conducting ground
+          ("finite", eps_r, sigma)     — Sommerfeld finite ground (default,
+                                         matches the historical hard-coded
+                                         eps_r=10, sigma=0.002)
+        """
         super().__init__(builder)
         self.tups = builder.build_wires()
         self.tls = builder.build_tls()
+        self.ground = ground
         self.excitation_pairs = None
         self._build_geometry()
 
@@ -22,8 +34,6 @@ class PyNECEngine(SimulationEngine):
 
     def _build_geometry(self):
         conductivity = 5.8e7  # Copper
-        ground_conductivity = 0.002
-        ground_dielectric = 10
 
         self.c = nec.nec_context()
         geo = self.c.get_geometry()
@@ -40,10 +50,23 @@ class PyNECEngine(SimulationEngine):
             self.c.tl_card(idx1, seg1, idx2, seg2, impedance, length, 0, 0, 0, 0)
 
         self.c.ld_card(5, 0, 0, 0, conductivity, 0.0, 0.0)
-        self.c.gn_card(0, 0, ground_dielectric, ground_conductivity, 0, 0, 0, 0)
+        self._apply_ground_card()
 
         for tag, sub_index, voltage in self.excitation_pairs:
             self.c.ex_card(0, tag, sub_index, 0, voltage.real, voltage.imag, 0, 0, 0, 0)
+
+    def _apply_ground_card(self):
+        g = self.ground
+        if g is None or g == "free":
+            return  # no gn_card -> free space
+        if g == "pec":
+            self.c.gn_card(1, 0, 0, 0, 0, 0, 0, 0)
+            return
+        if isinstance(g, tuple) and len(g) == 3 and g[0] == "finite":
+            _, eps_r, sigma = g
+            self.c.gn_card(0, 0, eps_r, sigma, 0, 0, 0, 0)
+            return
+        raise ValueError(f"unrecognised ground spec: {g!r}")
 
     def _set_freq_and_execute(self):
         self.c.fr_card(0, 1, self.builder.freq, 0)
