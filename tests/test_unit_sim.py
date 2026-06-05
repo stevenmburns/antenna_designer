@@ -26,7 +26,7 @@ def mock_geometry(self):
     self.c = FakePyNEC()
     self.excitation_pairs = [(2, 1, 1+0j), (4, 2, 0.5+0j)]
 
-@patch('antenna_designer.Antenna.geometry', new=mock_geometry)
+@patch('antenna_designer.Antenna._build_geometry', new=mock_geometry)
 def test_impedence_with_mock_Antenna():
 
     a = Antenna(Builder())

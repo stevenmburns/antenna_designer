@@ -1,3 +1,6 @@
 [submodule "python-necpp"]
 	path = python-necpp
 	url = https://github.com/stevenmburns/python-necpp.git
+[submodule "pysim"]
+	path = pysim
+	url = https://github.com/stevenmburns/pysim.git
