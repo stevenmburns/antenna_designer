@@ -1,21 +1,63 @@
-"""pysim-backed SimulationEngine. Currently impedance-only; far-field is
-deferred to a follow-up PR that ports pysim's web/server.py directivity
-math into the engine."""
+"""pysim-backed SimulationEngine. Impedance via TriangularPySim;
+far-field/directivity ported from pysim/web/server.py:_compute_directivity_norm.
+"""
 from __future__ import annotations
 
 import numpy as np
 from pysim import TriangularPySim
 
-from ..engine import SimulationEngine
+from ..engine import FarField, SimulationEngine
 from ..geometry import flat_wires_to_polylines
 
 C_LIGHT = 299_792_458.0
+EPS0 = 8.854_187_817e-12
+
+
+def _polyline_knots(polyline, npe_list):
+    """Concatenated per-edge knot positions (shared corners deduped).
+    Mirrors pysim/web/server.py:_polyline_knots."""
+    parts = []
+    for i, n_e in enumerate(npe_list):
+        seg = np.linspace(polyline[i], polyline[i + 1], n_e + 1)
+        parts.append(seg if i == 0 else seg[1:])
+    return np.vstack(parts)
+
+
+def _normalise_ground(ground):
+    if ground is None or ground == "free":
+        return None
+    if ground == "pec":
+        return ("pec",)
+    if isinstance(ground, tuple) and len(ground) == 3 and ground[0] == "finite":
+        return ground
+    raise ValueError(f"unrecognised ground spec: {ground!r}")
 
 
 class PysimEngine(SimulationEngine):
-    supports_far_field = False
+    supports_far_field = True
 
-    def __init__(self, builder, *, solver=TriangularPySim, wire_radius=0.0005, n_qp_reg=4, n_qp_off=4):
+    def __init__(
+        self,
+        builder,
+        *,
+        solver=TriangularPySim,
+        wire_radius=0.0005,
+        n_qp_reg=4,
+        n_qp_off=4,
+        ground=None,
+        ground_z=0.0,
+    ):
+        """
+        ground:
+          None or "free"           — no ground (default)
+          "pec"                    — PEC plane at z=ground_z (image method)
+          ("finite", eps_r, sigma) — far-field uses PEC image + Fresnel
+                                     coefficients on the reflected component;
+                                     impedance solve still uses PEC because
+                                     TriangularPySim only models PEC ground.
+                                     Cross-validation against PyNEC's
+                                     gn_card(0,...) is approximate.
+        """
         super().__init__(builder)
         if builder.build_tls():
             raise NotImplementedError("transmission-line cards not supported by PysimEngine yet")
@@ -31,6 +73,8 @@ class PysimEngine(SimulationEngine):
         self._wire_radius = wire_radius
         self._n_qp_reg = n_qp_reg
         self._n_qp_off = n_qp_off
+        self._ground = _normalise_ground(ground)
+        self._ground_z = ground_z if self._ground is not None else None
 
     def _make_solver(self, *, wavelength):
         return self._solver(
@@ -42,6 +86,7 @@ class PysimEngine(SimulationEngine):
             wire_radius=self._wire_radius,
             n_qp_reg=self._n_qp_reg,
             n_qp_off=self._n_qp_off,
+            ground_z=self._ground_z,
         )
 
     @staticmethod
@@ -62,3 +107,142 @@ class PysimEngine(SimulationEngine):
         k_array = 2.0 * np.pi * freqs * 1e6 / C_LIGHT
         zs = s.compute_impedance_swept(k_array)
         return (self._feed_voltage * zs).reshape(-1, 1)
+
+    def _segment_dipoles(self, sim, coeffs):
+        """Returns (mid, dr, i_mid) — concatenated per-segment midpoints,
+        edge vectors, and midpoint currents from the MoM solution."""
+        knot_currents = sim.currents_at_knots(coeffs)
+        mids, drs, i_mids = [], [], []
+        for w_idx, polyline in enumerate(self._polylines):
+            knots = _polyline_knots(polyline, self._edge_segments[w_idx])
+            cur = knot_currents[w_idx]
+            drs.append(knots[1:] - knots[:-1])
+            mids.append(0.5 * (knots[1:] + knots[:-1]))
+            i_mids.append(0.5 * (cur[1:] + cur[:-1]))
+        return (
+            np.concatenate(mids, axis=0),
+            np.concatenate(drs, axis=0),
+            np.concatenate(i_mids, axis=0),
+        )
+
+    def _evaluate_M_perp(self, mid, dr, i_mid, k, theta, phi, freq_hz):
+        """|M_perp(θ,φ)|² on the (theta, phi) grids (radians).
+
+        With ground enabled, adds the geometric-image contribution with PEC
+        polarity, then layers Fresnel coefficients on the reflected wave so
+        ρ_h=−1, ρ_v=+1 recovers the PEC limit exactly. Returns a real
+        (n_theta, n_phi) array."""
+        sin_t, cos_t = np.sin(theta), np.cos(theta)
+        cos_p, sin_p = np.cos(phi), np.sin(phi)
+
+        rx = sin_t[:, None] * cos_p[None, :]
+        ry = sin_t[:, None] * sin_p[None, :]
+        rz = np.broadcast_to(cos_t[:, None], rx.shape)
+        rhat = np.stack([rx, ry, rz], axis=-1)
+
+        phase = k * np.einsum("ijc,nc->ijn", rhat, mid)
+        expp = np.exp(1j * phase)
+        weighted = i_mid[:, None] * dr
+        M = np.einsum("ijn,nc->ijc", expp, weighted)
+        m_dot_r = np.sum(M * rhat, axis=-1)
+        M_perp = M - m_dot_r[..., None] * rhat
+
+        if self._ground is None:
+            return np.sum(M_perp.real**2 + M_perp.imag**2, axis=-1)
+
+        # Geometric image — horizontal current flipped, vertical preserved,
+        # mirrored across z = ground_z.
+        z0 = self._ground_z
+        mid_img = mid.copy()
+        mid_img[:, 2] = 2 * z0 - mid[:, 2]
+        dr_img = dr * np.array([-1.0, -1.0, 1.0])
+        weighted_img = i_mid[:, None] * dr_img
+        phase_img = k * np.einsum("ijc,nc->ijn", rhat, mid_img)
+        expp_img = np.exp(1j * phase_img)
+        M_img = np.einsum("ijn,nc->ijc", expp_img, weighted_img)
+        m_img_dot_r = np.sum(M_img * rhat, axis=-1)
+        M_img_perp = M_img - m_img_dot_r[..., None] * rhat
+
+        if self._ground[0] == "pec":
+            M_perp = M_perp + M_img_perp
+            return np.sum(M_perp.real**2 + M_perp.imag**2, axis=-1)
+
+        # ("finite", eps_r, sigma): polarisation basis at each ray and
+        # Fresnel reflection on the image wave.
+        _, eps_r, sigma = self._ground
+        s = np.sqrt(rx * rx + ry * ry)
+        s_safe = np.where(s > 1e-12, s, 1.0)
+        h_hat = np.stack([-ry / s_safe, rx / s_safe, np.zeros_like(rx)], axis=-1)
+        v_hat = np.stack([-rx * rz / s_safe, -ry * rz / s_safe, s], axis=-1)
+        M_img_h = np.sum(M_img_perp * h_hat, axis=-1)
+        M_img_v = np.sum(M_img_perp * v_hat, axis=-1)
+
+        omega = 2 * np.pi * freq_hz
+        eps_c = eps_r - 1j * sigma / (omega * EPS0)
+        cos_ti = rz
+        sin2_ti = s * s
+        Q = np.sqrt(eps_c - sin2_ti)
+        rho_h = (cos_ti - Q) / (cos_ti + Q)
+        rho_v = (eps_c * cos_ti - Q) / (eps_c * cos_ti + Q)
+
+        # PEC reflection corresponds to ρ_h=−1, ρ_v=+1. The image we built
+        # already has the PEC sign convention baked in, so we need the
+        # Fresnel-vs-PEC ratio per polarisation:
+        #     reflected_h = (−ρ_h) · M_img_h        # PEC was +1·M_img_h
+        #     reflected_v = (+ρ_v) · M_img_v        # PEC was +1·M_img_v
+        M_refl = (rho_v * M_img_v)[..., None] * v_hat - (rho_h * M_img_h)[..., None] * h_hat
+        M_perp = M_perp + M_refl
+        return np.sum(M_perp.real**2 + M_perp.imag**2, axis=-1)
+
+    def far_field(self, *, n_theta=90, n_phi=360, del_theta=1, del_phi=1):
+        assert 90 % n_theta == 0 and 90 == del_theta * n_theta
+        assert 360 % n_phi == 0 and 360 == del_phi * n_phi
+
+        wavelength = self._wavelength_for(self.builder.freq)
+        k = 2.0 * np.pi / wavelength
+        freq_hz = self.builder.freq * 1e6
+
+        sim = self._make_solver(wavelength=wavelength)
+        _z, coeffs = sim.compute_impedance()
+        mid, dr, i_mid = self._segment_dipoles(sim, coeffs)
+
+        # Cell-centred integration grid for ∫|M_perp|² dΩ. With ground the
+        # antenna only radiates into the upper hemisphere, so integrate
+        # there only (otherwise we'd double-count the image contribution
+        # against zero-amplitude below the ground plane).
+        n_th_int, n_ph_int = 90, 180
+        if self._ground is not None:
+            theta_int = (np.arange(n_th_int) + 0.5) * (np.pi / 2 / n_th_int)
+            dtheta = np.pi / 2 / n_th_int
+        else:
+            theta_int = (np.arange(n_th_int) + 0.5) * (np.pi / n_th_int)
+            dtheta = np.pi / n_th_int
+        phi_int = np.arange(n_ph_int) * (2 * np.pi / n_ph_int)
+        dphi = 2 * np.pi / n_ph_int
+
+        mag2_int = self._evaluate_M_perp(mid, dr, i_mid, k, theta_int, phi_int, freq_hz)
+        p_rad = float(np.sum(mag2_int * np.sin(theta_int)[:, None]) * dtheta * dphi)
+        if p_rad <= 0:
+            raise RuntimeError("computed zero radiated power")
+        directivity_norm = 4 * np.pi / p_rad
+
+        # Evaluate on the user grid (NEC convention: θ from 0 to 90−Δθ).
+        theta_deg = np.linspace(0, 90 - del_theta, n_theta)
+        phi_deg = np.linspace(0, 360, n_phi + 1)
+        theta_user = np.deg2rad(theta_deg)
+        phi_user = np.deg2rad(phi_deg)
+
+        mag2_user = self._evaluate_M_perp(mid, dr, i_mid, k, theta_user, phi_user, freq_hz)
+        D = directivity_norm * mag2_user
+        # Floor before log so points where M_perp is exactly zero (poles,
+        # nulls below quantisation) don't produce −inf.
+        dBi = 10.0 * np.log10(np.maximum(D, 1e-30))
+
+        rings = dBi.tolist()
+        return FarField(
+            rings=rings,
+            max_gain=float(np.max(dBi)),
+            min_gain=float(np.min(dBi)),
+            thetas=theta_deg,
+            phis=phi_deg,
+        )

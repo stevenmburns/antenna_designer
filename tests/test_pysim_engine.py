@@ -58,7 +58,51 @@ def test_pysim_matches_pynec_in_free_space():
     assert abs(z_pysim.imag - z_nec.imag) < 20.0, f"reactance diverged: nec={z_nec}, pysim={z_pysim}"
 
 
-def test_pysim_engine_declares_no_far_field():
-    assert PysimEngine.supports_far_field is False
-    with pytest.raises(NotImplementedError):
-        PysimEngine(Builder()).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+def test_pysim_engine_declares_far_field_support():
+    assert PysimEngine.supports_far_field is True
+
+
+def test_pysim_far_field_shape_matches_pynec():
+    """The FarField shape (rings dims, thetas/phis arrays) has to match
+    PyNEC's so plot_patterns, compare_patterns etc. work for both."""
+    b = Builder()
+    ff_nec = PyNECEngine(b, ground=None).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+    ff_ps = PysimEngine(b).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+    assert np.array_equal(ff_nec.thetas, ff_ps.thetas)
+    assert np.array_equal(ff_nec.phis, ff_ps.phis)
+    assert len(ff_ps.rings) == 90
+    assert len(ff_ps.rings[0]) == 361
+
+
+def test_pysim_free_space_directivity_matches_pynec():
+    """Free-space dipole peak directivity — same physical problem under
+    two independent MoM solvers. 0.1 dBi headroom is generous for what
+    is, on the dipole, sub-0.02 dBi agreement in practice."""
+    b = Builder()
+    ff_nec = PyNECEngine(b, ground=None).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+    ff_ps = PysimEngine(b).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+    assert abs(ff_ps.max_gain - ff_nec.max_gain) < 0.1, (ff_nec.max_gain, ff_ps.max_gain)
+
+
+def test_pysim_pec_ground_directivity_matches_pynec():
+    """PEC ground via image method on both sides. Tight agreement
+    expected since the physics is identical."""
+    b = Builder()
+    ff_nec = PyNECEngine(b, ground="pec").far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+    ff_ps = PysimEngine(b, ground="pec").far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+    assert abs(ff_ps.max_gain - ff_nec.max_gain) < 0.1, (ff_nec.max_gain, ff_ps.max_gain)
+
+
+def test_pysim_finite_ground_returns_sane_values():
+    """Finite ground in PysimEngine is PEC-image-plus-Fresnel post-
+    processing; PyNEC's gn_card(0,...) uses a more sophisticated
+    Sommerfeld/Norton model. The two diverge by ~1.5 dBi on a 10m
+    dipole over (eps_r=10, sigma=0.002) ground. Don't claim equality;
+    just sanity-check the output."""
+    b = Builder()
+    ff = PysimEngine(b, ground=("finite", 10.0, 0.002)).far_field(
+        n_theta=90, n_phi=360, del_theta=1, del_phi=1
+    )
+    assert 0.0 < ff.max_gain < 15.0, ff.max_gain
+    assert ff.min_gain < ff.max_gain
+    assert np.all(np.isfinite([ff.max_gain, ff.min_gain]))
