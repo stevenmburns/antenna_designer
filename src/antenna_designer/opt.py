@@ -6,16 +6,16 @@ import numpy as np
 #from scipy.optimize import minimize_scalar
 from scipy.optimize import minimize
 
-def optimize(antenna_builder, independent_variable_names, *, z0=50, resonance=False, opt_gain=False, bounds=None, fractions=None):
+def optimize(antenna_builder, independent_variable_names, *, z0=50, resonance=False, opt_gain=False, bounds=None, fractions=None, engine=Antenna):
 
   def objective(independent_variables):
 
       for v, nm in zip(independent_variables, independent_variable_names):
         setattr(antenna_builder, nm, v)
 
-      a = Antenna(antenna_builder)
+      a = engine(antenna_builder)
       zs = a.impedance()
-      _, max_gain, _, _, _ = get_elevation(a)      
+      _, max_gain, _, _, _ = get_elevation(a)
       del a
 
 

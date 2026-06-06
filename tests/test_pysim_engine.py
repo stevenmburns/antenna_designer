@@ -134,3 +134,56 @@ def test_compare_patterns_backwards_compatible_with_bare_builders(tmp_path):
     out = tmp_path / "cmp.png"
     ant.compare_patterns([Builder(), Builder()], fn=str(out))
     assert out.exists() and out.stat().st_size > 0
+
+
+def test_sweep_freq_accepts_engine_factory(tmp_path):
+    """sweep_freq's `engine=` kwarg accepts any callable (builder) ->
+    SimulationEngine. functools.partial is the ergonomic way to bind
+    construction kwargs like ground."""
+    import matplotlib
+    matplotlib.use("Agg")
+    from functools import partial
+    import antenna_designer as ant
+    out = tmp_path / "sf.png"
+    ant.sweep_freq(
+        Builder(),
+        rng=(28.0, 29.0),
+        npoints=5,
+        fn=str(out),
+        engine=partial(PysimEngine),
+    )
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_sweep_accepts_engine_factory(tmp_path):
+    import matplotlib
+    matplotlib.use("Agg")
+    import antenna_designer as ant
+    out = tmp_path / "sw.png"
+    ant.sweep(
+        Builder(),
+        "length",
+        center=5.032,
+        fraction=1.05,
+        npoints=3,
+        fn=str(out),
+        engine=PysimEngine,
+    )
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_sweep_gain_accepts_engine_factory(tmp_path):
+    import matplotlib
+    matplotlib.use("Agg")
+    import antenna_designer as ant
+    out = tmp_path / "sg.png"
+    ant.sweep_gain(
+        Builder(),
+        "length",
+        center=5.032,
+        fraction=1.05,
+        npoints=3,
+        fn=str(out),
+        engine=PysimEngine,
+    )
+    assert out.exists() and out.stat().st_size > 0
