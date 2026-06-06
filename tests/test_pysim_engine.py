@@ -106,3 +106,31 @@ def test_pysim_finite_ground_returns_sane_values():
     assert 0.0 < ff.max_gain < 15.0, ff.max_gain
     assert ff.min_gain < ff.max_gain
     assert np.all(np.isfinite([ff.max_gain, ff.min_gain]))
+
+
+def test_compare_patterns_accepts_engine_instances(tmp_path):
+    """End-to-end: compare_patterns with a mix of pre-built engines
+    (so the caller picks ground / backend per item) should run to
+    completion and produce a non-empty PNG."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import antenna_designer as ant
+    b = Builder()
+    out = tmp_path / "cmp.png"
+    ant.compare_patterns(
+        [PyNECEngine(b, ground=None), PysimEngine(b)],
+        fn=str(out),
+        builder_names=["pynec-free", "pysim-free"],
+    )
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_compare_patterns_backwards_compatible_with_bare_builders(tmp_path):
+    """Passing AntennaBuilder instances (the historical API) must keep
+    working — they get wrapped with the default Antenna alias."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import antenna_designer as ant
+    out = tmp_path / "cmp.png"
+    ant.compare_patterns([Builder(), Builder()], fn=str(out))
+    assert out.exists() and out.stat().st_size > 0
