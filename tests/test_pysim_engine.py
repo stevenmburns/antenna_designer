@@ -363,6 +363,25 @@ def test_pysim_multifeed_bowtie_1x2_phased_matches_pynec():
     assert abs(z_nec[0] - z_nec[1]) > 10.0
 
 
+def test_pysim_multifeed_far_field_matches_pynec():
+    """Bowtie 1×2 phased-array peak directivity, two backends. In-phase
+    drive gives a broadside lobe; 90° drive squints. Both must agree
+    with PyNEC because the far-field integrand is just the superposed
+    multi-source current pattern — a feed-ordering or voltage-sign bug
+    in the multi-feed RHS would show up as a different lobe shape and
+    a different peak. 0.1 dBi headroom matches the single-feed dipole
+    test; observed delta is ~0.02 dBi on both phasings."""
+    from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+    for phase_lr_deg in (0.0, 90.0):
+        b = B12()
+        b.phase_lr = phase_lr_deg
+        ff_p = PysimEngine(b).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+        ff_n = PyNECEngine(b, ground=None).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+        assert abs(ff_p.max_gain - ff_n.max_gain) < 0.1, (
+            f"phase={phase_lr_deg}: pysim={ff_p.max_gain}, pynec={ff_n.max_gain}"
+        )
+
+
 def test_pysim_multifeed_impedance_sweep_shape():
     """Multi-feed impedance_sweep must return (n_freqs, n_feeds) to
     match PyNECEngine's shape contract."""
