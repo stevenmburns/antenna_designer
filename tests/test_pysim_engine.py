@@ -313,6 +313,84 @@ def test_pysim_triangular_bowtie_runs():
     assert abs(z.imag) < 100, z
 
 
+def test_translator_emits_one_feed_per_excited_tuple():
+    """Multi-feed builders (arrays) should produce one entry in `feeds`
+    per excited wire tuple, with voltages from the builder phasors."""
+    from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+    b = B12()
+    b.phase_lr = 90.0
+    out = flat_wires_to_polylines(b.build_wires())
+    assert len(out["feeds"]) == 2
+    v0, v1 = out["feeds"][0][2], out["feeds"][1][2]
+    # First feed is V=1+0j; second is the phase_lr phasor at 90°.
+    assert abs(v0 - (1 + 0j)) < 1e-12
+    assert abs(v1 - 1j) < 1e-12
+    # Back-compat scalars point at the first feed.
+    assert out["feed_wire_index"] == out["feeds"][0][0]
+    assert out["feed_arclength"] == out["feeds"][0][1]
+    assert out["feed_voltage"] == out["feeds"][0][2]
+
+
+def test_pysim_multifeed_bowtie_1x2_matches_pynec():
+    """Symmetric in-phase drive on the bowtie 1×2 phased array: per-feed
+    Z from PysimEngine must agree with PyNEC, and the two feeds should
+    return ~equal Z by symmetry. 5% relative + 3 Ω absolute slack covers
+    the basis-vs-NEC gap that pysim's own bowtie-1×2 parity test uses."""
+    from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+    b = B12()
+    z_ps = PysimEngine(b).impedance()
+    z_nec = PyNECEngine(b, ground=None).impedance()
+    assert len(z_ps) == len(z_nec) == 2
+    for zp, zn in zip(z_ps, z_nec):
+        assert abs(zp - zn) < 0.05 * abs(zn) + 3.0, (zp, zn)
+    # In-phase symmetric drive → the two ports see the same Z.
+    assert abs(z_ps[0] - z_ps[1]) < 1.0
+
+
+def test_pysim_multifeed_bowtie_1x2_phased_matches_pynec():
+    """90° phasing makes Z₀ ≠ Z₁ via mutual coupling. Catches feed-
+    ordering / voltage-sign bugs that a symmetric drive would mask."""
+    from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+    b = B12()
+    b.phase_lr = 90.0
+    z_ps = PysimEngine(b).impedance()
+    z_nec = PyNECEngine(b, ground=None).impedance()
+    for zp, zn in zip(z_ps, z_nec):
+        assert abs(zp - zn) < 0.05 * abs(zn) + 3.0, (zp, zn)
+    # Asymmetry must actually appear, otherwise both backends could
+    # be silently degenerate.
+    assert abs(z_ps[0] - z_ps[1]) > 10.0
+    assert abs(z_nec[0] - z_nec[1]) > 10.0
+
+
+def test_pysim_multifeed_far_field_matches_pynec():
+    """Bowtie 1×2 phased-array peak directivity, two backends. In-phase
+    drive gives a broadside lobe; 90° drive squints. Both must agree
+    with PyNEC because the far-field integrand is just the superposed
+    multi-source current pattern — a feed-ordering or voltage-sign bug
+    in the multi-feed RHS would show up as a different lobe shape and
+    a different peak. 0.1 dBi headroom matches the single-feed dipole
+    test; observed delta is ~0.02 dBi on both phasings."""
+    from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+    for phase_lr_deg in (0.0, 90.0):
+        b = B12()
+        b.phase_lr = phase_lr_deg
+        ff_p = PysimEngine(b).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+        ff_n = PyNECEngine(b, ground=None).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+        assert abs(ff_p.max_gain - ff_n.max_gain) < 0.1, (
+            f"phase={phase_lr_deg}: pysim={ff_p.max_gain}, pynec={ff_n.max_gain}"
+        )
+
+
+def test_pysim_multifeed_impedance_sweep_shape():
+    """Multi-feed impedance_sweep must return (n_freqs, n_feeds) to
+    match PyNECEngine's shape contract."""
+    from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+    freqs = np.linspace(28.0, 29.0, 4)
+    zs = PysimEngine(B12()).impedance_sweep(freqs)
+    assert zs.shape == (4, 2), zs.shape
+
+
 def test_translator_rejects_loop_without_feed():
     """A pure cycle with no excited segment can't be handled (parasitic
     coupling not yet implemented). Should raise a clear NotImplementedError

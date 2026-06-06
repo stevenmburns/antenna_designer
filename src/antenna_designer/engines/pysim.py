@@ -74,9 +74,7 @@ class PysimEngine(SimulationEngine):
         translated = flat_wires_to_polylines(tups)
         self._polylines = translated["polylines"]
         self._edge_segments = translated["edge_segments"]
-        self._feed_wire_index = translated["feed_wire_index"]
-        self._feed_arclength = translated["feed_arclength"]
-        self._feed_voltage = translated["feed_voltage"]
+        self._feeds = translated["feeds"]
         self._junctions = translated["junctions"]
         self._solver = solver
         self._wire_radius = wire_radius
@@ -88,8 +86,7 @@ class PysimEngine(SimulationEngine):
         return self._solver(
             wires=self._polylines,
             n_per_edge_per_wire=self._edge_segments,
-            feed_wire_index=self._feed_wire_index,
-            feed_arclength=self._feed_arclength,
+            feeds=self._feeds,
             wavelength=wavelength,
             wire_radius=self._wire_radius,
             ground_z=self._ground_z,
@@ -104,7 +101,10 @@ class PysimEngine(SimulationEngine):
     def impedance(self):
         s = self._make_solver(wavelength=self._wavelength_for(self.builder.freq))
         z, _coeffs = s.compute_impedance()
-        return [self._feed_voltage * z]
+        # Single-feed path returns a scalar; multi-feed returns an array.
+        # Match PyNECEngine's list-of-Z return shape.
+        z_arr = np.atleast_1d(z)
+        return [complex(zi) for zi in z_arr]
 
     def impedance_sweep(self, freqs):
         freqs = np.asarray(freqs, dtype=float)
@@ -114,7 +114,12 @@ class PysimEngine(SimulationEngine):
         s = self._make_solver(wavelength=self._wavelength_for(freqs[0]))
         k_array = 2.0 * np.pi * freqs * 1e6 / C_LIGHT
         zs = s.compute_impedance_swept(k_array)
-        return (self._feed_voltage * zs).reshape(-1, 1)
+        # Single-feed: (n_k,); multi-feed: (n_k, n_feeds). Normalise to
+        # (n_k, n_feeds) to match PyNECEngine.
+        zs = np.asarray(zs)
+        if zs.ndim == 1:
+            zs = zs.reshape(-1, 1)
+        return zs
 
     def _segment_dipoles(self, sim, coeffs):
         """Returns (mid, dr, i_mid) — concatenated per-segment midpoints,

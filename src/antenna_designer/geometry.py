@@ -14,7 +14,8 @@ Supported topologies:
     OR at least one junction (degree >= 3); pure cycles aren't handled.
   * Any number of junctions of any degree (tees, X's, hentenna-style
     multi-junction, fandipole-style multi-spoke feeds).
-  * Exactly one excited segment per geometry.
+  * One or more excited segments per geometry (each becomes a delta-gap
+    feed in the returned `feeds` list).
 """
 from __future__ import annotations
 
@@ -33,10 +34,16 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
     Returns a dict with keys:
         polylines       : list of (M, 3) np.ndarray
         edge_segments   : list of list[int] — n_seg per edge per polyline
-        feed_wire_index : int — polyline holding the excited segment
-        feed_arclength  : float — distance along the feed polyline to
-                          the midpoint of the excited segment
-        feed_voltage    : complex
+        feeds           : list of (polyline_idx, arclength, voltage) —
+                          one entry per excited tuple, in registration
+                          order. Suitable to pass directly to
+                          TriangularPySim(feeds=...).
+        feed_wire_index : int — polyline holding the first excited
+                          segment (back-compat: feeds[0][0])
+        feed_arclength  : float — arclength of the first feed
+                          (back-compat: feeds[0][1])
+        feed_voltage    : complex — voltage of the first feed
+                          (back-compat: feeds[0][2])
         junctions       : list of list[(wire_idx, "start"|"end")] —
                           shared-node groups, suitable to pass directly
                           to TriangularPySim(junctions=...). Empty list
@@ -215,33 +222,34 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
     # (degree-1 free ends) and lone polyline starts aren't junctions.
     junctions = [ends for ends in junction_ends.values() if len(ends) >= 2]
 
-    # Locate the excitation and convert to (polyline_index, arclength).
-    excited = [(i, ev) for i, (_, _, _, ev, _) in enumerate(edges) if ev is not None]
-    if len(excited) == 0:
-        raise ValueError("no excitation found in wire list")
-    if len(excited) > 1:
-        raise NotImplementedError(
-            f"{len(excited)} excitations found; pysim engine currently "
-            "supports a single feed per geometry"
+    # Locate the excitation(s) and convert each to (polyline_idx,
+    # arclength, voltage). PyNEC feeds at segment `(n_seg+1)//2` of the
+    # excited tuple — the middle segment 1-indexed, i.e. the physical
+    # midpoint of the wire. The excited tuple is one edge of its
+    # polyline; feed at that edge's midpoint.
+    feeds = []
+    for tup_index, edge in enumerate(edges):
+        voltage = edge[3]
+        if voltage is None:
+            continue
+        feed_pl, feed_edge_idx = edge_to_polyline[tup_index]
+        polyline = polylines[feed_pl]
+        edge_lengths = np.linalg.norm(np.diff(polyline, axis=0), axis=1)
+        feed_arclength = float(
+            edge_lengths[:feed_edge_idx].sum() + 0.5 * edge_lengths[feed_edge_idx]
         )
+        feeds.append((feed_pl, feed_arclength, complex(voltage)))
 
-    tup_index, voltage = excited[0]
-    feed_pl, feed_edge_idx = edge_to_polyline[tup_index]
-    polyline = polylines[feed_pl]
-    edge_lengths = np.linalg.norm(np.diff(polyline, axis=0), axis=1)
-    # PyNEC feeds at segment `(n_seg+1)//2` of the excited tuple — the
-    # middle segment 1-indexed, i.e. the physical midpoint of the wire.
-    # The excited tuple is one edge of its polyline; feed at that edge's
-    # midpoint.
-    feed_arclength = float(
-        edge_lengths[:feed_edge_idx].sum() + 0.5 * edge_lengths[feed_edge_idx]
-    )
+    if not feeds:
+        raise ValueError("no excitation found in wire list")
 
     return {
         "polylines": polylines,
         "edge_segments": edge_segments,
-        "feed_wire_index": feed_pl,
-        "feed_arclength": feed_arclength,
-        "feed_voltage": complex(voltage),
+        "feeds": feeds,
+        # Back-compat scalars — first feed.
+        "feed_wire_index": feeds[0][0],
+        "feed_arclength": feeds[0][1],
+        "feed_voltage": feeds[0][2],
         "junctions": junctions,
     }
