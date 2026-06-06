@@ -208,3 +208,59 @@ def test_plot_patterns_pins_radial_floor(tmp_path):
     # exists; either way the file is on disk.
     assert out.exists() and out.stat().st_size > 0
     plt.close("all")
+
+
+def test_translator_handles_hentenna_tee_junctions():
+    """Hentenna has two degree-3 nodes (B, D); translator should
+    decompose into 3 polylines all running B→D, with one junction at
+    each."""
+    from antenna_designer.designs.freq_based.hentenna import Builder as H
+    out = flat_wires_to_polylines(H().build_wires())
+    assert len(out["polylines"]) == 3
+    assert len(out["junctions"]) == 2
+    # Two junctions, each with 3 polyline ends meeting.
+    assert sorted(len(j) for j in out["junctions"]) == [3, 3]
+
+
+def test_translator_handles_fandipole_high_degree_junctions():
+    """Fandipole has two degree-6 nodes (S, T): feed wire + 5 spokes
+    on each side. 5 polylines per side + 1 feed = 11 polylines."""
+    from antenna_designer.designs.fandipole import Builder as F
+    out = flat_wires_to_polylines(F().build_wires())
+    assert len(out["polylines"]) == 11
+    assert len(out["junctions"]) == 2
+    assert sorted(len(j) for j in out["junctions"]) == [6, 6]
+
+
+def test_pysim_sinusoidal_hentenna_impedance_close_to_pynec():
+    """Cross-validation on the hentenna (two tee junctions): pysim's
+    Sinusoidal basis agrees with PyNEC's free-space gn_card-disabled
+    solve to within ~10% on R and ~10 Ω on X. Triangular at the same
+    segmentation lands at a different impedance — the two basis
+    families converge to two different limits (PyNEC and Sinusoidal
+    to one, Triangular and BSpline to another), not to a common point.
+    A cross-engine bound against PyNEC therefore only makes sense for
+    Sinusoidal here. Picking a "more correct" pair is out of scope;
+    this test is just verifying that the translator's junction/feed
+    mapping is right."""
+    from pysim import SinusoidalPySim
+    from antenna_designer.designs.freq_based.hentenna import Builder as H
+    b = H()
+    z_nec = PyNECEngine(b, ground=None).impedance()[0]
+    z_ps = PysimEngine(b, solver=SinusoidalPySim).impedance()[0]
+    assert abs(z_ps.real - z_nec.real) / abs(z_nec.real) < 0.15
+    assert abs(z_ps.imag - z_nec.imag) < 15.0
+
+
+def test_pysim_sinusoidal_fandipole_runs():
+    """Fandipole has degree-6 junctions and a 1-segment feed gap. The
+    1-segment feed has zero interior knots so the Triangular tent basis
+    has no feed to land on; Sinusoidal's const-source basis lives on
+    segment centres and handles it. Just ensure it runs and produces
+    a plausible value, the multi-wire geometry has too many freedoms
+    to set a tight tolerance here."""
+    from pysim import SinusoidalPySim
+    from antenna_designer.designs.fandipole import Builder as F
+    z = PysimEngine(F(), solver=SinusoidalPySim).impedance()[0]
+    assert 20 < z.real < 200, z
+    assert abs(z.imag) < 200, z
