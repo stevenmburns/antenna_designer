@@ -7,7 +7,7 @@
 | src/antenna\_designer/\_\_init\_\_.py                    |        8 |        0 |    100% |           |
 | src/antenna\_designer/\_\_main\_\_.py                    |        0 |        0 |    100% |           |
 | src/antenna\_designer/builder.py                         |      195 |       84 |     57% |153-154, 157-195, 199-200, 203-242, 246-247, 250-286 |
-| src/antenna\_designer/cli.py                             |      162 |       12 |     93% |67, 81, 109-117, 192 |
+| src/antenna\_designer/cli.py                             |      201 |       13 |     94% |75, 89, 103, 117-125, 253 |
 | src/antenna\_designer/core.py                            |        6 |        0 |    100% |           |
 | src/antenna\_designer/designs/bowtie.py                  |       26 |        0 |    100% |           |
 | src/antenna\_designer/designs/bowtiearray2x4.py          |        7 |        0 |    100% |           |
@@ -35,7 +35,7 @@
 | src/antenna\_designer/sim.py                             |        2 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                           |      123 |        7 |     94% |     77-86 |
 | src/antenna\_designer/transform.py                       |       42 |        1 |     98% |        73 |
-| **TOTAL**                                                | **1504** |  **194** | **87%** |           |
+| **TOTAL**                                                | **1543** |  **195** | **87%** |           |
 
 
 ## Setup coverage badge
