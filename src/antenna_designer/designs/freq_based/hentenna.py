@@ -6,7 +6,7 @@ from types import MappingProxyType
 
 
 class Builder(AntennaBuilder):
-  params_100 = MappingProxyType({
+  z100_params = MappingProxyType({
     'design_freq': 28.47,
     'freq': 28.47,
     'base': 10,
@@ -15,7 +15,7 @@ class Builder(AntennaBuilder):
     'width_factor': 0.1841,
   })
 
-  params_50 = MappingProxyType({
+  z50_params = MappingProxyType({
     'design_freq': 28.47,
     'freq': 28.47,
     'base': 10,
@@ -24,7 +24,7 @@ class Builder(AntennaBuilder):
     'width_factor': 0.1378,   
   })
   
-  default_params = params_50
+  default_params = z50_params
 
   def build_wires(self):
     eps = 0.05

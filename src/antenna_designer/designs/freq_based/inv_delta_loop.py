@@ -4,7 +4,7 @@ import math
 from types import MappingProxyType
 
 class Builder(AntennaBuilder):
-  params_100ohms = MappingProxyType({
+  z100_params = MappingProxyType({
     'design_freq': 28.47,
     'freq': 28.47,
     'base': 7,
@@ -12,7 +12,7 @@ class Builder(AntennaBuilder):
     'angle_radians': 1.1284,
   })
 
-  params_200ohms = MappingProxyType({
+  z200_params = MappingProxyType({
     'design_freq': 28.47,
     'freq': 28.47,
     'base': 7,

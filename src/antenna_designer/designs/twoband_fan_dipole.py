@@ -6,7 +6,7 @@ from types import MappingProxyType
 
 class Builder(AntennaBuilder):
 
-  default_params_07 = MappingProxyType({
+  s07_params = MappingProxyType({
     'freq': 28.57,
     'freq_10': 28.57,
     'freq_12': 24.97,
@@ -22,7 +22,7 @@ class Builder(AntennaBuilder):
 
 
 
-  default_params_05 = MappingProxyType({
+  s05_params = MappingProxyType({
     'freq': 28.57,
     'freq_10': 28.57,
     'freq_12': 24.97,
@@ -36,7 +36,7 @@ class Builder(AntennaBuilder):
     'eps': 0.01
   })
 
-  default_params_03 = MappingProxyType({
+  s03_params = MappingProxyType({
     'freq': 28.57,
     'freq_10': 28.57,
     'freq_12': 24.97,
@@ -50,7 +50,7 @@ class Builder(AntennaBuilder):
     'eps': 0.01
   })
 
-  default_params_025 = MappingProxyType({
+  s025_params = MappingProxyType({
     'freq': 24.97,
     'freq_10': 28.57,
     'freq_12': 24.97,
@@ -65,7 +65,7 @@ class Builder(AntennaBuilder):
   })
 
 
-  default_params_02 = MappingProxyType({
+  s02_params = MappingProxyType({
     'freq': 24.97,
     'freq_10': 28.57,
     'freq_12': 24.97,
@@ -79,7 +79,7 @@ class Builder(AntennaBuilder):
     'eps': 0.01
   })
 
-  default_params_015 = MappingProxyType({
+  s015_params = MappingProxyType({
     'freq': 24.97,
     'freq_10': 28.57,
     'freq_12': 24.97,
@@ -93,7 +93,7 @@ class Builder(AntennaBuilder):
     'eps': 0.01
   })
 
-  default_params_01 = MappingProxyType({
+  s01_params = MappingProxyType({
     'freq': 24.97,
     'freq_10': 28.57,
     'freq_12': 24.97,
@@ -107,7 +107,7 @@ class Builder(AntennaBuilder):
     'eps': 0.01
   })
 
-  default_params_01_001 = MappingProxyType({
+  s01_eps001_params = MappingProxyType({
     'freq': 24.97,
     'freq_10': 28.57,
     'freq_12': 24.97,
@@ -121,7 +121,7 @@ class Builder(AntennaBuilder):
     'eps': 0.001
   })
 
-  default_params_current_physical = MappingProxyType({
+  current_physical_params = MappingProxyType({
     'freq': 28.47,
     'freq_10': 29.3,
     'freq_12': 26.6,
