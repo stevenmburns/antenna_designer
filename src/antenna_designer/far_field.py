@@ -1,12 +1,29 @@
 from . import Antenna
 from .core import save_or_show
+from .engine import SimulationEngine
 
 import numpy as np
 
 import matplotlib.pyplot as plt
 
-def get_pattern_rings(antenna_builder):
-  a = Antenna(antenna_builder)
+
+def _as_engine(obj):
+  """Accept either an AntennaBuilder (legacy path; wrap with the default
+  Antenna alias = PyNECEngine) or an already-constructed SimulationEngine
+  instance (lets callers pick the backend and any ground/options)."""
+  if isinstance(obj, SimulationEngine):
+    return obj
+  return Antenna(obj)
+
+
+def _default_name(obj):
+  if isinstance(obj, SimulationEngine):
+    return type(obj).__name__
+  return 'Unknown'
+
+
+def get_pattern_rings(builder_or_engine):
+  a = _as_engine(builder_or_engine)
   ff = a.far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
   del a
   return ff.rings, ff.max_gain, ff.min_gain, ff.thetas, ff.phis
@@ -58,22 +75,31 @@ def plot_patterns(rings_lst, names, thetas, phis, elevation_angle=15, fn=None, a
   save_or_show(plt, fn)
 
 
-def compare_patterns(antenna_builders, elevation_angle=15, fn=None, builder_names=None, azimuth_f=0, azimuth_r=180):
+def compare_patterns(builders_or_engines, elevation_angle=15, fn=None, builder_names=None, azimuth_f=0, azimuth_r=180):
+  """Plot azimuth + elevation cuts for a sequence of antennas.
+
+  Each item may be either an AntennaBuilder (uses the default PyNEC
+  engine) or a pre-constructed SimulationEngine instance — the latter
+  is how you pick a non-default backend or ground configuration. Pass
+  an explicit `builder_names=[...]` to control legend labels; absent
+  that, engine instances get their class name (e.g. "PyNECEngine",
+  "PysimEngine") and bare builders fall back to "Unknown" for
+  backwards compatibility."""
   if builder_names is None:
-    builder_names = ['Unknown' for _ in antenna_builders]
+    builder_names = [_default_name(b) for b in builders_or_engines]
 
   rings_lst = []
 
-  for antenna_builder in antenna_builders:
-    rings, max_gain, min_gain, thetas, phis = get_pattern_rings(antenna_builder)
+  for item in builders_or_engines:
+    rings, max_gain, min_gain, thetas, phis = get_pattern_rings(item)
     rings_lst.append(rings)
 
   plot_patterns(rings_lst, builder_names, thetas, phis, elevation_angle, fn, azimuth_f, azimuth_r)
 
 
-def pattern(antenna_builder, elevation_angle=15, fn=None):
+def pattern(builder_or_engine, elevation_angle=15, fn=None):
 
-  rings, max_gain, min_gain, thetas, phis = get_pattern_rings(antenna_builder)
+  rings, max_gain, min_gain, thetas, phis = get_pattern_rings(builder_or_engine)
 
   elevation = [ring[0] for ring in rings]
 
@@ -99,8 +125,8 @@ def pattern(antenna_builder, elevation_angle=15, fn=None):
   save_or_show(plt, fn)
 
 
-def pattern3d(antenna_builder, fn=None):
-  a = Antenna(antenna_builder)
+def pattern3d(builder_or_engine, fn=None):
+  a = _as_engine(builder_or_engine)
   ff = a.far_field(n_theta=30, n_phi=60, del_theta=3, del_phi=6)
   del a
 
