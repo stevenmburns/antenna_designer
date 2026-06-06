@@ -14,7 +14,26 @@ class Builder(AntennaBuilder):
     'angle_radians': 1.1086,
     'slant': 15,
   })
-  
+
+  slant30_params = MappingProxyType({
+    'design_freq': 28.47,
+    'freq': 28.47,
+    'base': 7,
+    'length_factor': 1.0850,
+    'angle_radians': 1.1605,
+    'slant': 30,
+  })
+
+  slant0_params = MappingProxyType({
+    'design_freq': 28.47,
+    'freq': 28.47,
+    'base': 7,
+    'length_factor': 1.0839,
+    'angle_radians': 1.0728,
+    'slant': 0,
+  })
+
+
 
   def build_wires(self):
     eps = 0.05
