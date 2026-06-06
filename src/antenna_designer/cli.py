@@ -125,6 +125,25 @@ def parse_ground(s):
     raise argparse.ArgumentTypeError(f"unrecognised --ground: {s!r}")
 
 
+def broadcast_pairs(builders, engines):
+    """Numpy-style 1D broadcast of two sequences into a list of pairs.
+
+    Equal lengths zip pairwise; a length-1 sequence broadcasts against the
+    other. Any other length mismatch raises.
+    """
+    nb, ne = len(builders), len(engines)
+    if nb == ne:
+        return list(zip(builders, engines))
+    if nb == 1:
+        return [(builders[0], e) for e in engines]
+    if ne == 1:
+        return [(b, engines[0]) for b in builders]
+    raise argparse.ArgumentTypeError(
+        f"cannot broadcast {nb} builders against {ne} engines; "
+        "lengths must match or one side must be 1"
+    )
+
+
 def parse_engine_spec(spec):
     """Parse an engine spec into (engine_name, kwargs_to_bind).
 
@@ -273,15 +292,20 @@ def cli(arguments=None):
     add_pattern_common(p)
     def f(args):
         ground = args.ground if args.ground is _GROUND_UNSET else parse_ground(args.ground)
-        engines = [(spec, make_engine_factory(spec, ground)) for spec in args.engines]
-        multi_engine = len(engines) > 1
+        pairs = broadcast_pairs(args.builders, args.engines)
+        multi_engine = len(set(args.engines)) > 1
+        multi_builder = len(set(args.builders)) > 1
         instances = []
         labels = []
-        for bname in args.builders:
-            builder_factory = get_builder(bname)
-            for espec, eng in engines:
-                instances.append(eng(builder_factory()))
-                labels.append(f'{bname}/{espec}' if multi_engine else bname)
+        for bname, espec in pairs:
+            eng = make_engine_factory(espec, ground)
+            instances.append(eng(get_builder(bname)()))
+            if multi_engine and multi_builder:
+                labels.append(f'{bname}/{espec}')
+            elif multi_engine:
+                labels.append(espec)
+            else:
+                labels.append(bname)
         compare_patterns(instances, elevation_angle=args.elevation_angle, fn=args.fn,
                          builder_names=labels, azimuth_f=args.azimuth_f, azimuth_r=args.azimuth_r)
     p.set_defaults(func=f)
