@@ -39,3 +39,12 @@ def test_cli_compare_patterns():
   ant.cli(f'compare_patterns{o}'.split())
   ant.cli(f'compare_patterns --builders invvee moxon{o}'.split())
   ant.cli(f'compare_patterns --builders invvee hexbeam{o}'.split())
+
+
+def test_cli_engine_flag():
+  """--engine pysim selects the pysim backend; --ground forces a
+  specific ground model on either engine."""
+  ant.cli(f'pattern --builder dipole --engine pysim --ground free{o}'.split())
+  ant.cli(f'pattern --builder dipole --engine pysim --ground pec{o}'.split())
+  ant.cli(f'compare_patterns --builders dipole --engine pysim --ground free{o}'.split())
+  ant.cli(f'sweep --builder dipole --npoints 3 --engine pysim --ground free{o}'.split())
