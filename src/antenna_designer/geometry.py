@@ -130,11 +130,86 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
             junction_ends[path_nodes[0]].append((polyline_idx, "start"))
             junction_ends[path_nodes[-1]].append((polyline_idx, "end"))
 
-    # Closed loops with no boundary node would leave edges unseen.
-    if not all(edge_seen):
-        raise NotImplementedError(
-            "closed loops with no junctions/endpoints are not supported"
+    # Pure-cycle components — every node degree 2, no boundary to start
+    # the walk from — are left untouched by the loop above. Cut each at
+    # its excited edge: the excited edge becomes one polyline (A→B), the
+    # rest of the cycle becomes a second polyline walked B→A the long
+    # way. The two cut nodes A and B are each registered as 2-entry
+    # junctions so pysim's KCL enforces current continuity around the
+    # loop.
+    while not all(edge_seen):
+        seed = next(i for i, seen in enumerate(edge_seen) if not seen)
+        # Flood the component reachable from `seed` through unseen edges.
+        comp_edges = []
+        stack = [seed]
+        in_comp = {seed}
+        while stack:
+            ei = stack.pop()
+            comp_edges.append(ei)
+            edge_seen[ei] = True
+            a, b, _, _, _ = edges[ei]
+            for endpoint in (a, b):
+                for _nb, eo in adj[endpoint]:
+                    if eo not in in_comp and not edge_seen[eo]:
+                        in_comp.add(eo)
+                        stack.append(eo)
+
+        excited_in_comp = [ei for ei in comp_edges if edges[ei][3] is not None]
+        if not excited_in_comp:
+            raise NotImplementedError(
+                "closed loop with no excited segment is not supported "
+                "(parasitic-only loops are not yet handled)"
+            )
+        if len(excited_in_comp) > 1:
+            raise NotImplementedError(
+                f"closed loop with {len(excited_in_comp)} excited segments "
+                "is not supported"
+            )
+
+        feed_ei = excited_in_comp[0]
+        cut_a, cut_b, feed_n_seg, _, feed_tup_idx = edges[feed_ei]
+
+        # Polyline 0 (feed): the excited edge alone, A → B.
+        feed_pl_idx = len(polylines)
+        polylines.append(np.stack([nodes[cut_a], nodes[cut_b]], axis=0))
+        edge_segments.append([feed_n_seg])
+        edge_to_polyline[feed_tup_idx] = (feed_pl_idx, 0)
+
+        # Polyline 1 (long way): walk B → ... → A via the remaining edges.
+        # The cut nodes are now polyline boundaries; the walker stops there.
+        is_boundary[cut_a] = True
+        is_boundary[cut_b] = True
+        junction_ends.setdefault(cut_a, [])
+        junction_ends.setdefault(cut_b, [])
+
+        # Undo the flood-fill's seen marks on the cycle remainder so the
+        # walker can traverse them. Keep the feed edge marked since it's
+        # already become polyline 0.
+        for ei in comp_edges:
+            if ei != feed_ei:
+                edge_seen[ei] = False
+
+        first = next(
+            (eo for _nb, eo in adj[cut_b] if eo != feed_ei and not edge_seen[eo]),
+            None,
         )
+        # In a pure cycle every node has degree 2, so there's exactly one
+        # remaining edge at cut_b after consuming the feed.
+        assert first is not None, "cycle cut left no continuation"
+        path_nodes, path_edges = walk_from(cut_b, first)
+        loop_pl_idx = len(polylines)
+        polylines.append(np.stack([nodes[n] for n in path_nodes], axis=0))
+        edge_segments.append([edges[e][2] for e in path_edges])
+        for k, e in enumerate(path_edges):
+            edge_to_polyline[edges[e][4]] = (loop_pl_idx, k)
+
+        # Register the cut endpoints as junctions: feed polyline has
+        # path [A, B] so its start=A, end=B; loop polyline was walked
+        # B → A so its start=B, end=A.
+        junction_ends[cut_a].append((feed_pl_idx, "start"))
+        junction_ends[cut_a].append((loop_pl_idx, "end"))
+        junction_ends[cut_b].append((feed_pl_idx, "end"))
+        junction_ends[cut_b].append((loop_pl_idx, "start"))
 
     # Junctions = nodes where >= 2 polylines meet. Single-end records
     # (degree-1 free ends) and lone polyline starts aren't junctions.

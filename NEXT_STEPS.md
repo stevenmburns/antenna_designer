@@ -17,61 +17,29 @@ Cross-validation at design freq, free space, against PyNEC: ≤ 0.1 dBi peak dir
 
 These are the topologies `PysimEngine` currently rejects. PyNECEngine is unaffected — these only matter if you're cross-validating with pysim or using it as the production backend.
 
-| limitation | affected designs (today) | severity |
+| limitation | affected designs (today) | status |
 |---|---|---|
-| pure closed loops (no degree-1 endpoint, no degree-3+ junction in any component) | `bowtie`, `freq_based.delta_loop`, `freq_based.diamond_loop`, `freq_based.inv_delta_loop`, `freq_based.folded_invvee`, `freq_based.delta_loop_slanted{,2,3}` | translator-only fix, no upstream pysim work needed |
+| ~~pure closed loops~~ | ~~bowtie, delta_loop, diamond_loop, inv_delta_loop, folded_invvee, delta_loop_slanted{,2,3}~~ | **done** — cut-at-feed-edge in `flat_wires_to_polylines` |
 | multiple excitations (`ex_card` voltage on more than one segment) | every array design — `invveearray`, `moxonarray`, `yagiarray`, `bowtiearray*`, `delta_looparray*`, `hentenna_array`, `hourglass_array`, `folded_invveearray`, `diamond_loop_turnstile` | deeper PysimEngine + likely upstream pysim change |
 | transmission-line cards (`tl_card`) | `freq_based.delta_looparray_with_tls` | upstream pysim has no equivalent today |
 
-## Next branch: closed-loop support in the translator
+## ~~Next branch: closed-loop support in the translator~~ — landed
 
-**Goal**: lift the "closed loops with no junctions/endpoints" `NotImplementedError` in `flat_wires_to_polylines` so `bowtie` and the delta/diamond loops can be solved by `PysimEngine`.
+Implementation: after the existing junction/endpoint walker finishes, any unwalked edges belong to pure-cycle components. The translator floods each cycle, locates its excited edge, and cuts there — emitting the excited edge as a single-edge polyline and the rest of the loop as a second polyline running the long way back. Both cut endpoints become 2-entry junctions so pysim's KCL closes the loop.
 
-### What "closed loop" means here
+Surprise relative to the plan: **bowtie is a pure cycle, not a degree-3 case**. The two triangles share corners at `(±y, 0)` but each triangle only contributes one edge incident at the shared corner, leaving those corners degree-2. The whole bowtie is a single 10-edge cycle with one excited segment (the lower triangle's centre gap) and one passive segment (the upper triangle's centre gap, no `ex_card`). It falls out of the same cut-at-excited-edge path with no special handling.
 
-A connected component in the wire graph where every node has degree 2 — no degree-1 free ends, no degree-3+ junctions. The current walker can't start because it iterates only boundary nodes. The excitation lives on one of the loop's edges.
+Cross-validation at design freq, free space (R, X in Ω):
 
-Concrete shape, from `bowtie.build_wires()`:
+| design | PyNEC | pysim Sinusoidal | pysim Triangular |
+|---|---|---|---|
+| bowtie | 188.6, +16.3 | 186.1, +14.2 | 187.7, +13.9 |
+| delta_loop | 113.4, +46.1 | 110.5, +43.9 | 110.5, +42.7 |
+| diamond_loop | 219.7, +60.1 | 216.8, +58.0 | 220.7, +57.6 |
 
-```
-A → B → C → D → E → A     (closed loop, all nodes degree 2)
-                  ^
-                  feed gap somewhere along this chain
-```
+Both pysim bases agree with PyNEC to ~1–3 % R and a few Ω X on the closed-loop designs (tighter than the hentenna because there are no degree-3 junctions adding extra basis-family bias). All six previously-blocked closed-loop designs now translate cleanly; the remaining 16 blocked designs are *all* multi-feed arrays (no more closed-loop blockers in the codebase).
 
-(Bowtie is actually two triangles sharing a feed gap, so it has *two* loops sharing two nodes — degenerate-tee territory. Single delta loop is the canonical pure-cycle case.)
-
-### Approach
-
-1. **Detect pure cycles**. After the existing junction/endpoint walker finishes, any remaining unwalked edges belong to pure-cycle components. Group those edges by connected component.
-
-2. **Choose a cut point** in each cycle. Two reasonable rules; pick whichever makes feed placement cleanest:
-
-   - **Cut at the excited edge** if the cycle contains the feed. The excited tuple becomes its own polyline (start ↔ end of the feed edge), and a *second* polyline runs the long way around the loop, connecting the same two nodes. The two polylines share both endpoints, which makes those endpoints degree-2 junctions in pysim's `junctions=` sense. Cleanest because the feed-arclength computation is identical to the open-polyline case.
-
-   - **Cut at an arbitrary node** if the cycle has no feed (parasitic loop coupling). Same junction-pair pattern; feed handling unchanged.
-
-3. **Emit the junction list**. The two cut endpoints each get a 2-element junction record `[(loop_polyline_0, "start"), (loop_polyline_1, "start")]` and `[(loop_polyline_0, "end"), (loop_polyline_1, "end")]`. Pysim's KCL Lagrange multiplier rows then enforce current continuity around the loop.
-
-4. **Compose with existing junction logic**. The translator already handles arbitrary-degree junctions for the non-cycle case (hentenna, fandipole). The cycle case is conceptually "two polylines sharing both endpoints" — the existing junction emission code should compose if we just append to the `junctions` dict already in flight.
-
-### Bowtie wrinkle
-
-Bowtie's two triangles share a common feed-gap edge: degree-2 nodes everywhere within each triangle, but the two feed-gap endpoints are each degree-3 (one edge of each triangle plus the feed gap). So it's already a junction-bearing component, not a pure cycle — the current translator's degree check should already accept it, and the failure mode reported in the inventory is the *no-boundary* check tripping because there are still no degree-1 nodes. Need to soften that check: "has at least one boundary node OR was reachable via junctions". Bowtie should fall out of step 1 for free once the walker considers junction nodes as valid starting points for cycle traversal too.
-
-Verify on bowtie specifically — it may need no special handling beyond making the no-boundary error less paranoid.
-
-### Tests
-
-- Translator structure check on `bowtie`, `freq_based.delta_loop`, `freq_based.diamond_loop`: expected polyline / junction counts.
-- Loose impedance bound for SinusoidalPySim vs PyNECEngine (free space) on `delta_loop`. Delta loops are textbook ~100 Ω at resonance; a < 15 % R / < 15 Ω X bound should be safe.
-- Existing dipole/hentenna/fandipole tests continue to pass — the cycle code path doesn't touch them.
-
-### Out of scope for that branch
-
-- Multi-feed arrays (bucket 2 above). Separate PR, needs upstream pysim work.
-- `tl_card` (bucket 3). Separate concern; likely "document as PyNEC-only" rather than implement.
-- Auto-refining short feed segments. The fandipole's `n_seg1=1` feed-gap trick that breaks Triangular but works under Sinusoidal is a basis-selection question, not a geometry-translation question.
+Parasitic-only loops (a cycle with no excited segment, no other component) raise a clear `NotImplementedError` rather than crashing inside pysim. Loops with multiple excitations also raise specifically. Neither case appears in `designs/`.
 
 ## Other follow-ups (lower priority)
 
