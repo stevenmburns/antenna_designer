@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 import skrf
 import skrf.plotting
 
-def build_and_get_elevation(antenna_builder):
-  a = Antenna(antenna_builder)
+def build_and_get_elevation(antenna_builder, *, engine=Antenna):
+  a = engine(antenna_builder)
   return get_elevation(a)
 
 def resolve_range(default_value, rng, center, fraction):
@@ -31,7 +31,7 @@ def gen_xs(default_value, rng, center, fraction, npoints):
     print("Range includes more than just a point and npoints == 1. Using the lower range bound.")
   return np.linspace(rng[0],rng[1],npoints)
 
-def sweep_freq(antenna_builder, *, z0=200, rng=None, center=None, fraction=None, npoints=21, fn=None):
+def sweep_freq(antenna_builder, *, z0=200, rng=None, center=None, fraction=None, npoints=21, fn=None, engine=Antenna):
 
   rng = resolve_range(antenna_builder.freq, rng, center, fraction)
 
@@ -41,7 +41,7 @@ def sweep_freq(antenna_builder, *, z0=200, rng=None, center=None, fraction=None,
 
   xs = np.linspace(min_freq, max_freq, n_freq+1)
 
-  a = Antenna(antenna_builder)
+  a = engine(antenna_builder)
   zs = a.impedance_sweep(xs)
   del a
 
@@ -72,7 +72,7 @@ def sweep_freq(antenna_builder, *, z0=200, rng=None, center=None, fraction=None,
   save_or_show(plt, fn)
 
 
-def sweep_patterns(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=3, fn=None, elevation_angle=15, azimuth_f=0, azimuth_r=180):
+def sweep_patterns(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=3, fn=None, elevation_angle=15, azimuth_f=0, azimuth_r=180, engine=Antenna):
 
   xs = gen_xs(getattr(antenna_builder, nm), rng, center, fraction, npoints)
 
@@ -80,23 +80,23 @@ def sweep_patterns(antenna_builder, nm, *, rng=None, center=None, fraction=None,
 
   for x in xs:
     setattr(antenna_builder, nm, x)
-    rings, max_gain, min_gain, thetas, phis = get_pattern_rings(antenna_builder)
+    rings, max_gain, min_gain, thetas, phis = get_pattern_rings(engine(antenna_builder))
     rings_lst.append(rings)
 
   plot_patterns(rings_lst, (f'{x:.3f}' for x in xs), thetas, phis, fn=fn, elevation_angle=elevation_angle, azimuth_f=azimuth_f, azimuth_r=azimuth_r)
 
-def sweep_gain(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, fn=None):
+def sweep_gain(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, fn=None, engine=Antenna):
 
   xs = gen_xs(getattr(antenna_builder, nm), rng, center, fraction, npoints)
 
   gs = []
   for x in xs:
     setattr(antenna_builder, nm, x)
-    _, max_gain, _, _, _ = build_and_get_elevation(antenna_builder)
+    _, max_gain, _, _, _ = build_and_get_elevation(antenna_builder, engine=engine)
     gs.append(max_gain)
 
   gs = np.array(gs)
-  
+
   fig, ax0 = plt.subplots()
   color = 'tab:red'
   ax0.set_xlabel(nm)
@@ -107,19 +107,19 @@ def sweep_gain(antenna_builder, nm, *, rng=None, center=None, fraction=None, npo
   save_or_show(plt, fn)
 
 
-def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, use_smithchart=False, z0=50, markers=[], fn=None):
+def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=21, use_smithchart=False, z0=50, markers=[], fn=None, engine=Antenna):
 
   xs = gen_xs(getattr(antenna_builder, nm), rng, center, fraction, npoints)
 
   zs = []
   for x in xs:
     setattr(antenna_builder, nm, x)
-    zs.append(Antenna(antenna_builder).impedance())
+    zs.append(engine(antenna_builder).impedance())
 
   marker_zs = []
   for x in markers:
     setattr(antenna_builder, nm, x)
-    marker_zs.append(Antenna(antenna_builder).impedance())
+    marker_zs.append(engine(antenna_builder).impedance())
 
   zs = np.array(zs)
   marker_xs = np.array(markers)
@@ -142,7 +142,7 @@ def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=
         normalized_zs = marker_zs/z0
         reflection_coefficients = (normalized_zs-1)/(normalized_zs+1)
         skrf.plotting.plot_smith(reflection_coefficients, color=color, draw_labels=True, chart_type='z', marker='s', linestyle='None')
-      
+
   else:
     fig, ax0 = plt.subplots()
     color = 'tab:red'
@@ -168,6 +168,3 @@ def sweep(antenna_builder, nm, *, rng=None, center=None, fraction=None, npoints=
     fig.tight_layout()
 
   save_or_show(plt, fn)
-
-
-
