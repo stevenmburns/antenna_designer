@@ -264,3 +264,65 @@ def test_pysim_sinusoidal_fandipole_runs():
     z = PysimEngine(F(), solver=SinusoidalPySim).impedance()[0]
     assert 20 < z.real < 200, z
     assert abs(z.imag) < 200, z
+
+
+def test_translator_handles_bowtie_closed_cycle():
+    """Bowtie is a single 10-edge closed cycle (each triangle's corners
+    share one edge per triangle, leaving every node degree-2). Cut at
+    the excited edge: feed becomes a 1-edge polyline, the rest becomes
+    a 9-edge polyline running the long way back."""
+    from antenna_designer.designs.bowtie import Builder as BT
+    out = flat_wires_to_polylines(BT().build_wires())
+    assert len(out["polylines"]) == 2
+    # Both polylines share both endpoints (the cut points), so both
+    # cut nodes are 2-entry junctions.
+    assert sorted(len(j) for j in out["junctions"]) == [2, 2]
+    feed_pl = out["polylines"][out["feed_wire_index"]]
+    assert feed_pl.shape == (2, 3)
+
+
+def test_translator_handles_delta_loop_pure_cycle():
+    from antenna_designer.designs.freq_based.delta_loop import Builder as DL
+    out = flat_wires_to_polylines(DL().build_wires())
+    assert len(out["polylines"]) == 2
+    assert sorted(len(j) for j in out["junctions"]) == [2, 2]
+    # Delta loop has 4 edges total: 1 becomes the feed polyline, 3 the loop.
+    assert sorted(len(s) for s in out["edge_segments"]) == [1, 3]
+
+
+def test_pysim_sinusoidal_delta_loop_close_to_pynec():
+    """Closed-loop cross-validation: PyNEC and Sinusoidal agree on a
+    canonical pure-cycle geometry. Tighter bound than the hentenna test
+    because there are no tee junctions adding extra basis-family bias."""
+    from pysim import SinusoidalPySim
+    from antenna_designer.designs.freq_based.delta_loop import Builder as DL
+    b = DL()
+    z_nec = PyNECEngine(b, ground=None).impedance()[0]
+    z_ps = PysimEngine(b, solver=SinusoidalPySim).impedance()[0]
+    assert abs(z_ps.real - z_nec.real) / abs(z_nec.real) < 0.05
+    assert abs(z_ps.imag - z_nec.imag) < 5.0
+
+
+def test_pysim_triangular_bowtie_runs():
+    """Triangular handles the bowtie because its feed gap is n_seg=3
+    (interior tent basis available). Verifies the closed-loop path
+    doesn't trip Triangular's feed-basis lookup."""
+    from antenna_designer.designs.bowtie import Builder as BT
+    z = PysimEngine(BT()).impedance()[0]
+    assert 100 < z.real < 300, z
+    assert abs(z.imag) < 100, z
+
+
+def test_translator_rejects_loop_without_feed():
+    """A pure cycle with no excited segment can't be handled (parasitic
+    coupling not yet implemented). Should raise a clear NotImplementedError
+    rather than crashing inside pysim."""
+    # Synthesise a 4-tuple cycle around a square, no excitation.
+    tups = [
+        ((0, 0, 0), (1, 0, 0), 5, None),
+        ((1, 0, 0), (1, 1, 0), 5, None),
+        ((1, 1, 0), (0, 1, 0), 5, None),
+        ((0, 1, 0), (0, 0, 0), 5, None),
+    ]
+    with pytest.raises(NotImplementedError, match="closed loop"):
+        flat_wires_to_polylines(tups)
