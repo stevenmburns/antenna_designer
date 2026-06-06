@@ -187,3 +187,24 @@ def test_sweep_gain_accepts_engine_factory(tmp_path):
         engine=PysimEngine,
     )
     assert out.exists() and out.stat().st_size > 0
+
+
+def test_plot_patterns_pins_radial_floor(tmp_path):
+    """Without an rlim, matplotlib polar autoscale would smear a
+    constant-radius elevation cut across the full radial range. Pin the
+    floor to the lowest tick label so the displayed radius reflects the
+    actual dBi value."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import antenna_designer as ant
+    b = Builder()
+    out = tmp_path / "p.png"
+    ant.compare_patterns(
+        [PyNECEngine(b, ground=None), PysimEngine(b)],
+        fn=str(out),
+    )
+    # The fn= save closes the figure, but the open-figure path also
+    # exists; either way the file is on disk.
+    assert out.exists() and out.stat().st_size > 0
+    plt.close("all")

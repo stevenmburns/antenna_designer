@@ -22,6 +22,29 @@ def _default_name(obj):
   return 'Unknown'
 
 
+# Visual floor for dBi polar plots. Without an explicit rmin matplotlib
+# autoscales to data extent, so a constant-radius cut (e.g. an elevation
+# slice along a horizontal dipole's broadside direction, gain ≈ const)
+# gets smeared across the entire radial range and a 0.02 dBi difference
+# between two engines reads as "one curve is at the rim, the other at
+# the centre". Pinning the floor to the lowest labelled tick keeps
+# constant curves at their actual dBi position.
+_DBI_FLOOR = -12
+
+
+def _init_dbi_polar(ax):
+  ax.set_rticks([-12, -6, 0, 6, 12])
+  ax.set_rmin(_DBI_FLOOR)
+
+
+def _finalise_dbi_polar(ax):
+  # Let the top expand if data exceeds the highest labelled tick, but
+  # never shrink below it — otherwise a low-gain pattern looks identical
+  # in shape to a high-gain one because both fill the axis.
+  top = max(12, ax.get_ylim()[1])
+  ax.set_ylim(_DBI_FLOOR, top)
+
+
 def get_pattern_rings(builder_or_engine):
   a = _as_engine(builder_or_engine)
   ff = a.far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
@@ -36,13 +59,14 @@ def get_elevation(a):
 def plot_patterns(rings_lst, names, thetas, phis, elevation_angle=15, fn=None, azimuth_f=0, azimuth_r=180):
   fig, axes = plt.subplots(ncols=2, subplot_kw={'projection': 'polar'}, figsize=(12,8))
 
-  axes[0].set_rticks([-12, -6, 0, 6, 12])
+  _init_dbi_polar(axes[0])
 
   for nm, rings in zip(names, rings_lst):
     for theta, ring in list(zip(thetas, rings)):
       if abs(theta-(90-elevation_angle)) < 0.1:
         axes[0].plot(np.deg2rad(phis),ring,marker='',label=f"{(90-theta):.0f} {nm}")
 
+  _finalise_dbi_polar(axes[0])
   axes[0].legend(loc="lower left")
 
   n = len(rings_lst[0][0])
@@ -67,11 +91,12 @@ def plot_patterns(rings_lst, names, thetas, phis, elevation_angle=15, fn=None, a
   elevations = [list(reversed([ring[azimuth_f] for ring in rings]))+[ring[azimuth_r] for ring in rings] for rings in rings_lst]
   el_thetas = list(reversed(list(90-thetas))) + list(90+thetas)
 
-  axes[1].set_rticks([-12, -6, 0, 6, 12])
+  _init_dbi_polar(axes[1])
 
   for elevation in elevations:
     axes[1].plot(np.deg2rad(el_thetas),elevation,marker='')
 
+  _finalise_dbi_polar(axes[1])
   save_or_show(plt, fn)
 
 
@@ -105,12 +130,13 @@ def pattern(builder_or_engine, elevation_angle=15, fn=None):
 
   fig, axes = plt.subplots(ncols=2, subplot_kw={'projection': 'polar'})
 
-  axes[0].set_rticks([-12, -6, 0, 6, 12])
+  _init_dbi_polar(axes[0])
 
   for theta, ring in list(zip(thetas, rings)):
     if abs(theta-(90-elevation_angle)) < 0.1:
       axes[0].plot(np.deg2rad(phis),ring,marker='',label=f"{(90-theta):.0f}")
 
+  _finalise_dbi_polar(axes[0])
   axes[0].legend(loc="lower left")
 
   n = len(rings[0])
@@ -118,10 +144,11 @@ def pattern(builder_or_engine, elevation_angle=15, fn=None):
   elevation = list(reversed([ring[0] for ring in rings]))+[ring[(n-1)//2] for ring in rings]
   el_thetas = list(reversed(list(90-thetas))) + list(90+thetas)
 
-  axes[1].set_rticks([-12, -6, 0, 6, 12])
+  _init_dbi_polar(axes[1])
 
   axes[1].plot(np.deg2rad(el_thetas),elevation,marker='')
 
+  _finalise_dbi_polar(axes[1])
   save_or_show(plt, fn)
 
 
