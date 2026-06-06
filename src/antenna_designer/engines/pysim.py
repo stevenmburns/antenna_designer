@@ -42,21 +42,29 @@ class PysimEngine(SimulationEngine):
         *,
         solver=TriangularPySim,
         wire_radius=0.0005,
-        n_qp_reg=4,
-        n_qp_off=4,
+        solver_kwargs=None,
         ground=None,
         ground_z=0.0,
     ):
         """
+        solver:
+          A pysim solver class — TriangularPySim (default), SinusoidalPySim,
+          or BSplinePySim. Different bases trade speed vs impedance fidelity;
+          on the hentenna sinusoidal is typically closer to PyNEC at modest
+          segmentation than triangular.
+        solver_kwargs:
+          Dict of solver-specific kwargs passed straight to the constructor
+          (e.g. `{"n_qp_reg": 8, "n_qp_off": 8}` for TriangularPySim, or
+          `{"n_qp_const": 16}` for SinusoidalPySim). None = solver defaults.
         ground:
           None or "free"           — no ground (default)
           "pec"                    — PEC plane at z=ground_z (image method)
           ("finite", eps_r, sigma) — far-field uses PEC image + Fresnel
                                      coefficients on the reflected component;
                                      impedance solve still uses PEC because
-                                     TriangularPySim only models PEC ground.
-                                     Cross-validation against PyNEC's
-                                     gn_card(0,...) is approximate.
+                                     pysim only models PEC ground. Cross-
+                                     validation against PyNEC's gn_card(0,...)
+                                     is approximate.
         """
         super().__init__(builder)
         if builder.build_tls():
@@ -69,10 +77,10 @@ class PysimEngine(SimulationEngine):
         self._feed_wire_index = translated["feed_wire_index"]
         self._feed_arclength = translated["feed_arclength"]
         self._feed_voltage = translated["feed_voltage"]
+        self._junctions = translated["junctions"]
         self._solver = solver
         self._wire_radius = wire_radius
-        self._n_qp_reg = n_qp_reg
-        self._n_qp_off = n_qp_off
+        self._solver_kwargs = dict(solver_kwargs) if solver_kwargs else {}
         self._ground = _normalise_ground(ground)
         self._ground_z = ground_z if self._ground is not None else None
 
@@ -84,9 +92,9 @@ class PysimEngine(SimulationEngine):
             feed_arclength=self._feed_arclength,
             wavelength=wavelength,
             wire_radius=self._wire_radius,
-            n_qp_reg=self._n_qp_reg,
-            n_qp_off=self._n_qp_off,
             ground_z=self._ground_z,
+            junctions=self._junctions or None,
+            **self._solver_kwargs,
         )
 
     @staticmethod
