@@ -7,6 +7,7 @@ from antenna_designer.cli import (
     PYSIM_BASES,
     parse_engine_spec,
     make_engine_factory,
+    broadcast_pairs,
     _GROUND_UNSET,
 )
 from antenna_designer.engines import PyNECEngine, PysimEngine
@@ -86,6 +87,49 @@ def test_cli_compare_patterns_pysim_basis():
     ant.cli(
         f"compare_patterns --builders dipole --engines pysim:triangular pysim:sinusoidal{O}".split()
     )
+
+
+def test_broadcast_equal_length():
+    assert broadcast_pairs(["a", "b", "c"], ["x", "y", "z"]) == [
+        ("a", "x"), ("b", "y"), ("c", "z")
+    ]
+
+
+def test_broadcast_single_engine():
+    assert broadcast_pairs(["a", "b", "c"], ["x"]) == [
+        ("a", "x"), ("b", "x"), ("c", "x")
+    ]
+
+
+def test_broadcast_single_builder():
+    assert broadcast_pairs(["a"], ["x", "y", "z"]) == [
+        ("a", "x"), ("a", "y"), ("a", "z")
+    ]
+
+
+def test_broadcast_mismatch_raises():
+    with pytest.raises(argparse.ArgumentTypeError):
+        broadcast_pairs(["a", "b"], ["x", "y", "z"])
+
+
+def test_cli_compare_patterns_three_by_three_paired():
+    ant.cli(
+        f"compare_patterns --builders dipole invvee bowtie "
+        f"--engines pynec pysim:triangular pysim:sinusoidal{O}".split()
+    )
+
+
+def test_cli_compare_patterns_three_builders_one_engine():
+    ant.cli(
+        f"compare_patterns --builders dipole invvee bowtie --engines pysim{O}".split()
+    )
+
+
+def test_cli_compare_patterns_mismatch_rejected():
+    with pytest.raises(argparse.ArgumentTypeError):
+        ant.cli(
+            f"compare_patterns --builders dipole invvee --engines pynec pysim:triangular pysim:sinusoidal{O}".split()
+        )
 
 
 def test_cli_pattern_with_basis_spec():
