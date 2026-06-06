@@ -41,8 +41,33 @@ Both pysim bases agree with PyNEC to ~1–3 % R and a few Ω X on the closed-loo
 
 Parasitic-only loops (a cycle with no excited segment, no other component) raise a clear `NotImplementedError` rather than crashing inside pysim. Loops with multiple excitations also raise specifically. Neither case appears in `designs/`.
 
-## Other follow-ups (lower priority)
+## Next branches (rough priority order)
 
-- **CLI `--basis triangular|sinusoidal|bspline` flag** on the analysis subcommands. Today `--engine pysim` always uses Triangular; choosing Sinusoidal requires the Python API. Straightforward add — mirror how `--ground` is plumbed.
-- **Far-field for the new designs**. Stage 2b validated the pattern math on the dipole; once tee-junction geometries are stable, re-run the directivity cross-check on hentenna and fandipole and add a corresponding test.
-- **Multi-feed PysimEngine**. Two viable shapes: (a) N independent solves, superposing per-feed for the impedance matrix Y; (b) genuine multi-source solve in pysim, requires upstream changes. Worth a design sketch before either.
+### 1. Cross-engine pattern comparison in the CLI
+
+Today `compare --engine pysim --builders dipole invvee` runs both builders through *one* engine. The Python API already lets `compare_patterns` take a heterogeneous list of engine instances; the gap is just CLI plumbing. Extend the `compare` subcommand to accept `--engines pynec pysim` and take the cross-product with `--builders` (labels become `dipole/pynec`, `dipole/pysim`, …). Same change naturally subsumes the previously-listed `--basis triangular|sinusoidal|bspline` follow-up: spell engine choices as `pynec`, `pysim:triangular`, `pysim:sinusoidal`, `pysim:bspline` so the basis is part of the engine identity rather than a separate orthogonal flag. Small, no upstream changes, immediate cross-validation value.
+
+### 2. Named parameter variants per builder
+
+Designs currently export one default param dict per module. Real usage (different bands, different element counts, swept-then-frozen configurations) wants multiple named variants checked into the same file. Proposal:
+
+- A design module can expose a `VARIANTS: dict[str, dict]` mapping name → param dict alongside the existing default. The default stays the unnamed variant.
+- Builder selector syntax on the CLI becomes `builder[:variant]`, e.g. `dipole:80m`, `hentenna:wide`. No colon → default variant (back-compatible).
+- The builder registry resolves `name:variant` to `(builder_callable, params_override)` and threads the override through the existing builder API.
+
+Open question: should variants compose with per-flag overrides (`--set length=5.2`)? The two solve different problems — named variants are for reproducible saved configurations, ad-hoc overrides are for sweeping. Probably both, but named variants first.
+
+### 3. Multi-feed PysimEngine (and where the interface code should live)
+
+This is the dominant blocker — 16 of the currently-rejected designs are multi-feed arrays. Two viable shapes, unchanged from before:
+
+- **(a) N independent solves, superpose for Y.** Drive each feed in turn with the others open/shorted (the choice matters for what Y means), recover the multi-port impedance matrix column-by-column. Works entirely above pysim's existing single-source API. Cheapest path; the answer is exact for linear MoM.
+- **(b) Genuine multi-source solve in pysim.** Requires upstream changes — basis assembly and the RHS construction need to know about multiple excitations simultaneously. More natural and avoids N solves, but couples our roadmap to a pysim release.
+
+Worth a design sketch before either. Recommend prototyping (a) first because it's reversible and validates the multi-port plumbing in `antenna_designer` independently of upstream churn.
+
+**Where the interface code lives.** Once multi-feed works, a real question opens up: the geometry translator (`flat_wires_to_polylines`, the closed-loop cut, the multi-port Y assembly) is antenna-agnostic and would benefit any pysim user, not just us. Tempting to move it upstream. **Don't do this yet** — moving code across repos creates an API contract that's expensive to iterate against, and we're still discovering the right shape (multi-feed will almost certainly reshape the translator's interface). Revisit after multi-feed lands and the translator's signature has been stable for a release or two.
+
+### 4. Far-field for the new designs
+
+Stage 2b validated the pattern math on the dipole; once tee-junction geometries are stable, re-run the directivity cross-check on hentenna and fandipole and add a corresponding test. Lower priority — falls out naturally as a side effect of #1 once the CLI can compare engines on these designs.

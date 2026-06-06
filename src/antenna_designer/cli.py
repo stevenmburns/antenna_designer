@@ -54,8 +54,42 @@ def resolve_class(s):
     return try_to_resolve_list(['antenna_designer', 'designs'] + lst)
 
 
+def list_variants(cls):
+    """Return all variant names for a Builder class. A variant is any class
+    attribute whose name ends in '_params' and is a Mapping; the variant name
+    is the attribute name with '_params' stripped."""
+    from collections.abc import Mapping
+    out = []
+    for nm in dir(cls):
+        if not nm.endswith('_params'):
+            continue
+        if not isinstance(getattr(cls, nm), Mapping):
+            continue
+        out.append(nm[:-len('_params')])
+    return sorted(out)
+
+
 def get_builder(nm):
-    return resolve_class(nm)
+    """Resolve a builder spec into a zero-arg factory.
+
+    Spec is "name" or "name:variant". A variant binds the named '<variant>_params'
+    class attribute as the builder's params; absent or ':default' uses default_params.
+    """
+    name, _, variant = nm.partition(':')
+    cls = resolve_class(name)
+    if cls is None:
+        return None
+    if not variant or variant == 'default':
+        return cls
+    attr = f'{variant}_params'
+    params = getattr(cls, attr, None)
+    if params is None:
+        available = ', '.join(list_variants(cls)) or '(none)'
+        raise ValueError(
+            f"builder {name!r} has no variant {variant!r}; available: {available}"
+        )
+    return partial(cls, params=params)
+
 
 def get_builders(nms):
     return (get_builder(nm) for nm in nms)
