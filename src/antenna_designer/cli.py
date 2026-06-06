@@ -4,6 +4,8 @@ from . import AntennaBuilder
 from . import sweep, sweep_gain, sweep_patterns, pattern, pattern3d, compare_patterns, optimize
 from .engines import PyNECEngine, PysimEngine
 
+from pysim import TriangularPySim, SinusoidalPySim, BSplinePySim
+
 from icecream import ic
 
 import argparse
@@ -13,6 +15,12 @@ from types import ModuleType
 ENGINE_CLASSES = {
     'pynec': PyNECEngine,
     'pysim': PysimEngine,
+}
+
+PYSIM_BASES = {
+    'triangular': TriangularPySim,
+    'sinusoidal': SinusoidalPySim,
+    'bspline': BSplinePySim,
 }
 
 
@@ -117,14 +125,40 @@ def parse_ground(s):
     raise argparse.ArgumentTypeError(f"unrecognised --ground: {s!r}")
 
 
-def make_engine_factory(engine_name, ground_spec):
-    cls = ENGINE_CLASSES[engine_name]
+def parse_engine_spec(spec):
+    """Parse an engine spec into (engine_name, kwargs_to_bind).
+
+    Forms: "pynec", "pysim", "pysim:triangular|sinusoidal|bspline".
+    """
+    name, _, basis = spec.partition(':')
+    if name not in ENGINE_CLASSES:
+        raise argparse.ArgumentTypeError(
+            f"unknown engine {name!r}; available: {', '.join(sorted(ENGINE_CLASSES))}"
+        )
+    if not basis:
+        return name, {}
+    if name != 'pysim':
+        raise argparse.ArgumentTypeError(
+            f"engine {name!r} does not accept a basis suffix (got {basis!r})"
+        )
+    if basis not in PYSIM_BASES:
+        raise argparse.ArgumentTypeError(
+            f"unknown pysim basis {basis!r}; available: {', '.join(sorted(PYSIM_BASES))}"
+        )
+    return name, {'solver': PYSIM_BASES[basis]}
+
+
+def make_engine_factory(engine_spec, ground_spec):
+    name, kwargs = parse_engine_spec(engine_spec)
+    cls = ENGINE_CLASSES[name]
     # PyNECEngine's default ground IS finite; pysim's default is free.
     # When the user passes --ground explicitly we always honour it;
     # when they don't, we use whatever the engine's own default is.
-    if ground_spec is _GROUND_UNSET:
+    if ground_spec is not _GROUND_UNSET:
+        kwargs['ground'] = ground_spec
+    if not kwargs:
         return cls
-    return partial(cls, ground=ground_spec)
+    return partial(cls, **kwargs)
 
 
 _GROUND_UNSET = object()
@@ -143,9 +177,17 @@ def cli(arguments=None):
         else:
             p.add_argument('--builder', type=str, default='dipole', help='Use this antenna builder.')
 
-    def add_engine_args(p):
-        p.add_argument('--engine', choices=sorted(ENGINE_CLASSES), default='pynec',
-                       help='Simulation backend (default: pynec).')
+    def add_engine_args(p, plural=False):
+        if plural:
+            p.add_argument('--engines', type=str, nargs='+', default=['pynec'],
+                           help='One or more simulation backends. Each spec is '
+                                '"pynec" or "pysim[:triangular|sinusoidal|bspline]". '
+                                'Cross-products with --builders.')
+        else:
+            p.add_argument('--engine', type=str, default='pynec',
+                           help='Simulation backend: pynec | pysim | '
+                                'pysim:triangular | pysim:sinusoidal | pysim:bspline '
+                                '(default: pynec).')
         p.add_argument('--ground', default=_GROUND_UNSET,
                        help='Ground model: free | pec | finite | finite:<eps_r>,<sigma> '
                             '(default: engine-specific — finite for pynec, free for pysim).')
@@ -227,12 +269,21 @@ def cli(arguments=None):
 
     p = subparsers.add_parser('compare_patterns', help='Display far field of multiple antennas')
     add_common(p, use_builders=True)
-    add_engine_args(p)
+    add_engine_args(p, plural=True)
     add_pattern_common(p)
     def f(args):
-        builders = get_builders(args.builders)
-        engine = engine_factory_from_args(args)
-        compare_patterns([engine(builder()) for builder in builders], elevation_angle=args.elevation_angle, fn=args.fn, builder_names=args.builders, azimuth_f=args.azimuth_f, azimuth_r=args.azimuth_r)
+        ground = args.ground if args.ground is _GROUND_UNSET else parse_ground(args.ground)
+        engines = [(spec, make_engine_factory(spec, ground)) for spec in args.engines]
+        multi_engine = len(engines) > 1
+        instances = []
+        labels = []
+        for bname in args.builders:
+            builder_factory = get_builder(bname)
+            for espec, eng in engines:
+                instances.append(eng(builder_factory()))
+                labels.append(f'{bname}/{espec}' if multi_engine else bname)
+        compare_patterns(instances, elevation_angle=args.elevation_angle, fn=args.fn,
+                         builder_names=labels, azimuth_f=args.azimuth_f, azimuth_r=args.azimuth_r)
     p.set_defaults(func=f)
 
     args = parser.parse_args(args=arguments)
