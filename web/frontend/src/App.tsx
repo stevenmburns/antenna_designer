@@ -79,6 +79,23 @@ type SolveResponse = {
   far_field: FarField | null;
 };
 
+type SweepRequest = {
+  builder: string;
+  variant: string;
+  params: Record<string, number | ComplexVal>;
+  engine: string;
+  pysim_basis?: string;
+  ground?: string | null;
+  band_start_mhz: number;
+  band_stop_mhz: number;
+  n_points: number;
+};
+
+type SweepResponse = {
+  freqs_mhz: number[];
+  z_per_feed: ComplexVal[][]; // [freq_idx][feed_idx]
+};
+
 // ===========================================================================
 // Engine + ground choices.
 // ===========================================================================
@@ -107,7 +124,21 @@ const GROUND_CHOICES = [
 type ProjMode = "auto" | "xy" | "xz" | "yz";
 type Projection = "xy" | "xz" | "yz";
 type FFCut = "azimuth" | "elevation";
-type View = "wire" | "smith" | "ff-az" | "ff-el";
+type View = "wire" | "smith" | "ff-az" | "ff-el" | "sweep";
+
+function swrFromZ(z_re: number, z_im: number, z0: number): number {
+  const num_re = z_re - z0;
+  const num_im = z_im;
+  const den_re = z_re + z0;
+  const den_im = z_im;
+  const denom = den_re * den_re + den_im * den_im;
+  if (denom === 0) return Infinity;
+  const gR = (num_re * den_re + num_im * den_im) / denom;
+  const gI = (num_im * den_re - num_re * den_im) / denom;
+  const g = Math.hypot(gR, gI);
+  if (g >= 1) return Infinity;
+  return (1 + g) / (1 - g);
+}
 
 // ===========================================================================
 // Schema-driven sliders.
@@ -343,11 +374,13 @@ function SmithChart({
   z0,
   size = 480,
   thumb = false,
+  sweep,
 }: {
   z_per_feed: ComplexVal[];
   z0: number;
   size?: number;
   thumb?: boolean;
+  sweep?: SweepResponse | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -405,7 +438,31 @@ function SmithChart({
       ctx.fillText("+jX", cx + R - 26, cy - R + 14);
       ctx.fillText("−jX", cx + R - 26, cy + R - 4);
     }
-    const n = z_per_feed.length;
+    // Optional sweep trail — one polyline per feed across the band.
+    const nFeedsCurrent = z_per_feed.length;
+    if (sweep && sweep.z_per_feed.length > 1) {
+      const nFeedsSweep = sweep.z_per_feed[0]?.length ?? 0;
+      for (let f = 0; f < nFeedsSweep; f++) {
+        ctx.strokeStyle = feedColor(f, nFeedsSweep, 0.55);
+        ctx.lineWidth = thumb ? 1.2 : 1.8;
+        ctx.beginPath();
+        let first = true;
+        for (let k = 0; k < sweep.freqs_mhz.length; k++) {
+          const z = sweep.z_per_feed[k][f];
+          if (!z) continue;
+          const zn_r = z.re / z0, zn_x = z.im / z0;
+          const dR = (zn_r + 1) * (zn_r + 1) + zn_x * zn_x;
+          const gR = ((zn_r - 1) * (zn_r + 1) + zn_x * zn_x) / dR;
+          const gI = (2 * zn_x) / dR;
+          const px = cx + gR * R, py = cy - gI * R;
+          if (first) { ctx.moveTo(px, py); first = false; }
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+    }
+
+    const n = nFeedsCurrent;
     z_per_feed.forEach((z, i) => {
       const zn_r = z.re / z0, zn_x = z.im / z0;
       const denomR = (zn_r + 1) * (zn_r + 1) + zn_x * zn_x;
@@ -567,6 +624,149 @@ function FarFieldPlot({
 }
 
 // ===========================================================================
+// SWR-vs-freq plot — one line per feed.
+// ===========================================================================
+
+function SwrPlot({
+  sweep,
+  z0,
+  measFreqMhz,
+  size = 480,
+  thumb = false,
+}: {
+  sweep: SweepResponse | null;
+  z0: number;
+  measFreqMhz: number;
+  size?: number;
+  thumb?: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(size * dpr);
+    canvas.height = Math.floor(size * dpr);
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    ctx.fillStyle = "#0d1015";
+    ctx.fillRect(0, 0, size, size);
+
+    if (!sweep || sweep.freqs_mhz.length < 2) {
+      if (!thumb) {
+        ctx.fillStyle = "var(--muted)";
+        ctx.font = "12px ui-monospace, monospace";
+        ctx.fillText("Hit Sweep to compute", 12, size / 2);
+      }
+      return;
+    }
+
+    const padL = thumb ? 4 : 44;
+    const padR = thumb ? 4 : 14;
+    const padT = thumb ? 4 : 14;
+    const padB = thumb ? 4 : 28;
+    const W = size - padL - padR;
+    const H = size - padT - padB;
+
+    const fs = sweep.freqs_mhz;
+    const f0 = fs[0], f1 = fs[fs.length - 1];
+    const SWR_MAX = 5;
+
+    // Compute SWR for every point/feed.
+    const nFeeds = sweep.z_per_feed[0]?.length ?? 0;
+    const swrSeries: number[][] = [];
+    for (let f = 0; f < nFeeds; f++) {
+      const ser = sweep.z_per_feed.map((zRow) =>
+        Math.min(SWR_MAX, swrFromZ(zRow[f].re, zRow[f].im, z0)),
+      );
+      swrSeries.push(ser);
+    }
+
+    const xT = (mhz: number) => padL + ((mhz - f0) / (f1 - f0)) * W;
+    const yT = (swr: number) => padT + (1 - (swr - 1) / (SWR_MAX - 1)) * H;
+
+    // Grid + axes.
+    ctx.strokeStyle = "#2a313d";
+    ctx.lineWidth = 0.6;
+    ctx.fillStyle = "#4a5160";
+    ctx.font = "10px ui-monospace, monospace";
+    for (const s of [1.0, 1.5, 2.0, 3.0, 5.0]) {
+      const y = yT(s);
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + W, y);
+      ctx.stroke();
+      if (!thumb) ctx.fillText(`${s.toFixed(1)}`, 6, y + 3);
+    }
+    // SWR=2 line emphasised
+    ctx.strokeStyle = "#ffd16640";
+    ctx.lineWidth = 0.8;
+    const y2 = yT(2);
+    ctx.beginPath();
+    ctx.moveTo(padL, y2);
+    ctx.lineTo(padL + W, y2);
+    ctx.stroke();
+
+    // Freq ticks.
+    if (!thumb) {
+      ctx.strokeStyle = "#2a313d";
+      ctx.fillStyle = "#4a5160";
+      const nticks = 5;
+      for (let i = 0; i <= nticks; i++) {
+        const mhz = f0 + (i / nticks) * (f1 - f0);
+        const x = xT(mhz);
+        ctx.beginPath();
+        ctx.moveTo(x, padT + H);
+        ctx.lineTo(x, padT + H + 4);
+        ctx.stroke();
+        ctx.fillText(`${mhz.toFixed(2)}`, x - 14, padT + H + 16);
+      }
+      ctx.fillText("MHz", padL + W - 24, padT + H + 24);
+      ctx.save();
+      ctx.translate(12, padT + H / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText("SWR", 0, 0);
+      ctx.restore();
+    }
+
+    // Per-feed SWR lines.
+    swrSeries.forEach((ser, f) => {
+      ctx.strokeStyle = feedColor(f, swrSeries.length);
+      ctx.lineWidth = thumb ? 1.2 : 1.8;
+      ctx.beginPath();
+      for (let i = 0; i < ser.length; i++) {
+        const x = xT(fs[i]);
+        const y = yT(ser[i]);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    });
+
+    // Measurement-freq marker.
+    if (measFreqMhz >= f0 && measFreqMhz <= f1) {
+      ctx.strokeStyle = "#cfd6e3";
+      ctx.setLineDash(thumb ? [2, 2] : [4, 3]);
+      ctx.lineWidth = 1;
+      const x = xT(measFreqMhz);
+      ctx.beginPath();
+      ctx.moveTo(x, padT);
+      ctx.lineTo(x, padT + H);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (!thumb) {
+        ctx.fillStyle = "#cfd6e3";
+        ctx.fillText(`${measFreqMhz.toFixed(3)}`, x + 4, padT + 12);
+      }
+    }
+  }, [sweep, z0, measFreqMhz, size, thumb]);
+  return <canvas ref={canvasRef} className={thumb ? "thumb-canvas" : undefined} />;
+}
+
+// ===========================================================================
 // Helpers
 // ===========================================================================
 
@@ -600,6 +800,11 @@ export function App() {
   const [showCurrents, setShowCurrents] = useState<boolean>(true);
   const [azElevDeg, setAzElevDeg] = useState<number>(0);
   const [elPhiDeg, setElPhiDeg] = useState<number>(0);
+  const [bandStart, setBandStart] = useState<number>(28.0);
+  const [bandStop, setBandStop] = useState<number>(29.0);
+  const [nSweep, setNSweep] = useState<number>(41);
+  const [sweep, setSweep] = useState<SweepResponse | null>(null);
+  const [sweeping, setSweeping] = useState<boolean>(false);
   const [slideRef, slideSize] = useFillSize<HTMLDivElement>();
 
   // Builder catalogue.
@@ -638,7 +843,46 @@ export function App() {
 
   const onParamChange = useCallback((key: string, val: number | ComplexVal) => {
     setValues((v) => ({ ...v, [key]: val }));
+    // A param edit invalidates the existing sweep (the antenna changed).
+    setSweep(null);
   }, []);
+
+  const runSweep = useCallback(async () => {
+    if (!schema) return;
+    const engineChoice = ENGINE_CHOICES.find((c) => c.id === engineId);
+    if (!engineChoice) return;
+    if (bandStop <= bandStart) {
+      setError("Sweep: band_stop must be > band_start");
+      return;
+    }
+    setSweeping(true);
+    try {
+      const req: SweepRequest = {
+        builder: selectedName,
+        variant,
+        params: values,
+        engine: engineChoice.engine,
+        pysim_basis: engineChoice.pysim_basis,
+        ground,
+        band_start_mhz: bandStart,
+        band_stop_mhz: bandStop,
+        n_points: nSweep,
+      };
+      const r = await fetch("/api/sweep", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(req),
+      });
+      if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+      const j: SweepResponse = await r.json();
+      setSweep(j);
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSweeping(false);
+    }
+  }, [schema, selectedName, variant, values, engineId, ground, bandStart, bandStop, nSweep]);
 
   // Debounced auto-solve. A newer slider edit aborts the in-flight request
   // before issuing a fresh one — keeps the UI responsive without flooding
@@ -761,6 +1005,45 @@ export function App() {
 
         {error && <div className="error">{error}</div>}
 
+        <div className="group-label">Sweep</div>
+        <div className="field">
+          <label><span>band start (MHz)</span><span className="val">{bandStart.toFixed(2)}</span></label>
+          <input
+            type="number"
+            value={bandStart}
+            step={0.05}
+            onChange={(e) => { setBandStart(parseFloat(e.target.value)); setSweep(null); }}
+          />
+        </div>
+        <div className="field">
+          <label><span>band stop (MHz)</span><span className="val">{bandStop.toFixed(2)}</span></label>
+          <input
+            type="number"
+            value={bandStop}
+            step={0.05}
+            onChange={(e) => { setBandStop(parseFloat(e.target.value)); setSweep(null); }}
+          />
+        </div>
+        <div className="field">
+          <label><span>n points</span><span className="val">{nSweep}</span></label>
+          <input
+            type="range"
+            min={5}
+            max={101}
+            step={2}
+            value={nSweep}
+            onChange={(e) => { setNSweep(parseInt(e.target.value, 10)); setSweep(null); }}
+          />
+        </div>
+        <button
+          className="backend-tab-btn"
+          style={{ borderRadius: 4 }}
+          onClick={runSweep}
+          disabled={sweeping}
+        >
+          <span className="slot-letter">{sweeping ? "Sweeping…" : "Sweep"}</span>
+        </button>
+
         {result && (
           <>
             <div className="group-label">Readout</div>
@@ -821,7 +1104,7 @@ export function App() {
             onClick={() => setView("smith")}
           >
             {result
-              ? <SmithChart z_per_feed={result.z_per_feed} z0={z0} size={64} thumb />
+              ? <SmithChart z_per_feed={result.z_per_feed} z0={z0} size={64} thumb sweep={sweep} />
               : <div className="thumb-canvas" />}
             <span className="thumb-label">Smith</span>
           </button>
@@ -844,6 +1127,15 @@ export function App() {
               ? <FarFieldPlot ff={result.far_field} size={64} cut="elevation" cutAngleDeg={elPhiDeg} thumb />
               : <div className="thumb-canvas" />}
             <span className="thumb-label">FF el</span>
+          </button>
+          <button
+            className={view === "sweep" ? "thumb active" : "thumb"}
+            onClick={() => setView("sweep")}
+          >
+            {sweep
+              ? <SwrPlot sweep={sweep} z0={z0} measFreqMhz={result?.freq_mhz ?? 0} size={64} thumb />
+              : <div className="thumb-canvas" />}
+            <span className="thumb-label">SWR</span>
           </button>
         </div>
 
@@ -882,7 +1174,11 @@ export function App() {
           )}
 
           {result && view === "smith" && (
-            <SmithChart z_per_feed={result.z_per_feed} z0={z0} size={slideSize} />
+            <SmithChart z_per_feed={result.z_per_feed} z0={z0} size={slideSize} sweep={sweep} />
+          )}
+
+          {result && view === "sweep" && (
+            <SwrPlot sweep={sweep} z0={z0} measFreqMhz={result.freq_mhz} size={slideSize} />
           )}
 
           {result && view === "ff-az" && result.far_field && (
