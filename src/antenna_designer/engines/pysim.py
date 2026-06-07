@@ -6,7 +6,7 @@ from __future__ import annotations
 import numpy as np
 from pysim import TriangularPySim
 
-from ..engine import FarField, SimulationEngine
+from ..engine import FarField, SimulationEngine, WireCurrents
 from ..geometry import flat_wires_to_polylines
 
 C_LIGHT = 299_792_458.0
@@ -120,6 +120,19 @@ class PysimEngine(SimulationEngine):
         if zs.ndim == 1:
             zs = zs.reshape(-1, 1)
         return zs
+
+    def current_distribution(self):
+        sim = self._make_solver(wavelength=self._wavelength_for(self.builder.freq))
+        _z, coeffs = sim.compute_impedance()
+        knot_currents = sim.currents_at_knots(coeffs)
+        out = []
+        for w_idx, polyline in enumerate(self._polylines):
+            knots = _polyline_knots(polyline, self._edge_segments[w_idx])
+            out.append(WireCurrents(
+                knot_positions=np.ascontiguousarray(knots),
+                knot_currents=np.ascontiguousarray(knot_currents[w_idx]),
+            ))
+        return out
 
     def _segment_dipoles(self, sim, coeffs):
         """Returns (mid, dr, i_mid) — concatenated per-segment midpoints,
