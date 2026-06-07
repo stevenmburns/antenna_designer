@@ -391,6 +391,18 @@ def test_pysim_multifeed_impedance_sweep_shape():
     assert zs.shape == (4, 2), zs.shape
 
 
+def test_current_distribution_peak_matches_one_over_z():
+    """Peak |I| over the geometry should equal |1/Z| within solver
+    rounding on both backends — Z = V/I with V=1, so the driving-point
+    current magnitude is |1/Z|."""
+    b = Builder()
+    for eng in (PysimEngine(b), PyNECEngine(b, ground=None)):
+        cd = eng.current_distribution()
+        peak = max(np.max(np.abs(w.knot_currents)) for w in cd)
+        z = eng.impedance()[0]
+        assert abs(peak - abs(1 / z)) < 0.02 * abs(1 / z), (peak, z)
+
+
 def test_translator_rejects_loop_without_feed():
     """A pure cycle with no excited segment can't be handled (parasitic
     coupling not yet implemented). Should raise a clear NotImplementedError

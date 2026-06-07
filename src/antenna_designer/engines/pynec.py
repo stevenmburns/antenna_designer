@@ -1,7 +1,7 @@
 import numpy as np
 import PyNEC as nec
 
-from ..engine import FarField, SimulationEngine
+from ..engine import FarField, SimulationEngine, WireCurrents
 
 
 DEFAULT_GROUND = ("finite", 10.0, 0.002)  # (kind, dielectric, conductivity)
@@ -109,6 +109,34 @@ class PyNECEngine(SimulationEngine):
         self.c.fr_card(0, freqs.size, float(freqs[0]), del_freq)
         self.c.xq_card(0)
         return np.array([self._impedances_at(i, sum_currents=sum_currents) for i in range(freqs.size)])
+
+    def current_distribution(self):
+        """Per-tuple knot positions + complex currents. Each build_wires()
+        tuple becomes one wire entry with n_seg+1 knot positions; per-knot
+        currents are the average of the two adjacent NEC segment-centre
+        currents, with boundary knots zeroed (open-wire BC). The pysim web
+        backend uses the same averaging convention."""
+        self._set_freq_and_execute()
+        sc = self.c.get_structure_currents(0)
+        all_tags = list(sc.get_current_segment_tag())
+        all_cur = sc.get_current()
+
+        out = []
+        for tag_idx, (p0, p1, n_seg, _ev) in enumerate(self.tups, start=1):
+            seg_idxs = [i for i, t in enumerate(all_tags) if t == tag_idx]
+            cur_per_seg = np.array([all_cur[i] for i in seg_idxs], dtype=np.complex128)
+            knots = np.linspace(p0, p1, n_seg + 1)
+            knot_cur = np.zeros(n_seg + 1, dtype=np.complex128)
+            if n_seg >= 2:
+                knot_cur[1:-1] = 0.5 * (cur_per_seg[:-1] + cur_per_seg[1:])
+            elif n_seg == 1:
+                # 1-segment wire: no interior knot, leave boundaries at 0.
+                pass
+            out.append(WireCurrents(
+                knot_positions=knots,
+                knot_currents=knot_cur,
+            ))
+        return out
 
     def far_field(self, *, n_theta=90, n_phi=360, del_theta=1, del_phi=1):
         self._set_freq_and_execute()
