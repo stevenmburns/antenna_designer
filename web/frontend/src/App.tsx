@@ -1,8 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // API types — mirror the FastAPI shapes in web/server.py.
-// ---------------------------------------------------------------------------
+// ===========================================================================
 
 type ComplexVal = { re: number; im: number };
 
@@ -54,9 +61,9 @@ type WireCurrent = {
 };
 
 type FarField = {
-  thetas: number[]; // degrees
-  phis: number[];   // degrees
-  rings: number[][]; // [theta_idx][phi_idx] → dBi
+  thetas: number[];
+  phis: number[];
+  rings: number[][];
   max_gain: number;
   min_gain: number;
 };
@@ -72,22 +79,23 @@ type SolveResponse = {
   far_field: FarField | null;
 };
 
-// ---------------------------------------------------------------------------
-// Engine choices. Maps the UI's flat list to (engine, pysim_basis) tuples.
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Engine + ground choices.
+// ===========================================================================
 
 type EngineChoice = {
   id: string;
-  label: string;
+  letter: string;
+  sub: string;
   engine: string;
   pysim_basis?: string;
 };
 
 const ENGINE_CHOICES: EngineChoice[] = [
-  { id: "pynec", label: "PyNEC", engine: "pynec" },
-  { id: "pysim-tri", label: "pysim (triangular)", engine: "pysim", pysim_basis: "triangular" },
-  { id: "pysim-sin", label: "pysim (sinusoidal)", engine: "pysim", pysim_basis: "sinusoidal" },
-  { id: "pysim-bsp", label: "pysim (bspline)", engine: "pysim", pysim_basis: "bspline" },
+  { id: "pynec", letter: "PyNEC", sub: "nec2", engine: "pynec" },
+  { id: "pysim-tri", letter: "Tri", sub: "pysim", engine: "pysim", pysim_basis: "triangular" },
+  { id: "pysim-sin", letter: "Sin", sub: "pysim", engine: "pysim", pysim_basis: "sinusoidal" },
+  { id: "pysim-bsp", letter: "Bsp", sub: "pysim", engine: "pysim", pysim_basis: "bspline" },
 ];
 
 const GROUND_CHOICES = [
@@ -96,9 +104,20 @@ const GROUND_CHOICES = [
   { id: "finite:13,0.005", label: "Finite (ε=13, σ=0.005)" },
 ];
 
-// ---------------------------------------------------------------------------
+type ProjMode = "auto" | "xy" | "xz" | "yz";
+type Projection = "xy" | "xz" | "yz";
+type FFCut = "azimuth" | "elevation";
+type View = "wire" | "smith" | "ff-az" | "ff-el";
+
+// ===========================================================================
 // Schema-driven sliders.
-// ---------------------------------------------------------------------------
+// ===========================================================================
+
+function fmtVal(v: number, step: number, isInt: boolean): string {
+  if (isInt) return v.toFixed(0);
+  const decs = Math.max(0, Math.min(4, -Math.floor(Math.log10(step))));
+  return v.toFixed(decs);
+}
 
 function ParamSliders({
   params,
@@ -115,9 +134,14 @@ function ParamSliders({
         if (p.is_complex) {
           const v = (values[p.key] as ComplexVal | undefined) ?? p.default;
           return (
-            <div className="slider-row" key={p.key}>
-              <div className="name">{p.key}</div>
-              <div className="complex-input" style={{ gridColumn: "1 / span 2" }}>
+            <div className="field" key={p.key}>
+              <label>
+                <span>{p.key}</span>
+                <span className="val">
+                  {v.re.toFixed(2)} {v.im >= 0 ? "+" : "-"} {Math.abs(v.im).toFixed(2)}j
+                </span>
+              </label>
+              <div className="complex-input">
                 <input
                   type="number"
                   value={v.re}
@@ -140,20 +164,17 @@ function ParamSliders({
         }
         const cur = (values[p.key] as number | undefined) ?? p.default;
         return (
-          <div className="slider-row" key={p.key}>
-            <div className="name">{p.key}</div>
+          <div className="field" key={p.key}>
+            <label>
+              <span>{p.key}</span>
+              <span className="val">{fmtVal(cur, p.step, p.is_int)}</span>
+            </label>
             <input
               type="range"
               min={p.min}
               max={p.max}
               step={p.step}
               value={cur}
-              onChange={(e) => onChange(p.key, parseFloat(e.target.value))}
-            />
-            <input
-              type="number"
-              value={cur}
-              step={p.step}
               onChange={(e) => onChange(p.key, parseFloat(e.target.value))}
             />
           </div>
@@ -163,45 +184,53 @@ function ParamSliders({
   );
 }
 
-// ---------------------------------------------------------------------------
-// 2D wire renderer — auto-picks XY/XZ/YZ projection by the bounding box.
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// ResizeObserver hook — drawing components fill their parent.
+// ===========================================================================
 
-type Projection = "xy" | "xz" | "yz";
+function useFillSize<T extends HTMLElement>(): [RefObject<T>, number] {
+  const ref = useRef<T>(null);
+  const [size, setSize] = useState(480);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const cr = entries[0].contentRect;
+      const s = Math.max(160, Math.min(cr.width, cr.height));
+      setSize(s);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, size];
+}
+
+// ===========================================================================
+// 2D wire renderer + current overlay.
+// ===========================================================================
 
 function project(p: [number, number, number], proj: Projection): [number, number] {
   switch (proj) {
-    case "xy":
-      return [p[0], p[1]];
-    case "xz":
-      return [p[0], p[2]];
-    case "yz":
-      return [p[1], p[2]];
+    case "xy": return [p[0], p[1]];
+    case "xz": return [p[0], p[2]];
+    case "yz": return [p[1], p[2]];
   }
 }
 
 function pickProjection(wires: WireGeom[]): Projection {
-  // Pick the projection whose two axes have the largest spread combined.
   const mins = [Infinity, Infinity, Infinity];
   const maxs = [-Infinity, -Infinity, -Infinity];
-  for (const w of wires) {
-    for (const p of [w.p0, w.p1]) {
-      for (let i = 0; i < 3; i++) {
-        if (p[i] < mins[i]) mins[i] = p[i];
-        if (p[i] > maxs[i]) maxs[i] = p[i];
-      }
-    }
+  for (const w of wires) for (const p of [w.p0, w.p1]) for (let i = 0; i < 3; i++) {
+    if (p[i] < mins[i]) mins[i] = p[i];
+    if (p[i] > maxs[i]) maxs[i] = p[i];
   }
-  const spread = [maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2]];
-  const xy = spread[0] + spread[1];
-  const xz = spread[0] + spread[2];
-  const yz = spread[1] + spread[2];
+  const sp = [maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2]];
+  const xy = sp[0] + sp[1], xz = sp[0] + sp[2], yz = sp[1] + sp[2];
   if (xz >= xy && xz >= yz) return "xz";
   if (yz >= xy) return "yz";
   return "xy";
 }
 
-// Map normalised |I| in [0,1] to a viridis-like ramp.
 function magToColor(t: number): string {
   const v = Math.max(0, Math.min(1, t));
   const r = Math.round(255 * (0.267 + v * (0.993 - 0.267)));
@@ -214,23 +243,27 @@ function WireCanvas({
   wires,
   currents,
   size = 480,
+  projMode = "auto",
+  showCurrents = true,
+  thumb = false,
 }: {
   wires: WireGeom[];
   currents?: WireCurrent[] | null;
   size?: number;
+  projMode?: ProjMode;
+  showCurrents?: boolean;
+  thumb?: boolean;
 }) {
-  if (wires.length === 0) {
-    return <svg width={size} height={size} />;
-  }
-  const proj = pickProjection(wires);
+  const cur = showCurrents ? currents : null;
+  if (wires.length === 0)
+    return <svg width={size} height={size} className={thumb ? "thumb-canvas" : undefined} />;
+  const proj: Projection = projMode === "auto" ? pickProjection(wires) : projMode;
   const proj2 = wires.map((w) => [project(w.p0, proj), project(w.p1, proj)] as const);
   const xs = proj2.flatMap((pq) => [pq[0][0], pq[1][0]]);
   const ys = proj2.flatMap((pq) => [pq[0][1], pq[1][1]]);
-  const xmin = Math.min(...xs);
-  const xmax = Math.max(...xs);
-  const ymin = Math.min(...ys);
-  const ymax = Math.max(...ys);
-  const pad = 0.08;
+  const xmin = Math.min(...xs), xmax = Math.max(...xs);
+  const ymin = Math.min(...ys), ymax = Math.max(...ys);
+  const pad = thumb ? 0.06 : 0.08;
   const dx = Math.max(xmax - xmin, 1e-6);
   const dy = Math.max(ymax - ymin, 1e-6);
   const scale = Math.min((size * (1 - 2 * pad)) / dx, (size * (1 - 2 * pad)) / dy);
@@ -239,103 +272,66 @@ function WireCanvas({
   const tx = (x: number) => ox + scale * x;
   const ty = (y: number) => size - (oy + scale * y);
 
-  // Global peak |I| across all wires, used to normalise the colour ramp.
   let peakI = 0;
-  if (currents) {
-    for (const w of currents) {
-      for (let i = 0; i < w.knot_currents_re.length; i++) {
-        const m = Math.hypot(w.knot_currents_re[i], w.knot_currents_im[i]);
-        if (m > peakI) peakI = m;
-      }
-    }
+  if (cur) for (const w of cur) for (let i = 0; i < w.knot_currents_re.length; i++) {
+    const m = Math.hypot(w.knot_currents_re[i], w.knot_currents_im[i]);
+    if (m > peakI) peakI = m;
   }
 
   return (
-    <svg width={size} height={size}>
-      <rect x={0} y={0} width={size} height={size} fill="var(--panel-2)" />
-      <text x={6} y={size - 6} fill="var(--text-dim)" fontSize={11} fontFamily="monospace">
-        {`${proj} projection — ${dx.toFixed(2)} × ${dy.toFixed(2)} m`}
-      </text>
-      {/* Base wires — drawn first, then currents overlaid. */}
+    <svg width={size} height={size} className={thumb ? "thumb-canvas" : undefined}>
+      <rect x={0} y={0} width={size} height={size} fill="#0d1015" />
+      {!thumb && (
+        <text
+          x={10}
+          y={size - 8}
+          fill="var(--muted)"
+          fontSize={11}
+          fontFamily="ui-monospace, monospace"
+        >
+          {`${proj} · ${dx.toFixed(2)} × ${dy.toFixed(2)} m`}
+        </text>
+      )}
       {wires.map((w, i) => {
         const [[a, b], [c, d]] = proj2[i];
         const isFeed = w.feed_voltage !== null;
         return (
           <line
-            key={`wire-${i}`}
-            x1={tx(a)}
-            y1={ty(b)}
-            x2={tx(c)}
-            y2={ty(d)}
+            key={`w-${i}`}
+            x1={tx(a)} y1={ty(b)} x2={tx(c)} y2={ty(d)}
             stroke={isFeed ? "var(--feed)" : "var(--wire)"}
-            strokeWidth={isFeed ? 2.5 : 1.0}
-            opacity={currents && peakI > 0 ? 0.35 : 1}
+            strokeWidth={isFeed ? (thumb ? 1.5 : 2.5) : thumb ? 0.8 : 1.0}
+            opacity={cur && peakI > 0 ? 0.3 : 1}
           />
         );
       })}
-      {/* Current overlay: per-knot polyline coloured by |I|. Each wire's
-          knot list is a single polyline; render each (k → k+1) segment
-          coloured by the segment-midpoint current magnitude. */}
-      {currents && peakI > 0 &&
-        currents.flatMap((w, wi) => {
-          const knots = w.knot_positions;
-          const re = w.knot_currents_re;
-          const im = w.knot_currents_im;
-          const segs = [];
-          for (let k = 0; k < knots.length - 1; k++) {
-            const [a, b] = project(knots[k], proj);
-            const [c, d] = project(knots[k + 1], proj);
-            const m1 = Math.hypot(re[k], im[k]);
-            const m2 = Math.hypot(re[k + 1], im[k + 1]);
-            const m = 0.5 * (m1 + m2);
-            segs.push(
-              <line
-                key={`cur-${wi}-${k}`}
-                x1={tx(a)}
-                y1={ty(b)}
-                x2={tx(c)}
-                y2={ty(d)}
-                stroke={magToColor(m / peakI)}
-                strokeWidth={3.0}
-                strokeLinecap="round"
-              />,
-            );
-          }
-          return segs;
-        })}
-      {/* Legend */}
-      {currents && peakI > 0 && (
-        <g transform={`translate(${size - 110}, 10)`}>
-          <rect x={0} y={0} width={100} height={12} fill="url(#cur-grad)" />
-          <text x={0} y={26} fill="var(--text-dim)" fontSize={10} fontFamily="monospace">
-            {`0`}
-          </text>
-          <text
-            x={100}
-            y={26}
-            fill="var(--text-dim)"
-            fontSize={10}
-            fontFamily="monospace"
-            textAnchor="end"
-          >
-            {`|I|=${peakI.toExponential(1)}A`}
-          </text>
-          <defs>
-            <linearGradient id="cur-grad" x1="0" y1="0" x2="1" y2="0">
-              {Array.from({ length: 6 }, (_, i) => (
-                <stop key={i} offset={`${(i * 100) / 5}%`} stopColor={magToColor(i / 5)} />
-              ))}
-            </linearGradient>
-          </defs>
-        </g>
-      )}
+      {cur && peakI > 0 && cur.flatMap((w, wi) => {
+        const knots = w.knot_positions;
+        const re = w.knot_currents_re, im = w.knot_currents_im;
+        const segs = [];
+        for (let k = 0; k < knots.length - 1; k++) {
+          const [a, b] = project(knots[k], proj);
+          const [c, d] = project(knots[k + 1], proj);
+          const m = 0.5 * (Math.hypot(re[k], im[k]) + Math.hypot(re[k + 1], im[k + 1]));
+          segs.push(
+            <line
+              key={`c-${wi}-${k}`}
+              x1={tx(a)} y1={ty(b)} x2={tx(c)} y2={ty(d)}
+              stroke={magToColor(m / peakI)}
+              strokeWidth={thumb ? 1.5 : 3.0}
+              strokeLinecap="round"
+            />,
+          );
+        }
+        return segs;
+      })}
     </svg>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Smith chart — per-feed Z markers at a chosen reference impedance.
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Smith chart.
+// ===========================================================================
 
 function feedColor(i: number, n: number, alpha = 0.95): string {
   const hue = n <= 1 ? 200 : (i * 360) / n;
@@ -346,19 +342,19 @@ function SmithChart({
   z_per_feed,
   z0,
   size = 480,
+  thumb = false,
 }: {
   z_per_feed: ComplexVal[];
   z0: number;
-  size: number;
+  size?: number;
+  thumb?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.floor(size * dpr);
     canvas.height = Math.floor(size * dpr);
@@ -366,23 +362,19 @@ function SmithChart({
     canvas.style.height = `${size}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const cx = size / 2;
-    const cy = size / 2;
-    const R = size / 2 - 12;
+    const cx = size / 2, cy = size / 2;
+    const R = size / 2 - (thumb ? 4 : 12);
 
     ctx.fillStyle = "#0d1015";
     ctx.fillRect(0, 0, size, size);
 
-    // Constant-r circles in Γ plane: centre = (r/(r+1), 0), radius = 1/(r+1)
     ctx.strokeStyle = "#2a313d";
-    ctx.lineWidth = 0.6;
+    ctx.lineWidth = thumb ? 0.4 : 0.6;
     for (const rn of [0.2, 0.5, 1, 2, 5]) {
       ctx.beginPath();
       ctx.arc(cx + (rn / (rn + 1)) * R, cy, (1 / (rn + 1)) * R, 0, 2 * Math.PI);
       ctx.stroke();
     }
-
-    // Constant-x arcs: centre = (1, 1/x), radius = 1/|x|, clipped to unit disk
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, R, 0, 2 * Math.PI);
@@ -397,75 +389,78 @@ function SmithChart({
       ctx.stroke();
     }
     ctx.restore();
-
-    // Real axis + outer boundary
     ctx.strokeStyle = "#3a4150";
-    ctx.lineWidth = 0.8;
+    ctx.lineWidth = thumb ? 0.6 : 0.8;
     ctx.beginPath();
-    ctx.moveTo(cx - R, cy);
-    ctx.lineTo(cx + R, cy);
+    ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy);
     ctx.stroke();
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = thumb ? 1.0 : 1.5;
     ctx.beginPath();
     ctx.arc(cx, cy, R, 0, 2 * Math.PI);
     ctx.stroke();
-
-    // Labels
-    ctx.fillStyle = "#4a5160";
-    ctx.font = "10px ui-monospace, monospace";
-    ctx.fillText(`Z₀ = ${z0}Ω`, 8, 14);
-    ctx.fillText("+jX", cx + R - 26, cy - R + 14);
-    ctx.fillText("−jX", cx + R - 26, cy + R - 4);
-
-    // Per-feed markers — Γ = (Z − Z₀) / (Z + Z₀), normalised.
+    if (!thumb) {
+      ctx.fillStyle = "#4a5160";
+      ctx.font = "10px ui-monospace, monospace";
+      ctx.fillText(`Z₀ = ${z0}Ω`, 8, 14);
+      ctx.fillText("+jX", cx + R - 26, cy - R + 14);
+      ctx.fillText("−jX", cx + R - 26, cy + R - 4);
+    }
     const n = z_per_feed.length;
     z_per_feed.forEach((z, i) => {
-      const zn_r = z.re / z0;
-      const zn_x = z.im / z0;
+      const zn_r = z.re / z0, zn_x = z.im / z0;
       const denomR = (zn_r + 1) * (zn_r + 1) + zn_x * zn_x;
-      const gammaR = ((zn_r - 1) * (zn_r + 1) + zn_x * zn_x) / denomR;
-      const gammaI = (2 * zn_x) / denomR;
-      const px = cx + gammaR * R;
-      const py = cy - gammaI * R;
+      const gR = ((zn_r - 1) * (zn_r + 1) + zn_x * zn_x) / denomR;
+      const gI = (2 * zn_x) / denomR;
+      const px = cx + gR * R, py = cy - gI * R;
       ctx.fillStyle = feedColor(i, n);
       ctx.beginPath();
-      ctx.arc(px, py, 6, 0, 2 * Math.PI);
+      ctx.arc(px, py, thumb ? 3 : 6, 0, 2 * Math.PI);
       ctx.fill();
       ctx.strokeStyle = "#0d1015";
       ctx.lineWidth = 1.5;
       ctx.stroke();
-      ctx.fillStyle = "#cfd6e3";
-      ctx.font = "10px ui-monospace, monospace";
-      ctx.fillText(`f${i}`, px + 10, py + 4);
+      if (!thumb) {
+        ctx.fillStyle = "#cfd6e3";
+        ctx.font = "10px ui-monospace, monospace";
+        ctx.fillText(`f${i}`, px + 10, py + 4);
+      }
     });
-  }, [z_per_feed, z0, size]);
-
-  return <canvas ref={canvasRef} />;
+  }, [z_per_feed, z0, size, thumb]);
+  return <canvas ref={canvasRef} className={thumb ? "thumb-canvas" : undefined} />;
 }
 
-// ---------------------------------------------------------------------------
-// Far-field polar plots — azimuth cut at chosen θ + elevation cut at φ.
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Far-field polar plot — one cut (azimuth or elevation).
+// ===========================================================================
+
+function nearestIdx(arr: number[], target: number): number {
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < arr.length; i++) {
+    const d = Math.abs(arr[i] - target);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
 
 function FarFieldPlot({
   ff,
   size = 480,
-  theta0Deg = 90, // azimuth cut elevation: 90° = horizon
-  phi0Deg = 0,    // elevation cut bearing
+  cut,
+  cutAngleDeg,
+  thumb = false,
 }: {
   ff: FarField;
   size?: number;
-  theta0Deg?: number;
-  phi0Deg?: number;
+  cut: FFCut;
+  cutAngleDeg: number;
+  thumb?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.floor(size * dpr);
     canvas.height = Math.floor(size * dpr);
@@ -476,16 +471,14 @@ function FarFieldPlot({
     ctx.fillStyle = "#0d1015";
     ctx.fillRect(0, 0, size, size);
 
-    const cx = size / 2;
-    const cy = size / 2;
-    const R = size / 2 - 18;
-    const DBI_TOP = Math.ceil(ff.max_gain / 3) * 3 + 3;
+    const cx = size / 2, cy = size / 2;
+    const R = size / 2 - (thumb ? 6 : 18);
+    const DBI_TOP = Math.max(0, Math.ceil(ff.max_gain / 3) * 3 + 3);
     const DB_SPAN = 30;
     const dbToFrac = (db: number) => Math.max(0, (db - (DBI_TOP - DB_SPAN)) / DB_SPAN);
 
-    // Radial grid: 6 dB steps from outer to centre.
     ctx.strokeStyle = "#2a313d";
-    ctx.lineWidth = 0.6;
+    ctx.lineWidth = thumb ? 0.4 : 0.6;
     ctx.fillStyle = "#4a5160";
     ctx.font = "9px ui-monospace, monospace";
     for (let d = 0; d <= 5; d++) {
@@ -493,10 +486,10 @@ function FarFieldPlot({
       ctx.beginPath();
       ctx.arc(cx, cy, rad, 0, 2 * Math.PI);
       ctx.stroke();
-      const lbl = `${(DBI_TOP - d * 6).toFixed(0)} dBi`;
-      if (d > 0 && d < 5) ctx.fillText(lbl, cx + 3, cy - rad + 10);
+      if (!thumb && d > 0 && d < 5) {
+        ctx.fillText(`${(DBI_TOP - d * 6).toFixed(0)} dBi`, cx + 3, cy - rad + 10);
+      }
     }
-    // Angle spokes every 30°
     ctx.strokeStyle = "#252a35";
     for (let a = 0; a < 360; a += 30) {
       const ar = (a * Math.PI) / 180;
@@ -506,35 +499,28 @@ function FarFieldPlot({
       ctx.stroke();
     }
 
-    // Azimuth cut: find nearest theta in ff.thetas to theta0Deg, plot all phi.
-    const thetaIdx = nearestIdx(ff.thetas, theta0Deg);
-    if (thetaIdx >= 0) {
+    if (cut === "azimuth") {
+      const theta0 = 90 - cutAngleDeg;
+      const tI = nearestIdx(ff.thetas, theta0);
       ctx.strokeStyle = "hsla(200, 80%, 60%, 0.95)";
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = thumb ? 1.2 : 1.8;
       ctx.beginPath();
       for (let pi = 0; pi < ff.phis.length; pi++) {
         const phi = (ff.phis[pi] * Math.PI) / 180;
-        const dbi = ff.rings[thetaIdx][pi];
+        const dbi = ff.rings[tI][pi];
         const rad = dbToFrac(dbi) * R;
         const x = cx + Math.cos(phi) * rad;
         const y = cy - Math.sin(phi) * rad;
-        if (pi === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        if (pi === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.closePath();
       ctx.stroke();
-    }
-
-    // Elevation cut: phi=phi0 and phi=phi0+180, plot dbi vs theta from -90..+90.
-    const phiF = nearestIdx(ff.phis, phi0Deg);
-    const phiB = nearestIdx(ff.phis, (phi0Deg + 180) % 360);
-    if (phiF >= 0 && phiB >= 0) {
+    } else {
+      const phiF = nearestIdx(ff.phis, cutAngleDeg);
+      const phiB = nearestIdx(ff.phis, (cutAngleDeg + 180) % 360);
       ctx.strokeStyle = "hsla(40, 90%, 60%, 0.95)";
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = thumb ? 1.2 : 1.8;
       ctx.beginPath();
-      // Sweep forward bearing from theta=0 (zenith) down to theta=90 (horizon)
-      // → map to angles 90°…0° on the chart. Then back bearing from 90 to 0°
-      // → map to 180°…270°.
       for (let ti = 0; ti < ff.thetas.length; ti++) {
         const theta = ff.thetas[ti];
         const dbi = ff.rings[ti][phiF];
@@ -542,74 +528,59 @@ function FarFieldPlot({
         const rad = dbToFrac(dbi) * R;
         const x = cx + Math.cos(ang) * rad;
         const y = cy - Math.sin(ang) * rad;
-        if (ti === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        if (ti === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       for (let ti = ff.thetas.length - 1; ti >= 0; ti--) {
         const theta = ff.thetas[ti];
         const dbi = ff.rings[ti][phiB];
-        const ang = ((90 + theta) * Math.PI) / 180; // back hemisphere
+        const ang = ((90 + theta) * Math.PI) / 180;
         const rad = dbToFrac(dbi) * R;
         ctx.lineTo(cx + Math.cos(ang) * rad, cy - Math.sin(ang) * rad);
       }
       ctx.stroke();
     }
 
-    // Compass labels (azimuth cut → +x is φ=0, +y is φ=90, etc.)
-    ctx.fillStyle = "#cfd6e3";
-    ctx.font = "11px ui-monospace, monospace";
-    ctx.fillText("φ=0°", cx + R - 30, cy + 14);
-    ctx.fillText("φ=90°", cx + 6, cy - R + 14);
-    ctx.fillText("φ=180°", cx - R + 4, cy + 14);
-    ctx.fillText("φ=270°", cx + 6, cy + R - 4);
-
-    // Legend
-    ctx.fillStyle = "hsla(200, 80%, 60%, 0.95)";
-    ctx.fillRect(8, size - 24, 12, 2);
-    ctx.fillStyle = "#cfd6e3";
-    ctx.fillText(`azimuth @ θ=${ff.thetas[thetaIdx]?.toFixed(0)}°`, 26, size - 20);
-    ctx.fillStyle = "hsla(40, 90%, 60%, 0.95)";
-    ctx.fillRect(8, size - 10, 12, 2);
-    ctx.fillStyle = "#cfd6e3";
-    ctx.fillText(`elevation @ φ=${phi0Deg}°/${(phi0Deg + 180) % 360}°`, 26, size - 6);
-  }, [ff, size, theta0Deg, phi0Deg]);
-
-  return <canvas ref={canvasRef} />;
-}
-
-function nearestIdx(arr: number[], target: number): number {
-  let best = -1;
-  let bestD = Infinity;
-  for (let i = 0; i < arr.length; i++) {
-    const d = Math.abs(arr[i] - target);
-    if (d < bestD) {
-      bestD = d;
-      best = i;
+    if (!thumb) {
+      ctx.fillStyle = "#cfd6e3";
+      ctx.font = "11px ui-monospace, monospace";
+      if (cut === "azimuth") {
+        ctx.fillText("φ=0°",   cx + R - 30, cy + 14);
+        ctx.fillText("φ=90°",  cx + 6,      cy - R + 14);
+        ctx.fillText("φ=180°", cx - R + 4,  cy + 14);
+        ctx.fillText("φ=270°", cx + 6,      cy + R - 4);
+        ctx.fillStyle = "hsla(200, 80%, 60%, 0.95)";
+        ctx.fillRect(8, size - 16, 12, 2);
+        ctx.fillStyle = "#cfd6e3";
+        ctx.fillText(`az cut @ el ${cutAngleDeg.toFixed(0)}°`, 26, size - 11);
+      } else {
+        ctx.fillText("zenith",  cx + 4, 14);
+        ctx.fillText("horizon", cx + R - 50, cy + 14);
+        ctx.fillText("nadir",   cx + 4, size - 2);
+        ctx.fillStyle = "hsla(40, 90%, 60%, 0.95)";
+        ctx.fillRect(8, size - 16, 12, 2);
+        ctx.fillStyle = "#cfd6e3";
+        ctx.fillText(`el cut @ φ ${cutAngleDeg.toFixed(0)}°`, 26, size - 11);
+      }
     }
-  }
-  return best;
+  }, [ff, size, cut, cutAngleDeg, thumb]);
+  return <canvas ref={canvasRef} className={thumb ? "thumb-canvas" : undefined} />;
 }
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // Helpers
-// ---------------------------------------------------------------------------
-
-function fmtC(c: ComplexVal): string {
-  const sign = c.im >= 0 ? "+" : "-";
-  return `${c.re.toFixed(2)} ${sign} ${Math.abs(c.im).toFixed(2)}j`;
-}
+// ===========================================================================
 
 function defaultValuesFor(schema: BuilderSchema): Record<string, number | ComplexVal> {
   const out: Record<string, number | ComplexVal> = {};
-  for (const p of schema.params) {
-    out[p.key] = p.default;
-  }
+  for (const p of schema.params) out[p.key] = p.default;
   return out;
 }
 
-// ---------------------------------------------------------------------------
-// Top-level app.
-// ---------------------------------------------------------------------------
+const DEBOUNCE_MS = 50;
+
+// ===========================================================================
+// App
+// ===========================================================================
 
 export function App() {
   const [builders, setBuilders] = useState<BuilderSchema[] | null>(null);
@@ -622,16 +593,19 @@ export function App() {
   const [values, setValues] = useState<Record<string, number | ComplexVal>>({});
   const [solving, setSolving] = useState<boolean>(false);
   const [result, setResult] = useState<SolveResponse | null>(null);
-  const [view, setView] = useState<"wire" | "smith" | "farfield">("wire");
+  const [solveMs, setSolveMs] = useState<number>(0);
+  const [view, setView] = useState<View>("wire");
   const [z0, setZ0] = useState<number>(50);
+  const [projMode, setProjMode] = useState<ProjMode>("auto");
+  const [showCurrents, setShowCurrents] = useState<boolean>(true);
+  const [azElevDeg, setAzElevDeg] = useState<number>(0);
+  const [elPhiDeg, setElPhiDeg] = useState<number>(0);
+  const [slideRef, slideSize] = useFillSize<HTMLDivElement>();
 
-  // 1. On mount: fetch the builder index.
+  // Builder catalogue.
   useEffect(() => {
     fetch("/api/builders")
-      .then((r) => {
-        if (!r.ok) throw new Error(`/api/builders → ${r.status}`);
-        return r.json();
-      })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`/api/builders → ${r.status}`))))
       .then((data: BuildersResp) => {
         setBuilders(data.builders);
         const first = data.builders.find((b) => b.name === "dipole") ?? data.builders[0];
@@ -643,24 +617,18 @@ export function App() {
       .catch((e: Error) => setError(e.message));
   }, []);
 
-  // 2. When the selected builder or variant changes, refetch its schema so
-  //    we get the right param defaults for the variant.
+  // Refetch schema on builder/variant change.
   const schema = useMemo(
     () => builders?.find((b) => b.name === selectedName) ?? null,
     [builders, selectedName],
   );
-
   useEffect(() => {
     if (!selectedName) return;
     const url = `/api/builder/${selectedName}?variant=${encodeURIComponent(variant)}`;
     fetch(url)
-      .then((r) => {
-        if (!r.ok) throw new Error(`${url} → ${r.status}`);
-        return r.json();
-      })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${url} → ${r.status}`))))
       .then((s: BuilderSchema) => {
         setValues(defaultValuesFor(s));
-        // Patch the cached entry so the slider list reflects the variant's params.
         setBuilders((prev) =>
           prev ? prev.map((b) => (b.name === s.name ? { ...b, params: s.params } : b)) : prev,
         );
@@ -672,217 +640,300 @@ export function App() {
     setValues((v) => ({ ...v, [key]: val }));
   }, []);
 
-  const solve = useCallback(async () => {
+  // Debounced auto-solve. A newer slider edit aborts the in-flight request
+  // before issuing a fresh one — keeps the UI responsive without flooding
+  // the backend during a slider drag.
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => {
     if (!schema) return;
     const engineChoice = ENGINE_CHOICES.find((c) => c.id === engineId);
     if (!engineChoice) return;
-    const req: SolveRequest = {
-      builder: selectedName,
-      variant,
-      params: values,
-      engine: engineChoice.engine,
-      pysim_basis: engineChoice.pysim_basis,
-      ground,
-      far_field: farField,
-    };
-    setSolving(true);
-    setError(null);
-    try {
-      const r = await fetch("/api/solve", {
+    const handle = setTimeout(() => {
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+      const req: SolveRequest = {
+        builder: selectedName,
+        variant,
+        params: values,
+        engine: engineChoice.engine,
+        pysim_basis: engineChoice.pysim_basis,
+        ground,
+        far_field: farField,
+      };
+      setSolving(true);
+      const t0 = performance.now();
+      fetch("/api/solve", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(req),
-      });
-      if (!r.ok) {
-        const text = await r.text();
-        throw new Error(`${r.status} ${text}`);
-      }
-      setResult(await r.json());
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSolving(false);
-    }
+        signal: ac.signal,
+      })
+        .then(async (r) => {
+          if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+          return r.json();
+        })
+        .then((j: SolveResponse) => {
+          setResult(j);
+          setSolveMs(performance.now() - t0);
+          setError(null);
+        })
+        .catch((e: Error) => {
+          if (e.name !== "AbortError") setError(e.message);
+        })
+        .finally(() => {
+          if (abortRef.current === ac) setSolving(false);
+        });
+    }, DEBOUNCE_MS);
+    return () => clearTimeout(handle);
   }, [schema, selectedName, variant, values, engineId, ground, farField]);
 
   if (error && !builders) {
     return (
       <div className="app">
-        <div className="panel">
-          <div className="error">{error}</div>
-        </div>
+        <div className="sidebar"><div className="error">{error}</div></div>
       </div>
     );
   }
   if (!builders) {
     return (
       <div className="app">
-        <div className="panel">Loading builders…</div>
+        <div className="sidebar">
+          <h1>antenna_designer</h1>
+          <div className="empty-state">Loading builders…</div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="app">
-      <div className="panel">
-        <h2>Antenna</h2>
-        <div className="field">
-          <label>Builder</label>
+      <div className="sidebar">
+        <h1>antenna_designer</h1>
+
+        <div className="group-label">Antenna</div>
+        <div className="geometry-select-row">
+          <span className="geometry-select-label">builder</span>
           <select
+            className="geometry-select"
             value={selectedName}
-            onChange={(e) => {
-              setSelectedName(e.target.value);
-              setVariant("default");
-            }}
+            onChange={(e) => { setSelectedName(e.target.value); setVariant("default"); }}
           >
-            {builders.map((b) => (
-              <option key={b.name} value={b.name}>
-                {b.name}
-              </option>
-            ))}
+            {builders.map((b) => (<option key={b.name} value={b.name}>{b.name}</option>))}
           </select>
         </div>
         {schema && schema.variants.length > 1 && (
-          <div className="field">
-            <label>Variant</label>
-            <select value={variant} onChange={(e) => setVariant(e.target.value)}>
-              {schema.variants.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
+          <div className="geometry-select-row">
+            <span className="geometry-select-label">variant</span>
+            <select className="geometry-select" value={variant} onChange={(e) => setVariant(e.target.value)}>
+              {schema.variants.map((v) => (<option key={v} value={v}>{v}</option>))}
             </select>
           </div>
         )}
 
-        <h2>Engine</h2>
-        <div className="field">
-          <label>Solver</label>
-          <select value={engineId} onChange={(e) => setEngineId(e.target.value)}>
-            {ENGINE_CHOICES.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
+        <div className="group-label">Engine</div>
+        <div className="backend-tabs">
+          {ENGINE_CHOICES.map((c) => (
+            <button
+              key={c.id}
+              className={c.id === engineId ? "backend-tab-btn active" : "backend-tab-btn"}
+              onClick={() => setEngineId(c.id)}
+              title={c.engine === "pynec" ? "PyNEC (NEC2)" : `pysim — ${c.pysim_basis}`}
+            >
+              <span className="slot-letter">{c.letter}</span>
+              <span className="slot-sub">{c.sub}</span>
+            </button>
+          ))}
+        </div>
+        <div className="geometry-select-row">
+          <span className="geometry-select-label">ground</span>
+          <select className="geometry-select" value={ground} onChange={(e) => setGround(e.target.value)}>
+            {GROUND_CHOICES.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
           </select>
         </div>
-        <div className="field">
-          <label>Ground</label>
-          <select value={ground} onChange={(e) => setGround(e.target.value)}>
-            {GROUND_CHOICES.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label>
-            <input
-              type="checkbox"
-              checked={farField}
-              onChange={(e) => setFarField(e.target.checked)}
-            />{" "}
-            Compute far-field
-          </label>
-        </div>
+        <label className="checkbox-row">
+          <input type="checkbox" checked={farField} onChange={(e) => setFarField(e.target.checked)} />
+          compute far-field
+        </label>
 
-        <h2>Parameters</h2>
-        {schema && (
-          <ParamSliders params={schema.params} values={values} onChange={onParamChange} />
+        <div className="group-label">Parameters</div>
+        {schema && <ParamSliders params={schema.params} values={values} onChange={onParamChange} />}
+
+        {error && <div className="error">{error}</div>}
+
+        {result && (
+          <>
+            <div className="group-label">Readout</div>
+            <div className="readout">
+              <div className="row">
+                <span>freq</span>
+                <span className="val">{result.freq_mhz.toFixed(3)} MHz</span>
+              </div>
+              {result.far_field && (
+                <div className="row">
+                  <span>max gain</span>
+                  <span className="val-hot">{result.far_field.max_gain.toFixed(2)} dBi</span>
+                </div>
+              )}
+              <div className="feeds-table">
+                <div className="feeds-table-header">
+                  <span>feed</span><span>R (Ω)</span><span>X (Ω)</span>
+                </div>
+                {result.z_per_feed.map((z, i) => (
+                  <div className="row" key={i}>
+                    <span>
+                      <span className="feed-swatch" style={{ background: feedColor(i, result.z_per_feed.length) }} />
+                      f{i}
+                    </span>
+                    <span className="val">{z.re.toFixed(1)}</span>
+                    <span className="val">{z.im.toFixed(1)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="field-row" style={{ marginTop: 6 }}>
+                <span style={{ color: "var(--muted)" }}>Z₀</span>
+                <input
+                  type="number"
+                  value={z0}
+                  step={1}
+                  onChange={(e) => setZ0(parseFloat(e.target.value) || 50)}
+                  style={{ width: 70 }}
+                />
+              </div>
+            </div>
+          </>
         )}
-
-        <button className="solve-button" onClick={solve} disabled={solving}>
-          {solving ? "Solving…" : "Solve"}
-        </button>
-
-        {error && <div className="error" style={{ marginTop: 8 }}>{error}</div>}
       </div>
 
-      <div className="panel viewport">
-        <div className="tab-row">
+      <div className="stage">
+        <div className="thumbstrip">
           <button
-            className={view === "wire" ? "tab active" : "tab"}
+            className={view === "wire" ? "thumb active" : "thumb"}
             onClick={() => setView("wire")}
           >
-            Wire + currents
+            {result
+              ? <WireCanvas wires={result.wires} currents={result.currents} size={64} projMode={projMode} showCurrents={showCurrents} thumb />
+              : <div className="thumb-canvas" />}
+            <span className="thumb-label">Wire</span>
           </button>
           <button
-            className={view === "smith" ? "tab active" : "tab"}
+            className={view === "smith" ? "thumb active" : "thumb"}
             onClick={() => setView("smith")}
           >
-            Smith
+            {result
+              ? <SmithChart z_per_feed={result.z_per_feed} z0={z0} size={64} thumb />
+              : <div className="thumb-canvas" />}
+            <span className="thumb-label">Smith</span>
           </button>
           <button
-            className={view === "farfield" ? "tab active" : "tab"}
-            onClick={() => setView("farfield")}
+            className={view === "ff-az" ? "thumb active" : "thumb"}
+            onClick={() => setView("ff-az")}
             disabled={!result?.far_field}
           >
-            Far-field
+            {result?.far_field
+              ? <FarFieldPlot ff={result.far_field} size={64} cut="azimuth" cutAngleDeg={azElevDeg} thumb />
+              : <div className="thumb-canvas" />}
+            <span className="thumb-label">FF az</span>
+          </button>
+          <button
+            className={view === "ff-el" ? "thumb active" : "thumb"}
+            onClick={() => setView("ff-el")}
+            disabled={!result?.far_field}
+          >
+            {result?.far_field
+              ? <FarFieldPlot ff={result.far_field} size={64} cut="elevation" cutAngleDeg={elPhiDeg} thumb />
+              : <div className="thumb-canvas" />}
+            <span className="thumb-label">FF el</span>
           </button>
         </div>
-        {result ? (
-          <>
-            <div className="status">
-              {result.builder} ({result.variant}) · {result.engine} · {result.freq_mhz} MHz · {result.wires.length} wires
-              {result.far_field && (
-                <>
-                  {" · "}far-field {result.far_field.max_gain.toFixed(2)} dBi max
-                </>
-              )}
-            </div>
-            <table className="z-table">
-              <thead>
-                <tr>
-                  <th>Feed</th>
-                  <th>R (Ω)</th>
-                  <th>X (Ω)</th>
-                  <th>|Z|</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.z_per_feed.map((z, i) => (
-                  <tr key={i}>
-                    <td>
-                      <span
-                        className="feed-swatch"
-                        style={{
-                          background: feedColor(i, result.z_per_feed.length),
-                        }}
-                      />
-                      f{i}
-                    </td>
-                    <td>{z.re.toFixed(2)}</td>
-                    <td>{z.im.toFixed(2)}</td>
-                    <td>{fmtC(z)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {view === "wire" && (
-              <WireCanvas wires={result.wires} currents={result.currents} />
-            )}
-            {view === "smith" && (
-              <>
-                <div className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <label style={{ margin: 0 }}>Z₀ (Ω)</label>
-                  <input
-                    type="number"
-                    value={z0}
-                    step={1}
-                    onChange={(e) => setZ0(parseFloat(e.target.value) || 50)}
-                    style={{ width: 80 }}
-                  />
+
+        <div className="carousel-slide" ref={slideRef}>
+          {!result && <div className="empty-state">Loading…</div>}
+
+          {result && view === "wire" && (
+            <>
+              <WireCanvas
+                wires={result.wires}
+                currents={result.currents}
+                projMode={projMode}
+                showCurrents={showCurrents}
+                size={slideSize}
+              />
+              <div className="antenna-overlay">
+                <div className="projection-toggle">
+                  {(["auto", "xy", "xz", "yz"] as ProjMode[]).map((m) => (
+                    <button
+                      key={m}
+                      className={m === projMode ? "active" : ""}
+                      onClick={() => setProjMode(m)}
+                    >{m}</button>
+                  ))}
                 </div>
-                <SmithChart z_per_feed={result.z_per_feed} z0={z0} size={480} />
-              </>
-            )}
-            {view === "farfield" && result.far_field && (
-              <FarFieldPlot ff={result.far_field} size={480} />
-            )}
-          </>
-        ) : (
-          <div className="status">Hit Solve to compute.</div>
+                <label className="overlay-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={showCurrents}
+                    onChange={(e) => setShowCurrents(e.target.checked)}
+                  />
+                  currents
+                </label>
+              </div>
+            </>
+          )}
+
+          {result && view === "smith" && (
+            <SmithChart z_per_feed={result.z_per_feed} z0={z0} size={slideSize} />
+          )}
+
+          {result && view === "ff-az" && result.far_field && (
+            <>
+              <FarFieldPlot ff={result.far_field} size={slideSize} cut="azimuth" cutAngleDeg={azElevDeg} />
+              <div className="antenna-overlay">
+                <div className="overlay-slider">
+                  <span>elev</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={89}
+                    step={1}
+                    value={azElevDeg}
+                    onChange={(e) => setAzElevDeg(parseFloat(e.target.value))}
+                  />
+                  <span className="val">{azElevDeg.toFixed(0)}°</span>
+                </div>
+              </div>
+            </>
+          )}
+
+          {result && view === "ff-el" && result.far_field && (
+            <>
+              <FarFieldPlot ff={result.far_field} size={slideSize} cut="elevation" cutAngleDeg={elPhiDeg} />
+              <div className="antenna-overlay">
+                <div className="overlay-slider">
+                  <span>az</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={359}
+                    step={1}
+                    value={elPhiDeg}
+                    onChange={(e) => setElPhiDeg(parseFloat(e.target.value))}
+                  />
+                  <span className="val">{elPhiDeg.toFixed(0)}°</span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {result && (
+          <div className="status">
+            {solving && <span className="solving-dot" />}
+            {result.builder}
+            {result.variant !== "default" && `:${result.variant}`} · {result.engine}
+            {" · "}
+            {result.freq_mhz.toFixed(3)} MHz · {solveMs.toFixed(0)} ms
+          </div>
         )}
       </div>
     </div>
