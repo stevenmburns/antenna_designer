@@ -50,6 +50,11 @@ class SolveRequest(BaseModel):
     pysim_basis: str = Field("triangular", description="triangular|sinusoidal|bspline")
     ground: str | None = Field(None, description="None|'free'|'pec'|'finite:eps,sigma'")
     far_field: bool = Field(True, description="Include far-field rings in response")
+    # Per-engine knobs settable from the Settings modal on each slot.
+    # wire_radius is currently only honoured by PysimEngine — PyNECEngine
+    # hard-codes 0.0005 in its geo.wire calls.
+    wire_radius: float = Field(0.0005, gt=0)
+    solver_kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
 class SweepRequest(BaseModel):
@@ -142,7 +147,13 @@ def _make_engine(req: SolveRequest, builder):
         basis = PYSIM_BASIS.get(req.pysim_basis)
         if basis is None:
             raise HTTPException(400, f"unknown pysim basis: {req.pysim_basis}")
-        return PysimEngine(builder, solver=basis, ground=ground)
+        return PysimEngine(
+            builder,
+            solver=basis,
+            ground=ground,
+            wire_radius=req.wire_radius,
+            solver_kwargs=req.solver_kwargs or None,
+        )
     raise HTTPException(400, f"unknown engine: {req.engine}")
 
 
