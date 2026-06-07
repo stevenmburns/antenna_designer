@@ -18,3 +18,4 @@ pg/
 node_modules/
 web/frontend/dist/
 web/frontend/.vite/
+.claude/

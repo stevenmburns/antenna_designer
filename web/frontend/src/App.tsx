@@ -45,6 +45,8 @@ type SolveRequest = {
   pysim_basis?: string;
   ground?: string | null;
   far_field?: boolean;
+  wire_radius?: number;
+  solver_kwargs?: Record<string, number>;
 };
 
 type WireGeom = {
@@ -132,7 +134,32 @@ const ENGINE_CHOICES: EngineChoice[] = [
 ];
 
 type SlotId = "A" | "B" | "C";
-type Slot = { id: SlotId; engineId: string; enabled: boolean };
+type Slot = {
+  id: SlotId;
+  engineId: string;
+  enabled: boolean;
+  wireRadius: number;
+  // Solver-basis-specific kwargs. Keyed by the basis they apply to so
+  // switching engines doesn't lose the previous basis's settings.
+  pysimKwargs: {
+    triangular: { n_qp_reg: number; n_qp_off: number };
+    sinusoidal: { n_qp_const: number };
+    bspline: Record<string, never>;
+  };
+};
+
+const DEFAULT_SLOT_KWARGS: Slot["pysimKwargs"] = {
+  triangular: { n_qp_reg: 4, n_qp_off: 4 },
+  sinusoidal: { n_qp_const: 16 },
+  bspline: {},
+};
+
+function slotSolverKwargs(slot: Slot): Record<string, number> {
+  const ec = ENGINE_CHOICES.find((c) => c.id === slot.engineId);
+  if (!ec || ec.engine !== "pysim") return {};
+  const basis = ec.pysim_basis as keyof Slot["pysimKwargs"];
+  return slot.pysimKwargs[basis] as Record<string, number>;
+}
 
 // Letter-shape style used to distinguish each slot's markers/lines across
 // every overlay chart. Slot A is always solid + filled; B + C use line
@@ -152,21 +179,16 @@ const GROUND_CHOICES = [
 type ProjMode = "auto" | "xy" | "xz" | "yz";
 type Projection = "xy" | "xz" | "yz";
 type FFCut = "azimuth" | "elevation";
-type View = "wire" | "wire3d" | "smith" | "ff-az" | "ff-el" | "sweep" | "converge";
+type View = "wire" | "smith" | "ff-az" | "ff-el";
 
-function swrFromZ(z_re: number, z_im: number, z0: number): number {
-  const num_re = z_re - z0;
-  const num_im = z_im;
-  const den_re = z_re + z0;
-  const den_im = z_im;
-  const denom = den_re * den_re + den_im * den_im;
-  if (denom === 0) return Infinity;
-  const gR = (num_re * den_re + num_im * den_im) / denom;
-  const gI = (num_im * den_re - num_re * den_im) / denom;
-  const g = Math.hypot(gR, gI);
-  if (g >= 1) return Infinity;
-  return (1 + g) / (1 - g);
-}
+const VIEW_LABEL: Record<View, string> = {
+  wire: "Wire 2D",
+  smith: "Smith",
+  "ff-az": "FF az",
+  "ff-el": "FF el",
+};
+
+const VIEW_ORDER: View[] = ["wire", "smith", "ff-az", "ff-el"];
 
 // ===========================================================================
 // Schema-driven sliders.
@@ -262,6 +284,30 @@ function useFillSize<T extends HTMLElement>(): [RefObject<T>, number] {
     return () => ro.disconnect();
   }, []);
   return [ref, size];
+}
+
+function useObservedHeight<T extends HTMLElement>(): [RefObject<T>, number] {
+  const ref = useRef<T>(null);
+  // Seed with viewport height so the first paint already has sane thumb
+  // sizes — without this seed the thumbstrip would be ~80px tall on the
+  // initial layout (label-only thumbs collapse the flex container's
+  // implicit height) and ResizeObserver settles at that small value
+  // instead of growing to the real cell height.
+  const [h, setH] = useState(() =>
+    typeof window !== "undefined" ? window.innerHeight : 0,
+  );
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    setH(el.clientHeight || window.innerHeight);
+    const ro = new ResizeObserver((entries) => {
+      const obs = entries[0].contentRect.height;
+      setH(obs > 0 ? obs : el.clientHeight);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, h];
 }
 
 // ===========================================================================
@@ -389,182 +435,6 @@ function WireCanvas({
 }
 
 // ===========================================================================
-// 3D wire renderer — orbit + zoom + per-knot current overlay.
-// ===========================================================================
-
-function rotate3(
-  p: [number, number, number],
-  yawRad: number,
-  pitchRad: number,
-): [number, number, number] {
-  const cy = Math.cos(yawRad), sy = Math.sin(yawRad);
-  const cp = Math.cos(pitchRad), sp = Math.sin(pitchRad);
-  const x1 = cy * p[0] - sy * p[1];
-  const y1 = sy * p[0] + cy * p[1];
-  const z1 = p[2];
-  const y2 = cp * y1 - sp * z1;
-  const z2 = sp * y1 + cp * z1;
-  return [x1, y2, z2];
-}
-
-function Wire3DCanvas({
-  wires,
-  currents,
-  size = 480,
-  yawDeg,
-  pitchDeg,
-  zoom,
-  showCurrents = true,
-  thumb = false,
-}: {
-  wires: WireGeom[];
-  currents?: WireCurrent[] | null;
-  size?: number;
-  yawDeg: number;
-  pitchDeg: number;
-  zoom: number;
-  showCurrents?: boolean;
-  thumb?: boolean;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.floor(size * dpr);
-    canvas.height = Math.floor(size * dpr);
-    canvas.style.width = `${size}px`;
-    canvas.style.height = `${size}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    ctx.fillStyle = "#0d1015";
-    ctx.fillRect(0, 0, size, size);
-
-    if (wires.length === 0) return;
-    const yawRad = (yawDeg * Math.PI) / 180;
-    const pitchRad = (pitchDeg * Math.PI) / 180;
-
-    // Project p → (sx, sy, depth). After rotation, x = right, z = up, y = depth.
-    type SP = { sx: number; sy: number; depth: number };
-    const proj = (p: [number, number, number]): SP => {
-      const [x, y, z] = rotate3(p, yawRad, pitchRad);
-      return { sx: x, sy: z, depth: y };
-    };
-
-    const rotPairs = wires.map((w) => [proj(w.p0), proj(w.p1)] as const);
-    let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
-    for (const [a, b] of rotPairs) {
-      xmin = Math.min(xmin, a.sx, b.sx);
-      xmax = Math.max(xmax, a.sx, b.sx);
-      ymin = Math.min(ymin, a.sy, b.sy);
-      ymax = Math.max(ymax, a.sy, b.sy);
-    }
-    const dx = Math.max(xmax - xmin, 1e-6);
-    const dy = Math.max(ymax - ymin, 1e-6);
-    const pad = thumb ? 0.08 : 0.1;
-    const fit = Math.min((size * (1 - 2 * pad)) / dx, (size * (1 - 2 * pad)) / dy);
-    const scale = fit * zoom;
-    const ox = (size - scale * dx) / 2 - scale * xmin;
-    const oy = (size - scale * dy) / 2 - scale * ymin;
-    const tx = (x: number) => ox + scale * x;
-    const ty = (y: number) => size - (oy + scale * y);
-
-    // Painter's algorithm — back wires first (larger depth → further away
-    // along view ray). For a tied chain of wires this gives correct stacking
-    // without a full z-buffer.
-    type SegItem = {
-      a: SP; b: SP;
-      isFeed: boolean;
-      color: string;
-      width: number;
-      midDepth: number;
-    };
-
-    const items: SegItem[] = [];
-    wires.forEach((w, i) => {
-      const [a, b] = rotPairs[i];
-      const isFeed = w.feed_voltage !== null;
-      items.push({
-        a, b, isFeed,
-        color: isFeed ? "var(--feed)" : "var(--wire)",
-        width: isFeed ? (thumb ? 1.5 : 2.5) : thumb ? 0.8 : 1.0,
-        midDepth: (a.depth + b.depth) / 2,
-      });
-    });
-
-    let peakI = 0;
-    if (showCurrents && currents) {
-      for (const w of currents) for (let i = 0; i < w.knot_currents_re.length; i++) {
-        const m = Math.hypot(w.knot_currents_re[i], w.knot_currents_im[i]);
-        if (m > peakI) peakI = m;
-      }
-    }
-
-    const curSegs: SegItem[] = [];
-    if (showCurrents && currents && peakI > 0) {
-      currents.forEach((w) => {
-        const knots = w.knot_positions;
-        const re = w.knot_currents_re, im = w.knot_currents_im;
-        for (let k = 0; k < knots.length - 1; k++) {
-          const a = proj(knots[k]);
-          const b = proj(knots[k + 1]);
-          const m = 0.5 * (Math.hypot(re[k], im[k]) + Math.hypot(re[k + 1], im[k + 1]));
-          curSegs.push({
-            a, b,
-            isFeed: false,
-            color: magToColor(m / peakI),
-            width: thumb ? 1.5 : 3.0,
-            midDepth: (a.depth + b.depth) / 2,
-          });
-        }
-      });
-    }
-
-    // Sort all segments back-to-front. Base wires drawn dim if currents on.
-    const all = [...items, ...curSegs];
-    all.sort((p, q) => q.midDepth - p.midDepth);
-    for (const it of all) {
-      ctx.strokeStyle = it.color;
-      ctx.globalAlpha = it.isFeed ? 1 : (curSegs.length > 0 && items.includes(it) ? 0.3 : 1);
-      ctx.lineWidth = it.width;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(tx(it.a.sx), ty(it.a.sy));
-      ctx.lineTo(tx(it.b.sx), ty(it.b.sy));
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-
-    // Compass: small axis triple at corner.
-    if (!thumb) {
-      ctx.font = "10px ui-monospace, monospace";
-      const ax = 30, ay = size - 30, len = 16;
-      const axes: [[number, number, number], string][] = [
-        [[1, 0, 0], "x"], [[0, 1, 0], "y"], [[0, 0, 1], "z"],
-      ];
-      for (const [v, lbl] of axes) {
-        const pr = rotate3(v, yawRad, pitchRad);
-        const dx = pr[0] * len, dy = pr[2] * len;
-        ctx.strokeStyle = "#4a5160";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(ax, ay);
-        ctx.lineTo(ax + dx, ay - dy);
-        ctx.stroke();
-        ctx.fillStyle = "#cfd6e3";
-        ctx.fillText(lbl, ax + dx + 2, ay - dy + 4);
-      }
-      ctx.fillStyle = "var(--muted)";
-      ctx.fillText(`yaw ${yawDeg.toFixed(0)}° · pitch ${pitchDeg.toFixed(0)}° · ×${zoom.toFixed(2)}`, 10, 14);
-    }
-  }, [wires, currents, size, yawDeg, pitchDeg, zoom, showCurrents, thumb]);
-
-  return <canvas ref={canvasRef} className={thumb ? "thumb-canvas" : undefined} />;
-}
-
-// ===========================================================================
 // Smith chart.
 // ===========================================================================
 
@@ -579,6 +449,7 @@ function SmithChart({
   size = 480,
   thumb = false,
   sweep,
+  converge,
   compareSlots,
 }: {
   z_per_feed: ComplexVal[];
@@ -586,6 +457,7 @@ function SmithChart({
   size?: number;
   thumb?: boolean;
   sweep?: SweepResponse | null;
+  converge?: ConvergeResponse | null;
   compareSlots?: { slotId: SlotId; z_per_feed: ComplexVal[] }[];
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -606,6 +478,12 @@ function SmithChart({
 
     ctx.fillStyle = "#0d1015";
     ctx.fillRect(0, 0, size, size);
+
+    // Skip the radius-driven drawing when the canvas hasn't been laid out
+    // yet — the ResizeObserver on the thumbstrip fires after the first
+    // render, so we briefly see size=0 → R<0 which would throw on
+    // ctx.arc.
+    if (R <= 0) return;
 
     ctx.strokeStyle = "#2a313d";
     ctx.lineWidth = thumb ? 0.4 : 0.6;
@@ -665,6 +543,48 @@ function SmithChart({
           else ctx.lineTo(px, py);
         }
         ctx.stroke();
+      }
+    }
+
+    // Optional convergence trail — one polyline per feed across the
+    // segmentation scales, with markers at each scale point. Visually
+    // distinct from the sweep trail (dashed, hot-yellow tint) so the two
+    // can coexist on the same chart without confusion.
+    if (converge && converge.z_per_feed.length > 1) {
+      const nFeedsConv = converge.z_per_feed[0]?.length ?? 0;
+      for (let f = 0; f < nFeedsConv; f++) {
+        ctx.strokeStyle = feedColor(f, nFeedsConv, 0.7);
+        ctx.lineWidth = thumb ? 1.0 : 1.4;
+        ctx.setLineDash(thumb ? [2, 2] : [4, 3]);
+        ctx.beginPath();
+        let first = true;
+        for (let k = 0; k < converge.z_per_feed.length; k++) {
+          const z = converge.z_per_feed[k][f];
+          if (!z) continue;
+          const zn_r = z.re / z0, zn_x = z.im / z0;
+          const dR = (zn_r + 1) * (zn_r + 1) + zn_x * zn_x;
+          const gR = ((zn_r - 1) * (zn_r + 1) + zn_x * zn_x) / dR;
+          const gI = (2 * zn_x) / dR;
+          const px = cx + gR * R, py = cy - gI * R;
+          if (first) { ctx.moveTo(px, py); first = false; }
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // small dot per scale
+        for (let k = 0; k < converge.z_per_feed.length; k++) {
+          const z = converge.z_per_feed[k][f];
+          if (!z) continue;
+          const zn_r = z.re / z0, zn_x = z.im / z0;
+          const dR = (zn_r + 1) * (zn_r + 1) + zn_x * zn_x;
+          const gR = ((zn_r - 1) * (zn_r + 1) + zn_x * zn_x) / dR;
+          const gI = (2 * zn_x) / dR;
+          const px = cx + gR * R, py = cy - gI * R;
+          ctx.fillStyle = "var(--feed)";
+          ctx.beginPath();
+          ctx.arc(px, py, thumb ? 1.5 : 2.5, 0, 2 * Math.PI);
+          ctx.fill();
+        }
       }
     }
 
@@ -767,6 +687,7 @@ function FarFieldPlot({
 
     const cx = size / 2, cy = size / 2;
     const R = size / 2 - (thumb ? 6 : 18);
+    if (R <= 0) return;
     const DBI_TOP = Math.max(0, Math.ceil(ff.max_gain / 3) * 3 + 3);
     const DB_SPAN = 30;
     const dbToFrac = (db: number) => Math.max(0, (db - (DBI_TOP - DB_SPAN)) / DB_SPAN);
@@ -860,275 +781,6 @@ function FarFieldPlot({
   return <canvas ref={canvasRef} className={thumb ? "thumb-canvas" : undefined} />;
 }
 
-// ===========================================================================
-// SWR-vs-freq plot — one line per feed.
-// ===========================================================================
-
-function SwrPlot({
-  sweep,
-  z0,
-  measFreqMhz,
-  size = 480,
-  thumb = false,
-}: {
-  sweep: SweepResponse | null;
-  z0: number;
-  measFreqMhz: number;
-  size?: number;
-  thumb?: boolean;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.floor(size * dpr);
-    canvas.height = Math.floor(size * dpr);
-    canvas.style.width = `${size}px`;
-    canvas.style.height = `${size}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    ctx.fillStyle = "#0d1015";
-    ctx.fillRect(0, 0, size, size);
-
-    if (!sweep || sweep.freqs_mhz.length < 2) {
-      if (!thumb) {
-        ctx.fillStyle = "var(--muted)";
-        ctx.font = "12px ui-monospace, monospace";
-        ctx.fillText("Hit Sweep to compute", 12, size / 2);
-      }
-      return;
-    }
-
-    const padL = thumb ? 4 : 44;
-    const padR = thumb ? 4 : 14;
-    const padT = thumb ? 4 : 14;
-    const padB = thumb ? 4 : 28;
-    const W = size - padL - padR;
-    const H = size - padT - padB;
-
-    const fs = sweep.freqs_mhz;
-    const f0 = fs[0], f1 = fs[fs.length - 1];
-    const SWR_MAX = 5;
-
-    // Compute SWR for every point/feed.
-    const nFeeds = sweep.z_per_feed[0]?.length ?? 0;
-    const swrSeries: number[][] = [];
-    for (let f = 0; f < nFeeds; f++) {
-      const ser = sweep.z_per_feed.map((zRow) =>
-        Math.min(SWR_MAX, swrFromZ(zRow[f].re, zRow[f].im, z0)),
-      );
-      swrSeries.push(ser);
-    }
-
-    const xT = (mhz: number) => padL + ((mhz - f0) / (f1 - f0)) * W;
-    const yT = (swr: number) => padT + (1 - (swr - 1) / (SWR_MAX - 1)) * H;
-
-    // Grid + axes.
-    ctx.strokeStyle = "#2a313d";
-    ctx.lineWidth = 0.6;
-    ctx.fillStyle = "#4a5160";
-    ctx.font = "10px ui-monospace, monospace";
-    for (const s of [1.0, 1.5, 2.0, 3.0, 5.0]) {
-      const y = yT(s);
-      ctx.beginPath();
-      ctx.moveTo(padL, y);
-      ctx.lineTo(padL + W, y);
-      ctx.stroke();
-      if (!thumb) ctx.fillText(`${s.toFixed(1)}`, 6, y + 3);
-    }
-    // SWR=2 line emphasised
-    ctx.strokeStyle = "#ffd16640";
-    ctx.lineWidth = 0.8;
-    const y2 = yT(2);
-    ctx.beginPath();
-    ctx.moveTo(padL, y2);
-    ctx.lineTo(padL + W, y2);
-    ctx.stroke();
-
-    // Freq ticks.
-    if (!thumb) {
-      ctx.strokeStyle = "#2a313d";
-      ctx.fillStyle = "#4a5160";
-      const nticks = 5;
-      for (let i = 0; i <= nticks; i++) {
-        const mhz = f0 + (i / nticks) * (f1 - f0);
-        const x = xT(mhz);
-        ctx.beginPath();
-        ctx.moveTo(x, padT + H);
-        ctx.lineTo(x, padT + H + 4);
-        ctx.stroke();
-        ctx.fillText(`${mhz.toFixed(2)}`, x - 14, padT + H + 16);
-      }
-      ctx.fillText("MHz", padL + W - 24, padT + H + 24);
-      ctx.save();
-      ctx.translate(12, padT + H / 2);
-      ctx.rotate(-Math.PI / 2);
-      ctx.fillText("SWR", 0, 0);
-      ctx.restore();
-    }
-
-    // Per-feed SWR lines.
-    swrSeries.forEach((ser, f) => {
-      ctx.strokeStyle = feedColor(f, swrSeries.length);
-      ctx.lineWidth = thumb ? 1.2 : 1.8;
-      ctx.beginPath();
-      for (let i = 0; i < ser.length; i++) {
-        const x = xT(fs[i]);
-        const y = yT(ser[i]);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    });
-
-    // Measurement-freq marker.
-    if (measFreqMhz >= f0 && measFreqMhz <= f1) {
-      ctx.strokeStyle = "#cfd6e3";
-      ctx.setLineDash(thumb ? [2, 2] : [4, 3]);
-      ctx.lineWidth = 1;
-      const x = xT(measFreqMhz);
-      ctx.beginPath();
-      ctx.moveTo(x, padT);
-      ctx.lineTo(x, padT + H);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      if (!thumb) {
-        ctx.fillStyle = "#cfd6e3";
-        ctx.fillText(`${measFreqMhz.toFixed(3)}`, x + 4, padT + 12);
-      }
-    }
-  }, [sweep, z0, measFreqMhz, size, thumb]);
-  return <canvas ref={canvasRef} className={thumb ? "thumb-canvas" : undefined} />;
-}
-
-// ===========================================================================
-// Convergence plot — R, X vs total segment count, one pair per feed.
-// ===========================================================================
-
-function ConvergePlot({
-  data,
-  size = 480,
-  thumb = false,
-}: {
-  data: ConvergeResponse | null;
-  size?: number;
-  thumb?: boolean;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.floor(size * dpr);
-    canvas.height = Math.floor(size * dpr);
-    canvas.style.width = `${size}px`;
-    canvas.style.height = `${size}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = "#0d1015";
-    ctx.fillRect(0, 0, size, size);
-
-    if (!data || data.scales.length < 2) {
-      if (!thumb) {
-        ctx.fillStyle = "var(--muted)";
-        ctx.font = "12px ui-monospace, monospace";
-        ctx.fillText("Hit Converge to compute", 12, size / 2);
-      }
-      return;
-    }
-
-    const padL = thumb ? 4 : 50;
-    const padR = thumb ? 4 : 14;
-    const padT = thumb ? 4 : 14;
-    const padB = thumb ? 4 : 30;
-    const W = size - padL - padR, H = size - padT - padB;
-
-    const nFeeds = data.z_per_feed[0]?.length ?? 0;
-    const Rs: number[][] = [], Xs: number[][] = [];
-    for (let f = 0; f < nFeeds; f++) {
-      Rs.push(data.z_per_feed.map((zRow) => zRow[f].re));
-      Xs.push(data.z_per_feed.map((zRow) => zRow[f].im));
-    }
-    const allVals = [...Rs.flat(), ...Xs.flat()];
-    const lo = Math.min(...allVals), hi = Math.max(...allVals);
-    const pad = (hi - lo) * 0.1 || 1;
-    const yMin = lo - pad, yMax = hi + pad;
-    const xs = data.n_segs_total;
-    const xMin = xs[0], xMax = xs[xs.length - 1];
-
-    const xT = (n: number) => padL + ((n - xMin) / Math.max(1, xMax - xMin)) * W;
-    const yT = (v: number) => padT + (1 - (v - yMin) / Math.max(1e-6, yMax - yMin)) * H;
-
-    // Grid + axes
-    ctx.strokeStyle = "#2a313d";
-    ctx.lineWidth = 0.6;
-    ctx.fillStyle = "#4a5160";
-    ctx.font = "10px ui-monospace, monospace";
-    const yTicks = 5;
-    for (let i = 0; i <= yTicks; i++) {
-      const v = yMin + (i / yTicks) * (yMax - yMin);
-      const y = yT(v);
-      ctx.beginPath();
-      ctx.moveTo(padL, y);
-      ctx.lineTo(padL + W, y);
-      ctx.stroke();
-      if (!thumb) ctx.fillText(v.toFixed(0), 4, y + 3);
-    }
-    if (!thumb) {
-      for (let i = 0; i < xs.length; i++) {
-        ctx.fillText(`${xs[i]}`, xT(xs[i]) - 10, padT + H + 14);
-      }
-      ctx.save();
-      ctx.translate(14, padT + H / 2);
-      ctx.rotate(-Math.PI / 2);
-      ctx.fillText("Z (Ω)", 0, 0);
-      ctx.restore();
-      ctx.fillText("total n_segs", padL + W - 70, padT + H + 24);
-    }
-
-    // R = solid, X = dashed
-    Rs.forEach((ser, f) => {
-      ctx.strokeStyle = feedColor(f, nFeeds);
-      ctx.lineWidth = thumb ? 1.2 : 1.8;
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      ser.forEach((v, i) => {
-        const x = xT(xs[i]), y = yT(v);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-      // dots
-      ser.forEach((v, i) => {
-        ctx.fillStyle = feedColor(f, nFeeds);
-        ctx.beginPath();
-        ctx.arc(xT(xs[i]), yT(v), thumb ? 1.5 : 2.5, 0, 2 * Math.PI);
-        ctx.fill();
-      });
-    });
-    Xs.forEach((ser, f) => {
-      ctx.strokeStyle = feedColor(f, nFeeds, 0.7);
-      ctx.lineWidth = thumb ? 1 : 1.5;
-      ctx.setLineDash(thumb ? [2, 2] : [4, 3]);
-      ctx.beginPath();
-      ser.forEach((v, i) => {
-        const x = xT(xs[i]), y = yT(v);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-    });
-    ctx.setLineDash([]);
-
-    // Legend
-    if (!thumb) {
-      ctx.fillStyle = "#cfd6e3";
-      ctx.fillText("solid = R, dashed = X", padL + 6, padT + 12);
-    }
-  }, [data, size, thumb]);
-  return <canvas ref={canvasRef} className={thumb ? "thumb-canvas" : undefined} />;
-}
 
 // ===========================================================================
 // Helpers
@@ -1138,6 +790,60 @@ function defaultValuesFor(schema: BuilderSchema): Record<string, number | Comple
   const out: Record<string, number | ComplexVal> = {};
   for (const p of schema.params) out[p.key] = p.default;
   return out;
+}
+
+type ViewProps = {
+  z0: number;
+  projMode: ProjMode;
+  showCurrents: boolean;
+  azElevDeg: number;
+  elPhiDeg: number;
+  sweep: SweepResponse | null;
+  converge: ConvergeResponse | null;
+  compareSlots: { slotId: SlotId; z_per_feed: ComplexVal[] }[];
+};
+
+function renderView(
+  v: View,
+  mode: "thumb" | "main",
+  result: SolveResponse,
+  p: ViewProps,
+  size: number,
+) {
+  const thumb = mode === "thumb";
+  switch (v) {
+    case "wire":
+      return (
+        <WireCanvas
+          wires={result.wires}
+          currents={result.currents}
+          size={size}
+          projMode={p.projMode}
+          showCurrents={p.showCurrents}
+          thumb={thumb}
+        />
+      );
+    case "smith":
+      return (
+        <SmithChart
+          z_per_feed={result.z_per_feed}
+          z0={p.z0}
+          size={size}
+          thumb={thumb}
+          sweep={p.sweep}
+          converge={p.converge}
+          compareSlots={p.compareSlots}
+        />
+      );
+    case "ff-az":
+      return result.far_field
+        ? <FarFieldPlot ff={result.far_field} size={size} cut="azimuth" cutAngleDeg={p.azElevDeg} thumb={thumb} />
+        : <div className="thumb-canvas" style={{ width: size, height: size }} />;
+    case "ff-el":
+      return result.far_field
+        ? <FarFieldPlot ff={result.far_field} size={size} cut="elevation" cutAngleDeg={p.elPhiDeg} thumb={thumb} />
+        : <div className="thumb-canvas" style={{ width: size, height: size }} />;
+  }
 }
 
 function buildCompareSlots(
@@ -1165,16 +871,17 @@ export function App() {
   const [selectedName, setSelectedName] = useState<string>("dipole");
   const [variant, setVariant] = useState<string>("default");
   const [slots, setSlots] = useState<Slot[]>([
-    { id: "A", engineId: "pynec", enabled: true },
-    { id: "B", engineId: "pysim-tri", enabled: false },
-    { id: "C", engineId: "pysim-sin", enabled: false },
+    { id: "A", engineId: "pynec",     enabled: true,  wireRadius: 0.0005, pysimKwargs: DEFAULT_SLOT_KWARGS },
+    { id: "B", engineId: "pysim-tri", enabled: false, wireRadius: 0.0005, pysimKwargs: DEFAULT_SLOT_KWARGS },
+    { id: "C", engineId: "pysim-sin", enabled: false, wireRadius: 0.0005, pysimKwargs: DEFAULT_SLOT_KWARGS },
   ]);
-  const setSlotEngine = useCallback((slotId: SlotId, engineId: string) => {
-    setSlots((ss) => ss.map((s) => (s.id === slotId ? { ...s, engineId } : s)));
+  const updateSlot = useCallback((slotId: SlotId, patch: Partial<Slot>) => {
+    setSlots((ss) => ss.map((s) => (s.id === slotId ? { ...s, ...patch } : s)));
   }, []);
   const setSlotEnabled = useCallback((slotId: SlotId, enabled: boolean) => {
     setSlots((ss) => ss.map((s) => (s.id === slotId ? { ...s, enabled } : s)));
   }, []);
+  const [settingsSlotId, setSettingsSlotId] = useState<SlotId | null>(null);
   // The primary slot (A) drives wire / currents / FF views; the live
   // single-point solve still uses one engine for those because they
   // don't compare meaningfully across slots.
@@ -1192,9 +899,6 @@ export function App() {
   const [showCurrents, setShowCurrents] = useState<boolean>(true);
   const [azElevDeg, setAzElevDeg] = useState<number>(0);
   const [elPhiDeg, setElPhiDeg] = useState<number>(0);
-  const [yaw3d, setYaw3d] = useState<number>(30);
-  const [pitch3d, setPitch3d] = useState<number>(25);
-  const [zoom3d, setZoom3d] = useState<number>(1.0);
   const [bandStart, setBandStart] = useState<number>(28.0);
   const [bandStop, setBandStop] = useState<number>(29.0);
   const [nSweep, setNSweep] = useState<number>(41);
@@ -1203,31 +907,12 @@ export function App() {
   const [converge, setConverge] = useState<ConvergeResponse | null>(null);
   const [converging, setConverging] = useState<boolean>(false);
   const [slideRef, slideSize] = useFillSize<HTMLDivElement>();
-
-  // Orbit-drag handlers for the 3D wire view. Active only when view==='wire3d';
-  // attached at the slide div level so dragging anywhere inside the canvas
-  // orbits.
-  const dragRef = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null);
-  const onSlidePointerDown = useCallback((e: React.PointerEvent) => {
-    if (view !== "wire3d") return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    dragRef.current = { x: e.clientX, y: e.clientY, yaw: yaw3d, pitch: pitch3d };
-  }, [view, yaw3d, pitch3d]);
-  const onSlidePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragRef.current) return;
-    const dx = e.clientX - dragRef.current.x;
-    const dy = e.clientY - dragRef.current.y;
-    setYaw3d(((dragRef.current.yaw + dx * 0.4) % 360 + 360) % 360);
-    setPitch3d(Math.max(-89, Math.min(89, dragRef.current.pitch - dy * 0.4)));
-  }, []);
-  const onSlidePointerUp = useCallback((e: React.PointerEvent) => {
-    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    dragRef.current = null;
-  }, []);
-  const onSlideWheel = useCallback((e: React.WheelEvent) => {
-    if (view !== "wire3d") return;
-    setZoom3d((z) => Math.max(0.2, Math.min(8, z * (e.deltaY < 0 ? 1.1 : 1 / 1.1))));
-  }, [view]);
+  const [stageRef, stageH] = useObservedHeight<HTMLDivElement>();
+  // Thumbstrip distributes 3 thumbs vertically; each thumb reserves ~32px
+  // of vertical space for the label + padding around the canvas. Scale
+  // purely from the available height — no floor, so a tiny window just
+  // gets tiny thumbs rather than triggering scrollbars.
+  const thumbSide = Math.max(0, Math.floor(stageH / 3) - 32);
 
   // Builder catalogue.
   useEffect(() => {
@@ -1364,6 +1049,8 @@ export function App() {
             pysim_basis: ec.pysim_basis,
             ground,
             far_field: s.id === "A" ? farField : false,
+            wire_radius: s.wireRadius,
+            solver_kwargs: slotSolverKwargs(s),
           };
           return fetch("/api/solve", {
             method: "POST",
@@ -1449,33 +1136,36 @@ export function App() {
         )}
 
         <div className="group-label">Engine slots</div>
-        {slots.map((slot) => (
-          <div key={slot.id} className="field-row" style={{ gap: 6 }}>
-            <label className="checkbox-row" style={{ minWidth: 28, color: "var(--accent)", fontWeight: 600 }}>
-              <input
-                type="checkbox"
-                checked={slot.enabled}
-                disabled={slot.id === "A"}
-                onChange={(e) => setSlotEnabled(slot.id, e.target.checked)}
-              />
-              {slot.id}
-            </label>
-            <div className="backend-tabs" style={{ flex: 1 }}>
-              {ENGINE_CHOICES.map((c) => (
+        <div className="backend-tabs">
+          {slots.map((slot) => {
+            const ec = ENGINE_CHOICES.find((c) => c.id === slot.engineId);
+            return (
+              <div key={slot.id} className="backend-tab-cell">
                 <button
-                  key={c.id}
-                  className={c.id === slot.engineId ? "backend-tab-btn active" : "backend-tab-btn"}
-                  onClick={() => setSlotEngine(slot.id, c.id)}
-                  disabled={!slot.enabled}
-                  title={c.engine === "pynec" ? "PyNEC (NEC2)" : `pysim — ${c.pysim_basis}`}
+                  className={slot.enabled ? "backend-tab-btn active" : "backend-tab-btn"}
+                  onClick={() =>
+                    slot.id === "A" ? undefined : setSlotEnabled(slot.id, !slot.enabled)
+                  }
+                  title={
+                    slot.id === "A"
+                      ? `Slot A — always on (${ec?.letter ?? "?"})`
+                      : `Slot ${slot.id}: ${slot.enabled ? "on" : "off"} — click to toggle`
+                  }
                 >
-                  <span className="slot-letter">{c.letter}</span>
-                  <span className="slot-sub">{c.sub}</span>
+                  <span className="slot-letter">{slot.id}</span>
+                  <span className="slot-sub">{ec?.letter ?? "?"}</span>
                 </button>
-              ))}
-            </div>
-          </div>
-        ))}
+                <button
+                  className="backend-gear-btn"
+                  onClick={() => setSettingsSlotId(slot.id)}
+                  title={`Configure slot ${slot.id}`}
+                >
+                  ⚙
+                </button>
+              </div>
+            );
+          })}
+        </div>
         <div className="geometry-select-row">
           <span className="geometry-select-label">ground</span>
           <select className="geometry-select" value={ground} onChange={(e) => setGround(e.target.value)}>
@@ -1585,91 +1275,43 @@ export function App() {
         )}
       </div>
 
-      <div className="stage">
-        <div className="thumbstrip">
-          <button
-            className={view === "wire" ? "thumb active" : "thumb"}
-            onClick={() => setView("wire")}
-          >
-            {result
-              ? <WireCanvas wires={result.wires} currents={result.currents} size={64} projMode={projMode} showCurrents={showCurrents} thumb />
-              : <div className="thumb-canvas" />}
-            <span className="thumb-label">Wire 2D</span>
-          </button>
-          <button
-            className={view === "wire3d" ? "thumb active" : "thumb"}
-            onClick={() => setView("wire3d")}
-          >
-            {result
-              ? <Wire3DCanvas wires={result.wires} currents={result.currents} size={64} yawDeg={yaw3d} pitchDeg={pitch3d} zoom={zoom3d} showCurrents={showCurrents} thumb />
-              : <div className="thumb-canvas" />}
-            <span className="thumb-label">Wire 3D</span>
-          </button>
-          <button
-            className={view === "smith" ? "thumb active" : "thumb"}
-            onClick={() => setView("smith")}
-          >
-            {result
-              ? <SmithChart
-                  z_per_feed={result.z_per_feed}
-                  z0={z0}
-                  size={64}
-                  thumb
-                  sweep={sweep}
-                  compareSlots={buildCompareSlots(compareResults)}
-                />
-              : <div className="thumb-canvas" />}
-            <span className="thumb-label">Smith</span>
-          </button>
-          <button
-            className={view === "ff-az" ? "thumb active" : "thumb"}
-            onClick={() => setView("ff-az")}
-            disabled={!result?.far_field}
-          >
-            {result?.far_field
-              ? <FarFieldPlot ff={result.far_field} size={64} cut="azimuth" cutAngleDeg={azElevDeg} thumb />
-              : <div className="thumb-canvas" />}
-            <span className="thumb-label">FF az</span>
-          </button>
-          <button
-            className={view === "ff-el" ? "thumb active" : "thumb"}
-            onClick={() => setView("ff-el")}
-            disabled={!result?.far_field}
-          >
-            {result?.far_field
-              ? <FarFieldPlot ff={result.far_field} size={64} cut="elevation" cutAngleDeg={elPhiDeg} thumb />
-              : <div className="thumb-canvas" />}
-            <span className="thumb-label">FF el</span>
-          </button>
-          <button
-            className={view === "sweep" ? "thumb active" : "thumb"}
-            onClick={() => setView("sweep")}
-          >
-            {sweep
-              ? <SwrPlot sweep={sweep} z0={z0} measFreqMhz={result?.freq_mhz ?? 0} size={64} thumb />
-              : <div className="thumb-canvas" />}
-            <span className="thumb-label">SWR</span>
-          </button>
-          <button
-            className={view === "converge" ? "thumb active" : "thumb"}
-            onClick={() => setView("converge")}
-          >
-            {converge
-              ? <ConvergePlot data={converge} size={64} thumb />
-              : <div className="thumb-canvas" />}
-            <span className="thumb-label">Conv.</span>
-          </button>
+      <div className="stage" ref={stageRef}>
+        <div className="thumbstrip" style={{ width: thumbSide + 16 }}>
+          {VIEW_ORDER.filter((v) => v !== view).map((v) => {
+            const disabled = (v === "ff-az" || v === "ff-el") && !result?.far_field;
+            return (
+              <button
+                key={v}
+                className="thumb"
+                onClick={() => setView(v)}
+                disabled={disabled}
+                style={{ width: thumbSide + 8 }}
+              >
+                {result
+                  ? renderView(
+                      v,
+                      "thumb",
+                      result,
+                      {
+                        z0,
+                        projMode,
+                        showCurrents,
+                        azElevDeg,
+                        elPhiDeg,
+                        sweep,
+                        converge,
+                        compareSlots: buildCompareSlots(compareResults),
+                      },
+                      thumbSide,
+                    )
+                  : <div className="thumb-canvas" style={{ width: thumbSide, height: thumbSide }} />}
+                <span className="thumb-label">{VIEW_LABEL[v]}</span>
+              </button>
+            );
+          })}
         </div>
 
-        <div
-          className="carousel-slide"
-          ref={slideRef}
-          onPointerDown={onSlidePointerDown}
-          onPointerMove={onSlidePointerMove}
-          onPointerUp={onSlidePointerUp}
-          onWheel={onSlideWheel}
-          style={view === "wire3d" ? { cursor: dragRef.current ? "grabbing" : "grab" } : undefined}
-        >
+        <div className="carousel-slide" ref={slideRef}>
           {!result && <div className="empty-state">Loading…</div>}
 
           {result && view === "wire" && (
@@ -1703,53 +1345,15 @@ export function App() {
             </>
           )}
 
-          {result && view === "wire3d" && (
-            <>
-              <Wire3DCanvas
-                wires={result.wires}
-                currents={result.currents}
-                size={slideSize}
-                yawDeg={yaw3d}
-                pitchDeg={pitch3d}
-                zoom={zoom3d}
-                showCurrents={showCurrents}
-              />
-              <div className="antenna-overlay">
-                <label className="overlay-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={showCurrents}
-                    onChange={(e) => setShowCurrents(e.target.checked)}
-                  />
-                  currents
-                </label>
-                <button
-                  className="overlay-checkbox"
-                  onClick={() => { setYaw3d(30); setPitch3d(25); setZoom3d(1.0); }}
-                  style={{ cursor: "pointer", border: "1px solid #2a2f38" }}
-                >
-                  reset view
-                </button>
-              </div>
-            </>
-          )}
-
           {result && view === "smith" && (
             <SmithChart
               z_per_feed={result.z_per_feed}
               z0={z0}
               size={slideSize}
               sweep={sweep}
+              converge={converge}
               compareSlots={buildCompareSlots(compareResults)}
             />
-          )}
-
-          {result && view === "sweep" && (
-            <SwrPlot sweep={sweep} z0={z0} measFreqMhz={result.freq_mhz} size={slideSize} />
-          )}
-
-          {result && view === "converge" && (
-            <ConvergePlot data={converge} size={slideSize} />
           )}
 
           {result && view === "ff-az" && result.far_field && (
@@ -1802,6 +1406,152 @@ export function App() {
             {result.freq_mhz.toFixed(3)} MHz · {solveMs.toFixed(0)} ms
           </div>
         )}
+      </div>
+
+      {settingsSlotId && (
+        <SlotSettingsModal
+          slot={slots.find((s) => s.id === settingsSlotId)!}
+          onChange={(patch) => updateSlot(settingsSlotId, patch)}
+          onClose={() => setSettingsSlotId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ===========================================================================
+// Settings modal — picks the engine for one slot and edits its knobs.
+// ===========================================================================
+
+function SlotSettingsModal({
+  slot,
+  onChange,
+  onClose,
+}: {
+  slot: Slot;
+  onChange: (patch: Partial<Slot>) => void;
+  onClose: () => void;
+}) {
+  const ec = ENGINE_CHOICES.find((c) => c.id === slot.engineId);
+  const isPysim = ec?.engine === "pysim";
+  const basis = ec?.pysim_basis as keyof Slot["pysimKwargs"] | undefined;
+
+  const updateKwarg = (k: string, v: number) => {
+    if (!basis) return;
+    onChange({
+      pysimKwargs: {
+        ...slot.pysimKwargs,
+        [basis]: { ...(slot.pysimKwargs[basis] as object), [k]: v },
+      },
+    });
+  };
+
+  return (
+    <div className="backend-config-overlay" onClick={onClose}>
+      <div className="backend-config-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="backend-config-header">
+          <div>Slot {slot.id} configuration</div>
+          <button className="backend-config-close" onClick={onClose} aria-label="close">×</button>
+        </div>
+        <div className="backend-config-body">
+          <div className="group-label">Engine</div>
+          <div className="backend-tabs">
+            {ENGINE_CHOICES.map((c) => (
+              <button
+                key={c.id}
+                className={c.id === slot.engineId ? "backend-tab-btn active" : "backend-tab-btn"}
+                onClick={() => onChange({ engineId: c.id })}
+              >
+                <span className="slot-letter">{c.letter}</span>
+                <span className="slot-sub">{c.sub}</span>
+              </button>
+            ))}
+          </div>
+
+          {isPysim && (
+            <>
+              <div className="group-label">Pysim knobs</div>
+              <div className="field">
+                <label>
+                  <span>wire_radius (m)</span>
+                  <span className="val">{slot.wireRadius.toFixed(4)}</span>
+                </label>
+                <input
+                  type="number"
+                  value={slot.wireRadius}
+                  step={0.0001}
+                  min={1e-5}
+                  onChange={(e) => onChange({ wireRadius: parseFloat(e.target.value) || 0.0005 })}
+                />
+              </div>
+              {basis === "triangular" && (
+                <>
+                  <div className="field">
+                    <label>
+                      <span>n_qp_reg</span>
+                      <span className="val">{slot.pysimKwargs.triangular.n_qp_reg}</span>
+                    </label>
+                    <input
+                      type="range"
+                      min={2}
+                      max={16}
+                      step={1}
+                      value={slot.pysimKwargs.triangular.n_qp_reg}
+                      onChange={(e) => updateKwarg("n_qp_reg", parseInt(e.target.value, 10))}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>
+                      <span>n_qp_off</span>
+                      <span className="val">{slot.pysimKwargs.triangular.n_qp_off}</span>
+                    </label>
+                    <input
+                      type="range"
+                      min={2}
+                      max={16}
+                      step={1}
+                      value={slot.pysimKwargs.triangular.n_qp_off}
+                      onChange={(e) => updateKwarg("n_qp_off", parseInt(e.target.value, 10))}
+                    />
+                  </div>
+                </>
+              )}
+              {basis === "sinusoidal" && (
+                <div className="field">
+                  <label>
+                    <span>n_qp_const</span>
+                    <span className="val">{slot.pysimKwargs.sinusoidal.n_qp_const}</span>
+                  </label>
+                  <input
+                    type="range"
+                    min={4}
+                    max={64}
+                    step={1}
+                    value={slot.pysimKwargs.sinusoidal.n_qp_const}
+                    onChange={(e) => updateKwarg("n_qp_const", parseInt(e.target.value, 10))}
+                  />
+                </div>
+              )}
+              {basis === "bspline" && (
+                <div className="empty-state">No knobs exposed for B-spline yet.</div>
+              )}
+            </>
+          )}
+          {!isPysim && (
+            <div className="empty-state">PyNEC has no slot-level knobs yet.</div>
+          )}
+        </div>
+        <div className="backend-config-footer">
+          <button
+            className="backend-config-reset"
+            onClick={() => onChange({
+              wireRadius: 0.0005,
+              pysimKwargs: DEFAULT_SLOT_KWARGS,
+            })}
+          >
+            reset to defaults
+          </button>
+        </div>
       </div>
     </div>
   );
