@@ -131,6 +131,18 @@ const ENGINE_CHOICES: EngineChoice[] = [
   { id: "pysim-bsp", letter: "Bsp", sub: "pysim", engine: "pysim", pysim_basis: "bspline" },
 ];
 
+type SlotId = "A" | "B" | "C";
+type Slot = { id: SlotId; engineId: string; enabled: boolean };
+
+// Letter-shape style used to distinguish each slot's markers/lines across
+// every overlay chart. Slot A is always solid + filled; B + C use line
+// dashes and marker glyphs.
+const SLOT_STYLE: Record<SlotId, { dash: number[]; marker: "filled" | "hollow" | "x" }> = {
+  A: { dash: [], marker: "filled" },
+  B: { dash: [5, 4], marker: "hollow" },
+  C: { dash: [2, 3], marker: "x" },
+};
+
 const GROUND_CHOICES = [
   { id: "free", label: "Free space" },
   { id: "pec", label: "PEC plane" },
@@ -567,12 +579,14 @@ function SmithChart({
   size = 480,
   thumb = false,
   sweep,
+  compareSlots,
 }: {
   z_per_feed: ComplexVal[];
   z0: number;
   size?: number;
   thumb?: boolean;
   sweep?: SweepResponse | null;
+  compareSlots?: { slotId: SlotId; z_per_feed: ComplexVal[] }[];
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -655,25 +669,56 @@ function SmithChart({
     }
 
     const n = nFeedsCurrent;
-    z_per_feed.forEach((z, i) => {
+    const drawMarker = (
+      z: ComplexVal,
+      i: number,
+      slotId: SlotId,
+      labelSuffix: string,
+    ) => {
       const zn_r = z.re / z0, zn_x = z.im / z0;
       const denomR = (zn_r + 1) * (zn_r + 1) + zn_x * zn_x;
       const gR = ((zn_r - 1) * (zn_r + 1) + zn_x * zn_x) / denomR;
       const gI = (2 * zn_x) / denomR;
       const px = cx + gR * R, py = cy - gI * R;
-      ctx.fillStyle = feedColor(i, n);
-      ctx.beginPath();
-      ctx.arc(px, py, thumb ? 3 : 6, 0, 2 * Math.PI);
-      ctx.fill();
+      const r = thumb ? 3 : 6;
+      const fc = feedColor(i, n);
+      const m = SLOT_STYLE[slotId].marker;
       ctx.strokeStyle = "#0d1015";
       ctx.lineWidth = 1.5;
-      ctx.stroke();
+      if (m === "filled") {
+        ctx.fillStyle = fc;
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+      } else if (m === "hollow") {
+        ctx.fillStyle = "#0d1015";
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.strokeStyle = fc;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = fc;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(px - r, py - r); ctx.lineTo(px + r, py + r);
+        ctx.moveTo(px - r, py + r); ctx.lineTo(px + r, py - r);
+        ctx.stroke();
+      }
       if (!thumb) {
         ctx.fillStyle = "#cfd6e3";
         ctx.font = "10px ui-monospace, monospace";
-        ctx.fillText(`f${i}`, px + 10, py + 4);
+        ctx.fillText(`f${i}${labelSuffix}`, px + 10, py + 4);
       }
-    });
+    };
+    z_per_feed.forEach((z, i) => drawMarker(z, i, "A", ""));
+    if (compareSlots) {
+      for (const cs of compareSlots) {
+        cs.z_per_feed.forEach((z, i) => drawMarker(z, i, cs.slotId, ` ${cs.slotId}`));
+      }
+    }
   }, [z_per_feed, z0, size, thumb]);
   return <canvas ref={canvasRef} className={thumb ? "thumb-canvas" : undefined} />;
 }
@@ -1095,6 +1140,19 @@ function defaultValuesFor(schema: BuilderSchema): Record<string, number | Comple
   return out;
 }
 
+function buildCompareSlots(
+  compareResults: Partial<Record<SlotId, SolveResponse>>,
+): { slotId: SlotId; z_per_feed: ComplexVal[] }[] {
+  // Slot A's markers come from the primary `result` already; B and C
+  // ride on top here.
+  const out: { slotId: SlotId; z_per_feed: ComplexVal[] }[] = [];
+  for (const slotId of ["B", "C"] as SlotId[]) {
+    const r = compareResults[slotId];
+    if (r) out.push({ slotId, z_per_feed: r.z_per_feed });
+  }
+  return out;
+}
+
 const DEBOUNCE_MS = 50;
 
 // ===========================================================================
@@ -1106,13 +1164,28 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [selectedName, setSelectedName] = useState<string>("dipole");
   const [variant, setVariant] = useState<string>("default");
-  const [engineId, setEngineId] = useState<string>("pynec");
+  const [slots, setSlots] = useState<Slot[]>([
+    { id: "A", engineId: "pynec", enabled: true },
+    { id: "B", engineId: "pysim-tri", enabled: false },
+    { id: "C", engineId: "pysim-sin", enabled: false },
+  ]);
+  const setSlotEngine = useCallback((slotId: SlotId, engineId: string) => {
+    setSlots((ss) => ss.map((s) => (s.id === slotId ? { ...s, engineId } : s)));
+  }, []);
+  const setSlotEnabled = useCallback((slotId: SlotId, enabled: boolean) => {
+    setSlots((ss) => ss.map((s) => (s.id === slotId ? { ...s, enabled } : s)));
+  }, []);
+  // The primary slot (A) drives wire / currents / FF views; the live
+  // single-point solve still uses one engine for those because they
+  // don't compare meaningfully across slots.
+  const engineId = slots[0].engineId;
   const [ground, setGround] = useState<string>("free");
   const [farField, setFarField] = useState<boolean>(true);
   const [values, setValues] = useState<Record<string, number | ComplexVal>>({});
   const [solving, setSolving] = useState<boolean>(false);
   const [result, setResult] = useState<SolveResponse | null>(null);
   const [solveMs, setSolveMs] = useState<number>(0);
+  const [compareResults, setCompareResults] = useState<Partial<Record<SlotId, SolveResponse>>>({});
   const [view, setView] = useState<View>("wire");
   const [z0, setZ0] = useState<number>(50);
   const [projMode, setProjMode] = useState<ProjMode>("auto");
@@ -1264,53 +1337,73 @@ export function App() {
     }
   }, [schema, selectedName, variant, values, engineId, ground]);
 
-  // Debounced auto-solve. A newer slider edit aborts the in-flight request
-  // before issuing a fresh one — keeps the UI responsive without flooding
-  // the backend during a slider drag.
+  // Debounced auto-solve. Fires one /api/solve per enabled slot, the
+  // primary (A) drives the wire/FF/currents views, B/C are stored under
+  // compareResults for the Smith chart overlay. AbortController cancels
+  // every in-flight request when a newer slider edit comes in.
   const abortRef = useRef<AbortController | null>(null);
   useEffect(() => {
     if (!schema) return;
-    const engineChoice = ENGINE_CHOICES.find((c) => c.id === engineId);
-    if (!engineChoice) return;
     const handle = setTimeout(() => {
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
-      const req: SolveRequest = {
-        builder: selectedName,
-        variant,
-        params: values,
-        engine: engineChoice.engine,
-        pysim_basis: engineChoice.pysim_basis,
-        ground,
-        far_field: farField,
-      };
       setSolving(true);
       const t0 = performance.now();
-      fetch("/api/solve", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(req),
-        signal: ac.signal,
-      })
-        .then(async (r) => {
-          if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
-          return r.json();
+
+      const slotJobs = slots
+        .filter((s) => s.enabled)
+        .map((s) => {
+          const ec = ENGINE_CHOICES.find((c) => c.id === s.engineId);
+          if (!ec) return null;
+          const req: SolveRequest = {
+            builder: selectedName,
+            variant,
+            params: values,
+            engine: ec.engine,
+            pysim_basis: ec.pysim_basis,
+            ground,
+            far_field: s.id === "A" ? farField : false,
+          };
+          return fetch("/api/solve", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(req),
+            signal: ac.signal,
+          })
+            .then(async (r) => {
+              if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+              return r.json() as Promise<SolveResponse>;
+            })
+            .then((j) => ({ slotId: s.id, result: j }));
         })
-        .then((j: SolveResponse) => {
-          setResult(j);
-          setSolveMs(performance.now() - t0);
-          setError(null);
-        })
-        .catch((e: Error) => {
-          if (e.name !== "AbortError") setError(e.message);
+        .filter((x): x is Promise<{ slotId: SlotId; result: SolveResponse }> => x !== null);
+
+      Promise.allSettled(slotJobs)
+        .then((settled) => {
+          const out: Partial<Record<SlotId, SolveResponse>> = {};
+          let primary: SolveResponse | null = null;
+          for (const s of settled) {
+            if (s.status === "fulfilled") {
+              out[s.value.slotId] = s.value.result;
+              if (s.value.slotId === "A") primary = s.value.result;
+            } else if ((s.reason as Error)?.name !== "AbortError") {
+              setError((s.reason as Error).message);
+            }
+          }
+          if (primary) {
+            setResult(primary);
+            setSolveMs(performance.now() - t0);
+            setError(null);
+          }
+          setCompareResults(out);
         })
         .finally(() => {
           if (abortRef.current === ac) setSolving(false);
         });
     }, DEBOUNCE_MS);
     return () => clearTimeout(handle);
-  }, [schema, selectedName, variant, values, engineId, ground, farField]);
+  }, [schema, selectedName, variant, values, slots, ground, farField]);
 
   if (error && !builders) {
     return (
@@ -1355,20 +1448,34 @@ export function App() {
           </div>
         )}
 
-        <div className="group-label">Engine</div>
-        <div className="backend-tabs">
-          {ENGINE_CHOICES.map((c) => (
-            <button
-              key={c.id}
-              className={c.id === engineId ? "backend-tab-btn active" : "backend-tab-btn"}
-              onClick={() => setEngineId(c.id)}
-              title={c.engine === "pynec" ? "PyNEC (NEC2)" : `pysim — ${c.pysim_basis}`}
-            >
-              <span className="slot-letter">{c.letter}</span>
-              <span className="slot-sub">{c.sub}</span>
-            </button>
-          ))}
-        </div>
+        <div className="group-label">Engine slots</div>
+        {slots.map((slot) => (
+          <div key={slot.id} className="field-row" style={{ gap: 6 }}>
+            <label className="checkbox-row" style={{ minWidth: 28, color: "var(--accent)", fontWeight: 600 }}>
+              <input
+                type="checkbox"
+                checked={slot.enabled}
+                disabled={slot.id === "A"}
+                onChange={(e) => setSlotEnabled(slot.id, e.target.checked)}
+              />
+              {slot.id}
+            </label>
+            <div className="backend-tabs" style={{ flex: 1 }}>
+              {ENGINE_CHOICES.map((c) => (
+                <button
+                  key={c.id}
+                  className={c.id === slot.engineId ? "backend-tab-btn active" : "backend-tab-btn"}
+                  onClick={() => setSlotEngine(slot.id, c.id)}
+                  disabled={!slot.enabled}
+                  title={c.engine === "pynec" ? "PyNEC (NEC2)" : `pysim — ${c.pysim_basis}`}
+                >
+                  <span className="slot-letter">{c.letter}</span>
+                  <span className="slot-sub">{c.sub}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
         <div className="geometry-select-row">
           <span className="geometry-select-label">ground</span>
           <select className="geometry-select" value={ground} onChange={(e) => setGround(e.target.value)}>
@@ -1503,7 +1610,14 @@ export function App() {
             onClick={() => setView("smith")}
           >
             {result
-              ? <SmithChart z_per_feed={result.z_per_feed} z0={z0} size={64} thumb sweep={sweep} />
+              ? <SmithChart
+                  z_per_feed={result.z_per_feed}
+                  z0={z0}
+                  size={64}
+                  thumb
+                  sweep={sweep}
+                  compareSlots={buildCompareSlots(compareResults)}
+                />
               : <div className="thumb-canvas" />}
             <span className="thumb-label">Smith</span>
           </button>
@@ -1621,7 +1735,13 @@ export function App() {
           )}
 
           {result && view === "smith" && (
-            <SmithChart z_per_feed={result.z_per_feed} z0={z0} size={slideSize} sweep={sweep} />
+            <SmithChart
+              z_per_feed={result.z_per_feed}
+              z0={z0}
+              size={slideSize}
+              sweep={sweep}
+              compareSlots={buildCompareSlots(compareResults)}
+            />
           )}
 
           {result && view === "sweep" && (
