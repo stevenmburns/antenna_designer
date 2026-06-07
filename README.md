@@ -26,17 +26,18 @@
 | src/antenna\_designer/designs/rawdipole.py               |       12 |        0 |    100% |           |
 | src/antenna\_designer/designs/twoband\_fan\_dipole.py    |       77 |       59 |     23% |189-281, 287-303 |
 | src/antenna\_designer/designs/vertical.py                |       24 |        0 |    100% |           |
-| src/antenna\_designer/engine.py                          |       10 |        1 |     90% |        30 |
+| src/antenna\_designer/engine.py                          |       13 |        2 |     85% |    43, 49 |
 | src/antenna\_designer/engines/\_\_init\_\_.py            |        3 |        0 |    100% |           |
-| src/antenna\_designer/engines/pynec.py                   |       87 |        5 |     94% |50, 69, 99, 101, 106 |
-| src/antenna\_designer/engines/pysim.py                   |      145 |        4 |     97% |33, 71, 112, 239 |
+| src/antenna\_designer/engines/pynec.py                   |      104 |        7 |     93% |50, 69, 99, 101, 106, 132-134 |
+| src/antenna\_designer/engines/pysim.py                   |      154 |        4 |     97% |33, 71, 112, 252 |
 | src/antenna\_designer/far\_field.py                      |       94 |        0 |    100% |           |
 | src/antenna\_designer/geometry.py                        |      130 |        5 |     96% |53, 71, 82, 171, 244 |
 | src/antenna\_designer/opt.py                             |       39 |        1 |     97% |        53 |
 | src/antenna\_designer/sim.py                             |        2 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                           |      123 |        7 |     94% |     77-86 |
 | src/antenna\_designer/transform.py                       |       42 |        1 |     98% |        73 |
-| **TOTAL**                                                | **1554** |  **166** | **89%** |           |
+| src/antenna\_designer/web\_schema.py                     |       94 |       94 |      0% |    13-199 |
+| **TOTAL**                                                | **1677** |  **263** | **84%** |           |
 
 
 ## Setup coverage badge
