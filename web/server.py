@@ -64,6 +64,19 @@ class SweepRequest(BaseModel):
     n_points: int = Field(41, ge=2, le=401)
 
 
+class ConvergeRequest(BaseModel):
+    builder: str
+    variant: str = "default"
+    params: dict[str, Any] = Field(default_factory=dict)
+    engine: str = "pynec"
+    pysim_basis: str = "triangular"
+    ground: str | None = None
+    # Scaling factors applied to every wire's n_seg. 1.0 is the builder's
+    # native segmentation; sweeping >1 shows whether the solve has
+    # converged at the native resolution.
+    scales: list[float] = Field(default_factory=lambda: [0.5, 0.75, 1.0, 1.5, 2.0, 3.0])
+
+
 def _resolve_builder_class(name: str) -> type:
     try:
         mod = import_module(f"antenna_designer.designs.{name}")
@@ -194,6 +207,53 @@ def _solve_request_from_sweep(req: SweepRequest) -> SolveRequest:
     )
 
 
+def _scale_builder_segs(builder, scale: float):
+    """Monkey-patch builder.build_wires so every wire's n_seg is scaled by
+    `scale` (min 1). AntennaBuilder.__setattr__ diverts plain attribute
+    writes into `_params`, so we install the wrapper via `__dict__` to
+    bypass that and shadow the class-level method on this instance.
+    The engine constructors call build_wires() once, so one patch per
+    builder instance suffices."""
+    orig = builder.build_wires
+
+    def wrapped():
+        return [
+            (p0, p1, max(1, int(round(n * scale))), ev) for (p0, p1, n, ev) in orig()
+        ]
+
+    builder.__dict__["build_wires"] = wrapped
+    return builder
+
+
+@app.post("/api/converge")
+def converge(req: ConvergeRequest):
+    """Re-solve at increasing segmentations to gauge whether the live
+    solve is past its convergence knee."""
+    solve_req = SolveRequest(
+        builder=req.builder,
+        variant=req.variant,
+        params=req.params,
+        engine=req.engine,
+        pysim_basis=req.pysim_basis,
+        ground=req.ground,
+        far_field=False,
+    )
+    n_segs_total: list[int] = []
+    z_per_feed: list[list[dict]] = []
+    for s in req.scales:
+        b = _build_builder(solve_req)
+        _scale_builder_segs(b, s)
+        eng = _make_engine(solve_req, b)
+        zs = eng.impedance()
+        n_segs_total.append(sum(t[2] for t in b.build_wires()))
+        z_per_feed.append([{"re": float(z.real), "im": float(z.imag)} for z in zs])
+    return {
+        "scales": list(map(float, req.scales)),
+        "n_segs_total": n_segs_total,
+        "z_per_feed": z_per_feed,
+    }
+
+
 @app.post("/api/sweep")
 def sweep(req: SweepRequest):
     """Run an evenly-spaced frequency sweep on the chosen engine.
@@ -209,8 +269,7 @@ def sweep(req: SweepRequest):
     return {
         "freqs_mhz": freqs.tolist(),
         "z_per_feed": [
-            [{"re": float(z.real), "im": float(z.imag)} for z in row]
-            for row in zs
+            [{"re": float(z.real), "im": float(z.imag)} for z in row] for row in zs
         ],
     }
 

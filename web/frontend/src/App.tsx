@@ -96,6 +96,22 @@ type SweepResponse = {
   z_per_feed: ComplexVal[][]; // [freq_idx][feed_idx]
 };
 
+type ConvergeRequest = {
+  builder: string;
+  variant: string;
+  params: Record<string, number | ComplexVal>;
+  engine: string;
+  pysim_basis?: string;
+  ground?: string | null;
+  scales?: number[];
+};
+
+type ConvergeResponse = {
+  scales: number[];
+  n_segs_total: number[];
+  z_per_feed: ComplexVal[][]; // [scale_idx][feed_idx]
+};
+
 // ===========================================================================
 // Engine + ground choices.
 // ===========================================================================
@@ -124,7 +140,7 @@ const GROUND_CHOICES = [
 type ProjMode = "auto" | "xy" | "xz" | "yz";
 type Projection = "xy" | "xz" | "yz";
 type FFCut = "azimuth" | "elevation";
-type View = "wire" | "wire3d" | "smith" | "ff-az" | "ff-el" | "sweep";
+type View = "wire" | "wire3d" | "smith" | "ff-az" | "ff-el" | "sweep" | "converge";
 
 function swrFromZ(z_re: number, z_im: number, z0: number): number {
   const num_re = z_re - z0;
@@ -943,6 +959,133 @@ function SwrPlot({
 }
 
 // ===========================================================================
+// Convergence plot — R, X vs total segment count, one pair per feed.
+// ===========================================================================
+
+function ConvergePlot({
+  data,
+  size = 480,
+  thumb = false,
+}: {
+  data: ConvergeResponse | null;
+  size?: number;
+  thumb?: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(size * dpr);
+    canvas.height = Math.floor(size * dpr);
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = "#0d1015";
+    ctx.fillRect(0, 0, size, size);
+
+    if (!data || data.scales.length < 2) {
+      if (!thumb) {
+        ctx.fillStyle = "var(--muted)";
+        ctx.font = "12px ui-monospace, monospace";
+        ctx.fillText("Hit Converge to compute", 12, size / 2);
+      }
+      return;
+    }
+
+    const padL = thumb ? 4 : 50;
+    const padR = thumb ? 4 : 14;
+    const padT = thumb ? 4 : 14;
+    const padB = thumb ? 4 : 30;
+    const W = size - padL - padR, H = size - padT - padB;
+
+    const nFeeds = data.z_per_feed[0]?.length ?? 0;
+    const Rs: number[][] = [], Xs: number[][] = [];
+    for (let f = 0; f < nFeeds; f++) {
+      Rs.push(data.z_per_feed.map((zRow) => zRow[f].re));
+      Xs.push(data.z_per_feed.map((zRow) => zRow[f].im));
+    }
+    const allVals = [...Rs.flat(), ...Xs.flat()];
+    const lo = Math.min(...allVals), hi = Math.max(...allVals);
+    const pad = (hi - lo) * 0.1 || 1;
+    const yMin = lo - pad, yMax = hi + pad;
+    const xs = data.n_segs_total;
+    const xMin = xs[0], xMax = xs[xs.length - 1];
+
+    const xT = (n: number) => padL + ((n - xMin) / Math.max(1, xMax - xMin)) * W;
+    const yT = (v: number) => padT + (1 - (v - yMin) / Math.max(1e-6, yMax - yMin)) * H;
+
+    // Grid + axes
+    ctx.strokeStyle = "#2a313d";
+    ctx.lineWidth = 0.6;
+    ctx.fillStyle = "#4a5160";
+    ctx.font = "10px ui-monospace, monospace";
+    const yTicks = 5;
+    for (let i = 0; i <= yTicks; i++) {
+      const v = yMin + (i / yTicks) * (yMax - yMin);
+      const y = yT(v);
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + W, y);
+      ctx.stroke();
+      if (!thumb) ctx.fillText(v.toFixed(0), 4, y + 3);
+    }
+    if (!thumb) {
+      for (let i = 0; i < xs.length; i++) {
+        ctx.fillText(`${xs[i]}`, xT(xs[i]) - 10, padT + H + 14);
+      }
+      ctx.save();
+      ctx.translate(14, padT + H / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText("Z (Ω)", 0, 0);
+      ctx.restore();
+      ctx.fillText("total n_segs", padL + W - 70, padT + H + 24);
+    }
+
+    // R = solid, X = dashed
+    Rs.forEach((ser, f) => {
+      ctx.strokeStyle = feedColor(f, nFeeds);
+      ctx.lineWidth = thumb ? 1.2 : 1.8;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ser.forEach((v, i) => {
+        const x = xT(xs[i]), y = yT(v);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      // dots
+      ser.forEach((v, i) => {
+        ctx.fillStyle = feedColor(f, nFeeds);
+        ctx.beginPath();
+        ctx.arc(xT(xs[i]), yT(v), thumb ? 1.5 : 2.5, 0, 2 * Math.PI);
+        ctx.fill();
+      });
+    });
+    Xs.forEach((ser, f) => {
+      ctx.strokeStyle = feedColor(f, nFeeds, 0.7);
+      ctx.lineWidth = thumb ? 1 : 1.5;
+      ctx.setLineDash(thumb ? [2, 2] : [4, 3]);
+      ctx.beginPath();
+      ser.forEach((v, i) => {
+        const x = xT(xs[i]), y = yT(v);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+
+    // Legend
+    if (!thumb) {
+      ctx.fillStyle = "#cfd6e3";
+      ctx.fillText("solid = R, dashed = X", padL + 6, padT + 12);
+    }
+  }, [data, size, thumb]);
+  return <canvas ref={canvasRef} className={thumb ? "thumb-canvas" : undefined} />;
+}
+
+// ===========================================================================
 // Helpers
 // ===========================================================================
 
@@ -984,6 +1127,8 @@ export function App() {
   const [nSweep, setNSweep] = useState<number>(41);
   const [sweep, setSweep] = useState<SweepResponse | null>(null);
   const [sweeping, setSweeping] = useState<boolean>(false);
+  const [converge, setConverge] = useState<ConvergeResponse | null>(null);
+  const [converging, setConverging] = useState<boolean>(false);
   const [slideRef, slideSize] = useFillSize<HTMLDivElement>();
 
   // Orbit-drag handlers for the 3D wire view. Active only when view==='wire3d';
@@ -1047,8 +1192,10 @@ export function App() {
 
   const onParamChange = useCallback((key: string, val: number | ComplexVal) => {
     setValues((v) => ({ ...v, [key]: val }));
-    // A param edit invalidates the existing sweep (the antenna changed).
+    // Cached sweep / converge are tied to the antenna being solved; a
+    // param edit means they're stale.
     setSweep(null);
+    setConverge(null);
   }, []);
 
   const runSweep = useCallback(async () => {
@@ -1087,6 +1234,35 @@ export function App() {
       setSweeping(false);
     }
   }, [schema, selectedName, variant, values, engineId, ground, bandStart, bandStop, nSweep]);
+
+  const runConverge = useCallback(async () => {
+    if (!schema) return;
+    const engineChoice = ENGINE_CHOICES.find((c) => c.id === engineId);
+    if (!engineChoice) return;
+    setConverging(true);
+    try {
+      const req: ConvergeRequest = {
+        builder: selectedName,
+        variant,
+        params: values,
+        engine: engineChoice.engine,
+        pysim_basis: engineChoice.pysim_basis,
+        ground,
+      };
+      const r = await fetch("/api/converge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(req),
+      });
+      if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+      setConverge(await r.json());
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setConverging(false);
+    }
+  }, [schema, selectedName, variant, values, engineId, ground]);
 
   // Debounced auto-solve. A newer slider edit aborts the in-flight request
   // before issuing a fresh one — keeps the UI responsive without flooding
@@ -1239,14 +1415,24 @@ export function App() {
             onChange={(e) => { setNSweep(parseInt(e.target.value, 10)); setSweep(null); }}
           />
         </div>
-        <button
-          className="backend-tab-btn"
-          style={{ borderRadius: 4 }}
-          onClick={runSweep}
-          disabled={sweeping}
-        >
-          <span className="slot-letter">{sweeping ? "Sweeping…" : "Sweep"}</span>
-        </button>
+        <div className="field-row">
+          <button
+            className="backend-tab-btn"
+            style={{ borderRadius: 4, flex: 1 }}
+            onClick={runSweep}
+            disabled={sweeping}
+          >
+            <span className="slot-letter">{sweeping ? "Sweeping…" : "Sweep"}</span>
+          </button>
+          <button
+            className="backend-tab-btn"
+            style={{ borderRadius: 4, flex: 1 }}
+            onClick={runConverge}
+            disabled={converging}
+          >
+            <span className="slot-letter">{converging ? "Converging…" : "Converge"}</span>
+          </button>
+        </div>
 
         {result && (
           <>
@@ -1350,6 +1536,15 @@ export function App() {
               : <div className="thumb-canvas" />}
             <span className="thumb-label">SWR</span>
           </button>
+          <button
+            className={view === "converge" ? "thumb active" : "thumb"}
+            onClick={() => setView("converge")}
+          >
+            {converge
+              ? <ConvergePlot data={converge} size={64} thumb />
+              : <div className="thumb-canvas" />}
+            <span className="thumb-label">Conv.</span>
+          </button>
         </div>
 
         <div
@@ -1431,6 +1626,10 @@ export function App() {
 
           {result && view === "sweep" && (
             <SwrPlot sweep={sweep} z0={z0} measFreqMhz={result.freq_mhz} size={slideSize} />
+          )}
+
+          {result && view === "converge" && (
+            <ConvergePlot data={converge} size={slideSize} />
           )}
 
           {result && view === "ff-az" && result.far_field && (
