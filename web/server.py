@@ -52,6 +52,18 @@ class SolveRequest(BaseModel):
     far_field: bool = Field(True, description="Include far-field rings in response")
 
 
+class SweepRequest(BaseModel):
+    builder: str
+    variant: str = "default"
+    params: dict[str, Any] = Field(default_factory=dict)
+    engine: str = "pynec"
+    pysim_basis: str = "triangular"
+    ground: str | None = None
+    band_start_mhz: float = Field(..., description="Sweep start (MHz)")
+    band_stop_mhz: float = Field(..., description="Sweep stop (MHz)")
+    n_points: int = Field(41, ge=2, le=401)
+
+
 def _resolve_builder_class(name: str) -> type:
     try:
         mod = import_module(f"antenna_designer.designs.{name}")
@@ -168,6 +180,39 @@ def get_builder(name: str, variant: str = "default"):
     if s is None:
         raise HTTPException(404, f"unknown builder: {name}")
     return s
+
+
+def _solve_request_from_sweep(req: SweepRequest) -> SolveRequest:
+    return SolveRequest(
+        builder=req.builder,
+        variant=req.variant,
+        params=req.params,
+        engine=req.engine,
+        pysim_basis=req.pysim_basis,
+        ground=req.ground,
+        far_field=False,
+    )
+
+
+@app.post("/api/sweep")
+def sweep(req: SweepRequest):
+    """Run an evenly-spaced frequency sweep on the chosen engine.
+
+    PyNEC's batched sweep card requires evenly-spaced frequencies; pysim
+    handles arbitrary spacing but we send evenly-spaced for parity. The
+    builder's `freq` attribute is only used for k-independent setup; the
+    actual sweep targets are passed in via impedance_sweep(freqs)."""
+    builder = _build_builder(_solve_request_from_sweep(req))
+    eng = _make_engine(_solve_request_from_sweep(req), builder)
+    freqs = np.linspace(req.band_start_mhz, req.band_stop_mhz, req.n_points)
+    zs = eng.impedance_sweep(freqs)  # (n_freqs, n_feeds)
+    return {
+        "freqs_mhz": freqs.tolist(),
+        "z_per_feed": [
+            [{"re": float(z.real), "im": float(z.imag)} for z in row]
+            for row in zs
+        ],
+    }
 
 
 @app.post("/api/solve")
