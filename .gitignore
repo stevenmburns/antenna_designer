@@ -17,3 +17,4 @@ src/antenna_designer/*.html
 pg/
 node_modules/
 web/frontend/dist/
+web/frontend/.vite/

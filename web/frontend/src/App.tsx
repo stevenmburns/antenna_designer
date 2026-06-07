@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // ---------------------------------------------------------------------------
 // API types — mirror the FastAPI shapes in web/server.py.
@@ -47,6 +47,20 @@ type WireGeom = {
   feed_voltage: ComplexVal | null;
 };
 
+type WireCurrent = {
+  knot_positions: [number, number, number][];
+  knot_currents_re: number[];
+  knot_currents_im: number[];
+};
+
+type FarField = {
+  thetas: number[]; // degrees
+  phis: number[];   // degrees
+  rings: number[][]; // [theta_idx][phi_idx] → dBi
+  max_gain: number;
+  min_gain: number;
+};
+
 type SolveResponse = {
   builder: string;
   variant: string;
@@ -54,8 +68,8 @@ type SolveResponse = {
   freq_mhz: number;
   z_per_feed: ComplexVal[];
   wires: WireGeom[];
-  currents: unknown[];
-  far_field: { max_gain: number; min_gain: number } | null;
+  currents: WireCurrent[];
+  far_field: FarField | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -187,9 +201,26 @@ function pickProjection(wires: WireGeom[]): Projection {
   return "xy";
 }
 
-function WireCanvas({ wires, size = 480 }: { wires: WireGeom[]; size?: number }) {
+// Map normalised |I| in [0,1] to a viridis-like ramp.
+function magToColor(t: number): string {
+  const v = Math.max(0, Math.min(1, t));
+  const r = Math.round(255 * (0.267 + v * (0.993 - 0.267)));
+  const g = Math.round(255 * (0.005 + v * (0.906 - 0.005)));
+  const b = Math.round(255 * (0.329 + v * (0.144 - 0.329)));
+  return `rgb(${r},${g},${b})`;
+}
+
+function WireCanvas({
+  wires,
+  currents,
+  size = 480,
+}: {
+  wires: WireGeom[];
+  currents?: WireCurrent[] | null;
+  size?: number;
+}) {
   if (wires.length === 0) {
-    return <canvas width={size} height={size} />;
+    return <svg width={size} height={size} />;
   }
   const proj = pickProjection(wires);
   const proj2 = wires.map((w) => [project(w.p0, proj), project(w.p1, proj)] as const);
@@ -202,37 +233,361 @@ function WireCanvas({ wires, size = 480 }: { wires: WireGeom[]; size?: number })
   const pad = 0.08;
   const dx = Math.max(xmax - xmin, 1e-6);
   const dy = Math.max(ymax - ymin, 1e-6);
-  // Letterbox into the square, preserving aspect ratio.
   const scale = Math.min((size * (1 - 2 * pad)) / dx, (size * (1 - 2 * pad)) / dy);
   const ox = (size - scale * dx) / 2 - scale * xmin;
   const oy = (size - scale * dy) / 2 - scale * ymin;
   const tx = (x: number) => ox + scale * x;
-  const ty = (y: number) => size - (oy + scale * y); // flip y for screen coords
+  const ty = (y: number) => size - (oy + scale * y);
+
+  // Global peak |I| across all wires, used to normalise the colour ramp.
+  let peakI = 0;
+  if (currents) {
+    for (const w of currents) {
+      for (let i = 0; i < w.knot_currents_re.length; i++) {
+        const m = Math.hypot(w.knot_currents_re[i], w.knot_currents_im[i]);
+        if (m > peakI) peakI = m;
+      }
+    }
+  }
 
   return (
     <svg width={size} height={size}>
       <rect x={0} y={0} width={size} height={size} fill="var(--panel-2)" />
-      {/* Axis hint */}
       <text x={6} y={size - 6} fill="var(--text-dim)" fontSize={11} fontFamily="monospace">
         {`${proj} projection — ${dx.toFixed(2)} × ${dy.toFixed(2)} m`}
       </text>
+      {/* Base wires — drawn first, then currents overlaid. */}
       {wires.map((w, i) => {
         const [[a, b], [c, d]] = proj2[i];
         const isFeed = w.feed_voltage !== null;
         return (
           <line
-            key={i}
+            key={`wire-${i}`}
             x1={tx(a)}
             y1={ty(b)}
             x2={tx(c)}
             y2={ty(d)}
             stroke={isFeed ? "var(--feed)" : "var(--wire)"}
-            strokeWidth={isFeed ? 2.5 : 1.5}
+            strokeWidth={isFeed ? 2.5 : 1.0}
+            opacity={currents && peakI > 0 ? 0.35 : 1}
           />
         );
       })}
+      {/* Current overlay: per-knot polyline coloured by |I|. Each wire's
+          knot list is a single polyline; render each (k → k+1) segment
+          coloured by the segment-midpoint current magnitude. */}
+      {currents && peakI > 0 &&
+        currents.flatMap((w, wi) => {
+          const knots = w.knot_positions;
+          const re = w.knot_currents_re;
+          const im = w.knot_currents_im;
+          const segs = [];
+          for (let k = 0; k < knots.length - 1; k++) {
+            const [a, b] = project(knots[k], proj);
+            const [c, d] = project(knots[k + 1], proj);
+            const m1 = Math.hypot(re[k], im[k]);
+            const m2 = Math.hypot(re[k + 1], im[k + 1]);
+            const m = 0.5 * (m1 + m2);
+            segs.push(
+              <line
+                key={`cur-${wi}-${k}`}
+                x1={tx(a)}
+                y1={ty(b)}
+                x2={tx(c)}
+                y2={ty(d)}
+                stroke={magToColor(m / peakI)}
+                strokeWidth={3.0}
+                strokeLinecap="round"
+              />,
+            );
+          }
+          return segs;
+        })}
+      {/* Legend */}
+      {currents && peakI > 0 && (
+        <g transform={`translate(${size - 110}, 10)`}>
+          <rect x={0} y={0} width={100} height={12} fill="url(#cur-grad)" />
+          <text x={0} y={26} fill="var(--text-dim)" fontSize={10} fontFamily="monospace">
+            {`0`}
+          </text>
+          <text
+            x={100}
+            y={26}
+            fill="var(--text-dim)"
+            fontSize={10}
+            fontFamily="monospace"
+            textAnchor="end"
+          >
+            {`|I|=${peakI.toExponential(1)}A`}
+          </text>
+          <defs>
+            <linearGradient id="cur-grad" x1="0" y1="0" x2="1" y2="0">
+              {Array.from({ length: 6 }, (_, i) => (
+                <stop key={i} offset={`${(i * 100) / 5}%`} stopColor={magToColor(i / 5)} />
+              ))}
+            </linearGradient>
+          </defs>
+        </g>
+      )}
     </svg>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Smith chart — per-feed Z markers at a chosen reference impedance.
+// ---------------------------------------------------------------------------
+
+function feedColor(i: number, n: number, alpha = 0.95): string {
+  const hue = n <= 1 ? 200 : (i * 360) / n;
+  return `hsla(${hue}, 80%, 60%, ${alpha})`;
+}
+
+function SmithChart({
+  z_per_feed,
+  z0,
+  size = 480,
+}: {
+  z_per_feed: ComplexVal[];
+  z0: number;
+  size: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(size * dpr);
+    canvas.height = Math.floor(size * dpr);
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const cx = size / 2;
+    const cy = size / 2;
+    const R = size / 2 - 12;
+
+    ctx.fillStyle = "#0d1015";
+    ctx.fillRect(0, 0, size, size);
+
+    // Constant-r circles in Γ plane: centre = (r/(r+1), 0), radius = 1/(r+1)
+    ctx.strokeStyle = "#2a313d";
+    ctx.lineWidth = 0.6;
+    for (const rn of [0.2, 0.5, 1, 2, 5]) {
+      ctx.beginPath();
+      ctx.arc(cx + (rn / (rn + 1)) * R, cy, (1 / (rn + 1)) * R, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+
+    // Constant-x arcs: centre = (1, 1/x), radius = 1/|x|, clipped to unit disk
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+    ctx.clip();
+    for (const xn of [0.2, 0.5, 1, 2, 5]) {
+      const rad = (1 / xn) * R;
+      ctx.beginPath();
+      ctx.arc(cx + R, cy - (1 / xn) * R, rad, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx + R, cy + (1 / xn) * R, rad, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Real axis + outer boundary
+    ctx.strokeStyle = "#3a4150";
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(cx - R, cy);
+    ctx.lineTo(cx + R, cy);
+    ctx.stroke();
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = "#4a5160";
+    ctx.font = "10px ui-monospace, monospace";
+    ctx.fillText(`Z₀ = ${z0}Ω`, 8, 14);
+    ctx.fillText("+jX", cx + R - 26, cy - R + 14);
+    ctx.fillText("−jX", cx + R - 26, cy + R - 4);
+
+    // Per-feed markers — Γ = (Z − Z₀) / (Z + Z₀), normalised.
+    const n = z_per_feed.length;
+    z_per_feed.forEach((z, i) => {
+      const zn_r = z.re / z0;
+      const zn_x = z.im / z0;
+      const denomR = (zn_r + 1) * (zn_r + 1) + zn_x * zn_x;
+      const gammaR = ((zn_r - 1) * (zn_r + 1) + zn_x * zn_x) / denomR;
+      const gammaI = (2 * zn_x) / denomR;
+      const px = cx + gammaR * R;
+      const py = cy - gammaI * R;
+      ctx.fillStyle = feedColor(i, n);
+      ctx.beginPath();
+      ctx.arc(px, py, 6, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.strokeStyle = "#0d1015";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = "#cfd6e3";
+      ctx.font = "10px ui-monospace, monospace";
+      ctx.fillText(`f${i}`, px + 10, py + 4);
+    });
+  }, [z_per_feed, z0, size]);
+
+  return <canvas ref={canvasRef} />;
+}
+
+// ---------------------------------------------------------------------------
+// Far-field polar plots — azimuth cut at chosen θ + elevation cut at φ.
+// ---------------------------------------------------------------------------
+
+function FarFieldPlot({
+  ff,
+  size = 480,
+  theta0Deg = 90, // azimuth cut elevation: 90° = horizon
+  phi0Deg = 0,    // elevation cut bearing
+}: {
+  ff: FarField;
+  size?: number;
+  theta0Deg?: number;
+  phi0Deg?: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(size * dpr);
+    canvas.height = Math.floor(size * dpr);
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    ctx.fillStyle = "#0d1015";
+    ctx.fillRect(0, 0, size, size);
+
+    const cx = size / 2;
+    const cy = size / 2;
+    const R = size / 2 - 18;
+    const DBI_TOP = Math.ceil(ff.max_gain / 3) * 3 + 3;
+    const DB_SPAN = 30;
+    const dbToFrac = (db: number) => Math.max(0, (db - (DBI_TOP - DB_SPAN)) / DB_SPAN);
+
+    // Radial grid: 6 dB steps from outer to centre.
+    ctx.strokeStyle = "#2a313d";
+    ctx.lineWidth = 0.6;
+    ctx.fillStyle = "#4a5160";
+    ctx.font = "9px ui-monospace, monospace";
+    for (let d = 0; d <= 5; d++) {
+      const rad = (R * (5 - d)) / 5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad, 0, 2 * Math.PI);
+      ctx.stroke();
+      const lbl = `${(DBI_TOP - d * 6).toFixed(0)} dBi`;
+      if (d > 0 && d < 5) ctx.fillText(lbl, cx + 3, cy - rad + 10);
+    }
+    // Angle spokes every 30°
+    ctx.strokeStyle = "#252a35";
+    for (let a = 0; a < 360; a += 30) {
+      const ar = (a * Math.PI) / 180;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(ar) * R, cy - Math.sin(ar) * R);
+      ctx.stroke();
+    }
+
+    // Azimuth cut: find nearest theta in ff.thetas to theta0Deg, plot all phi.
+    const thetaIdx = nearestIdx(ff.thetas, theta0Deg);
+    if (thetaIdx >= 0) {
+      ctx.strokeStyle = "hsla(200, 80%, 60%, 0.95)";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      for (let pi = 0; pi < ff.phis.length; pi++) {
+        const phi = (ff.phis[pi] * Math.PI) / 180;
+        const dbi = ff.rings[thetaIdx][pi];
+        const rad = dbToFrac(dbi) * R;
+        const x = cx + Math.cos(phi) * rad;
+        const y = cy - Math.sin(phi) * rad;
+        if (pi === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    // Elevation cut: phi=phi0 and phi=phi0+180, plot dbi vs theta from -90..+90.
+    const phiF = nearestIdx(ff.phis, phi0Deg);
+    const phiB = nearestIdx(ff.phis, (phi0Deg + 180) % 360);
+    if (phiF >= 0 && phiB >= 0) {
+      ctx.strokeStyle = "hsla(40, 90%, 60%, 0.95)";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      // Sweep forward bearing from theta=0 (zenith) down to theta=90 (horizon)
+      // → map to angles 90°…0° on the chart. Then back bearing from 90 to 0°
+      // → map to 180°…270°.
+      for (let ti = 0; ti < ff.thetas.length; ti++) {
+        const theta = ff.thetas[ti];
+        const dbi = ff.rings[ti][phiF];
+        const ang = ((90 - theta) * Math.PI) / 180;
+        const rad = dbToFrac(dbi) * R;
+        const x = cx + Math.cos(ang) * rad;
+        const y = cy - Math.sin(ang) * rad;
+        if (ti === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      for (let ti = ff.thetas.length - 1; ti >= 0; ti--) {
+        const theta = ff.thetas[ti];
+        const dbi = ff.rings[ti][phiB];
+        const ang = ((90 + theta) * Math.PI) / 180; // back hemisphere
+        const rad = dbToFrac(dbi) * R;
+        ctx.lineTo(cx + Math.cos(ang) * rad, cy - Math.sin(ang) * rad);
+      }
+      ctx.stroke();
+    }
+
+    // Compass labels (azimuth cut → +x is φ=0, +y is φ=90, etc.)
+    ctx.fillStyle = "#cfd6e3";
+    ctx.font = "11px ui-monospace, monospace";
+    ctx.fillText("φ=0°", cx + R - 30, cy + 14);
+    ctx.fillText("φ=90°", cx + 6, cy - R + 14);
+    ctx.fillText("φ=180°", cx - R + 4, cy + 14);
+    ctx.fillText("φ=270°", cx + 6, cy + R - 4);
+
+    // Legend
+    ctx.fillStyle = "hsla(200, 80%, 60%, 0.95)";
+    ctx.fillRect(8, size - 24, 12, 2);
+    ctx.fillStyle = "#cfd6e3";
+    ctx.fillText(`azimuth @ θ=${ff.thetas[thetaIdx]?.toFixed(0)}°`, 26, size - 20);
+    ctx.fillStyle = "hsla(40, 90%, 60%, 0.95)";
+    ctx.fillRect(8, size - 10, 12, 2);
+    ctx.fillStyle = "#cfd6e3";
+    ctx.fillText(`elevation @ φ=${phi0Deg}°/${(phi0Deg + 180) % 360}°`, 26, size - 6);
+  }, [ff, size, theta0Deg, phi0Deg]);
+
+  return <canvas ref={canvasRef} />;
+}
+
+function nearestIdx(arr: number[], target: number): number {
+  let best = -1;
+  let bestD = Infinity;
+  for (let i = 0; i < arr.length; i++) {
+    const d = Math.abs(arr[i] - target);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +622,8 @@ export function App() {
   const [values, setValues] = useState<Record<string, number | ComplexVal>>({});
   const [solving, setSolving] = useState<boolean>(false);
   const [result, setResult] = useState<SolveResponse | null>(null);
+  const [view, setView] = useState<"wire" | "smith" | "farfield">("wire");
+  const [z0, setZ0] = useState<number>(50);
 
   // 1. On mount: fetch the builder index.
   useEffect(() => {
@@ -443,11 +800,36 @@ export function App() {
       </div>
 
       <div className="panel viewport">
-        <h2>Result</h2>
+        <div className="tab-row">
+          <button
+            className={view === "wire" ? "tab active" : "tab"}
+            onClick={() => setView("wire")}
+          >
+            Wire + currents
+          </button>
+          <button
+            className={view === "smith" ? "tab active" : "tab"}
+            onClick={() => setView("smith")}
+          >
+            Smith
+          </button>
+          <button
+            className={view === "farfield" ? "tab active" : "tab"}
+            onClick={() => setView("farfield")}
+            disabled={!result?.far_field}
+          >
+            Far-field
+          </button>
+        </div>
         {result ? (
           <>
             <div className="status">
               {result.builder} ({result.variant}) · {result.engine} · {result.freq_mhz} MHz · {result.wires.length} wires
+              {result.far_field && (
+                <>
+                  {" · "}far-field {result.far_field.max_gain.toFixed(2)} dBi max
+                </>
+              )}
             </div>
             <table className="z-table">
               <thead>
@@ -461,7 +843,15 @@ export function App() {
               <tbody>
                 {result.z_per_feed.map((z, i) => (
                   <tr key={i}>
-                    <td>{i}</td>
+                    <td>
+                      <span
+                        className="feed-swatch"
+                        style={{
+                          background: feedColor(i, result.z_per_feed.length),
+                        }}
+                      />
+                      f{i}
+                    </td>
                     <td>{z.re.toFixed(2)}</td>
                     <td>{z.im.toFixed(2)}</td>
                     <td>{fmtC(z)}</td>
@@ -469,12 +859,27 @@ export function App() {
                 ))}
               </tbody>
             </table>
-            {result.far_field && (
-              <div className="status">
-                Far-field: max {result.far_field.max_gain.toFixed(2)} dBi, min {result.far_field.min_gain.toFixed(2)} dBi
-              </div>
+            {view === "wire" && (
+              <WireCanvas wires={result.wires} currents={result.currents} />
             )}
-            <WireCanvas wires={result.wires} />
+            {view === "smith" && (
+              <>
+                <div className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <label style={{ margin: 0 }}>Z₀ (Ω)</label>
+                  <input
+                    type="number"
+                    value={z0}
+                    step={1}
+                    onChange={(e) => setZ0(parseFloat(e.target.value) || 50)}
+                    style={{ width: 80 }}
+                  />
+                </div>
+                <SmithChart z_per_feed={result.z_per_feed} z0={z0} size={480} />
+              </>
+            )}
+            {view === "farfield" && result.far_field && (
+              <FarFieldPlot ff={result.far_field} size={480} />
+            )}
           </>
         ) : (
           <div className="status">Hit Solve to compute.</div>
