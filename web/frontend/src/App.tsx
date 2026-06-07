@@ -124,7 +124,7 @@ const GROUND_CHOICES = [
 type ProjMode = "auto" | "xy" | "xz" | "yz";
 type Projection = "xy" | "xz" | "yz";
 type FFCut = "azimuth" | "elevation";
-type View = "wire" | "smith" | "ff-az" | "ff-el" | "sweep";
+type View = "wire" | "wire3d" | "smith" | "ff-az" | "ff-el" | "sweep";
 
 function swrFromZ(z_re: number, z_im: number, z0: number): number {
   const num_re = z_re - z0;
@@ -358,6 +358,182 @@ function WireCanvas({
       })}
     </svg>
   );
+}
+
+// ===========================================================================
+// 3D wire renderer — orbit + zoom + per-knot current overlay.
+// ===========================================================================
+
+function rotate3(
+  p: [number, number, number],
+  yawRad: number,
+  pitchRad: number,
+): [number, number, number] {
+  const cy = Math.cos(yawRad), sy = Math.sin(yawRad);
+  const cp = Math.cos(pitchRad), sp = Math.sin(pitchRad);
+  const x1 = cy * p[0] - sy * p[1];
+  const y1 = sy * p[0] + cy * p[1];
+  const z1 = p[2];
+  const y2 = cp * y1 - sp * z1;
+  const z2 = sp * y1 + cp * z1;
+  return [x1, y2, z2];
+}
+
+function Wire3DCanvas({
+  wires,
+  currents,
+  size = 480,
+  yawDeg,
+  pitchDeg,
+  zoom,
+  showCurrents = true,
+  thumb = false,
+}: {
+  wires: WireGeom[];
+  currents?: WireCurrent[] | null;
+  size?: number;
+  yawDeg: number;
+  pitchDeg: number;
+  zoom: number;
+  showCurrents?: boolean;
+  thumb?: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(size * dpr);
+    canvas.height = Math.floor(size * dpr);
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    ctx.fillStyle = "#0d1015";
+    ctx.fillRect(0, 0, size, size);
+
+    if (wires.length === 0) return;
+    const yawRad = (yawDeg * Math.PI) / 180;
+    const pitchRad = (pitchDeg * Math.PI) / 180;
+
+    // Project p → (sx, sy, depth). After rotation, x = right, z = up, y = depth.
+    type SP = { sx: number; sy: number; depth: number };
+    const proj = (p: [number, number, number]): SP => {
+      const [x, y, z] = rotate3(p, yawRad, pitchRad);
+      return { sx: x, sy: z, depth: y };
+    };
+
+    const rotPairs = wires.map((w) => [proj(w.p0), proj(w.p1)] as const);
+    let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
+    for (const [a, b] of rotPairs) {
+      xmin = Math.min(xmin, a.sx, b.sx);
+      xmax = Math.max(xmax, a.sx, b.sx);
+      ymin = Math.min(ymin, a.sy, b.sy);
+      ymax = Math.max(ymax, a.sy, b.sy);
+    }
+    const dx = Math.max(xmax - xmin, 1e-6);
+    const dy = Math.max(ymax - ymin, 1e-6);
+    const pad = thumb ? 0.08 : 0.1;
+    const fit = Math.min((size * (1 - 2 * pad)) / dx, (size * (1 - 2 * pad)) / dy);
+    const scale = fit * zoom;
+    const ox = (size - scale * dx) / 2 - scale * xmin;
+    const oy = (size - scale * dy) / 2 - scale * ymin;
+    const tx = (x: number) => ox + scale * x;
+    const ty = (y: number) => size - (oy + scale * y);
+
+    // Painter's algorithm — back wires first (larger depth → further away
+    // along view ray). For a tied chain of wires this gives correct stacking
+    // without a full z-buffer.
+    type SegItem = {
+      a: SP; b: SP;
+      isFeed: boolean;
+      color: string;
+      width: number;
+      midDepth: number;
+    };
+
+    const items: SegItem[] = [];
+    wires.forEach((w, i) => {
+      const [a, b] = rotPairs[i];
+      const isFeed = w.feed_voltage !== null;
+      items.push({
+        a, b, isFeed,
+        color: isFeed ? "var(--feed)" : "var(--wire)",
+        width: isFeed ? (thumb ? 1.5 : 2.5) : thumb ? 0.8 : 1.0,
+        midDepth: (a.depth + b.depth) / 2,
+      });
+    });
+
+    let peakI = 0;
+    if (showCurrents && currents) {
+      for (const w of currents) for (let i = 0; i < w.knot_currents_re.length; i++) {
+        const m = Math.hypot(w.knot_currents_re[i], w.knot_currents_im[i]);
+        if (m > peakI) peakI = m;
+      }
+    }
+
+    const curSegs: SegItem[] = [];
+    if (showCurrents && currents && peakI > 0) {
+      currents.forEach((w) => {
+        const knots = w.knot_positions;
+        const re = w.knot_currents_re, im = w.knot_currents_im;
+        for (let k = 0; k < knots.length - 1; k++) {
+          const a = proj(knots[k]);
+          const b = proj(knots[k + 1]);
+          const m = 0.5 * (Math.hypot(re[k], im[k]) + Math.hypot(re[k + 1], im[k + 1]));
+          curSegs.push({
+            a, b,
+            isFeed: false,
+            color: magToColor(m / peakI),
+            width: thumb ? 1.5 : 3.0,
+            midDepth: (a.depth + b.depth) / 2,
+          });
+        }
+      });
+    }
+
+    // Sort all segments back-to-front. Base wires drawn dim if currents on.
+    const all = [...items, ...curSegs];
+    all.sort((p, q) => q.midDepth - p.midDepth);
+    for (const it of all) {
+      ctx.strokeStyle = it.color;
+      ctx.globalAlpha = it.isFeed ? 1 : (curSegs.length > 0 && items.includes(it) ? 0.3 : 1);
+      ctx.lineWidth = it.width;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(tx(it.a.sx), ty(it.a.sy));
+      ctx.lineTo(tx(it.b.sx), ty(it.b.sy));
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // Compass: small axis triple at corner.
+    if (!thumb) {
+      ctx.font = "10px ui-monospace, monospace";
+      const ax = 30, ay = size - 30, len = 16;
+      const axes: [[number, number, number], string][] = [
+        [[1, 0, 0], "x"], [[0, 1, 0], "y"], [[0, 0, 1], "z"],
+      ];
+      for (const [v, lbl] of axes) {
+        const pr = rotate3(v, yawRad, pitchRad);
+        const dx = pr[0] * len, dy = pr[2] * len;
+        ctx.strokeStyle = "#4a5160";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax + dx, ay - dy);
+        ctx.stroke();
+        ctx.fillStyle = "#cfd6e3";
+        ctx.fillText(lbl, ax + dx + 2, ay - dy + 4);
+      }
+      ctx.fillStyle = "var(--muted)";
+      ctx.fillText(`yaw ${yawDeg.toFixed(0)}° · pitch ${pitchDeg.toFixed(0)}° · ×${zoom.toFixed(2)}`, 10, 14);
+    }
+  }, [wires, currents, size, yawDeg, pitchDeg, zoom, showCurrents, thumb]);
+
+  return <canvas ref={canvasRef} className={thumb ? "thumb-canvas" : undefined} />;
 }
 
 // ===========================================================================
@@ -800,12 +976,40 @@ export function App() {
   const [showCurrents, setShowCurrents] = useState<boolean>(true);
   const [azElevDeg, setAzElevDeg] = useState<number>(0);
   const [elPhiDeg, setElPhiDeg] = useState<number>(0);
+  const [yaw3d, setYaw3d] = useState<number>(30);
+  const [pitch3d, setPitch3d] = useState<number>(25);
+  const [zoom3d, setZoom3d] = useState<number>(1.0);
   const [bandStart, setBandStart] = useState<number>(28.0);
   const [bandStop, setBandStop] = useState<number>(29.0);
   const [nSweep, setNSweep] = useState<number>(41);
   const [sweep, setSweep] = useState<SweepResponse | null>(null);
   const [sweeping, setSweeping] = useState<boolean>(false);
   const [slideRef, slideSize] = useFillSize<HTMLDivElement>();
+
+  // Orbit-drag handlers for the 3D wire view. Active only when view==='wire3d';
+  // attached at the slide div level so dragging anywhere inside the canvas
+  // orbits.
+  const dragRef = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null);
+  const onSlidePointerDown = useCallback((e: React.PointerEvent) => {
+    if (view !== "wire3d") return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragRef.current = { x: e.clientX, y: e.clientY, yaw: yaw3d, pitch: pitch3d };
+  }, [view, yaw3d, pitch3d]);
+  const onSlidePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.x;
+    const dy = e.clientY - dragRef.current.y;
+    setYaw3d(((dragRef.current.yaw + dx * 0.4) % 360 + 360) % 360);
+    setPitch3d(Math.max(-89, Math.min(89, dragRef.current.pitch - dy * 0.4)));
+  }, []);
+  const onSlidePointerUp = useCallback((e: React.PointerEvent) => {
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    dragRef.current = null;
+  }, []);
+  const onSlideWheel = useCallback((e: React.WheelEvent) => {
+    if (view !== "wire3d") return;
+    setZoom3d((z) => Math.max(0.2, Math.min(8, z * (e.deltaY < 0 ? 1.1 : 1 / 1.1))));
+  }, [view]);
 
   // Builder catalogue.
   useEffect(() => {
@@ -1097,7 +1301,16 @@ export function App() {
             {result
               ? <WireCanvas wires={result.wires} currents={result.currents} size={64} projMode={projMode} showCurrents={showCurrents} thumb />
               : <div className="thumb-canvas" />}
-            <span className="thumb-label">Wire</span>
+            <span className="thumb-label">Wire 2D</span>
+          </button>
+          <button
+            className={view === "wire3d" ? "thumb active" : "thumb"}
+            onClick={() => setView("wire3d")}
+          >
+            {result
+              ? <Wire3DCanvas wires={result.wires} currents={result.currents} size={64} yawDeg={yaw3d} pitchDeg={pitch3d} zoom={zoom3d} showCurrents={showCurrents} thumb />
+              : <div className="thumb-canvas" />}
+            <span className="thumb-label">Wire 3D</span>
           </button>
           <button
             className={view === "smith" ? "thumb active" : "thumb"}
@@ -1139,7 +1352,15 @@ export function App() {
           </button>
         </div>
 
-        <div className="carousel-slide" ref={slideRef}>
+        <div
+          className="carousel-slide"
+          ref={slideRef}
+          onPointerDown={onSlidePointerDown}
+          onPointerMove={onSlidePointerMove}
+          onPointerUp={onSlidePointerUp}
+          onWheel={onSlideWheel}
+          style={view === "wire3d" ? { cursor: dragRef.current ? "grabbing" : "grab" } : undefined}
+        >
           {!result && <div className="empty-state">Loading…</div>}
 
           {result && view === "wire" && (
@@ -1169,6 +1390,37 @@ export function App() {
                   />
                   currents
                 </label>
+              </div>
+            </>
+          )}
+
+          {result && view === "wire3d" && (
+            <>
+              <Wire3DCanvas
+                wires={result.wires}
+                currents={result.currents}
+                size={slideSize}
+                yawDeg={yaw3d}
+                pitchDeg={pitch3d}
+                zoom={zoom3d}
+                showCurrents={showCurrents}
+              />
+              <div className="antenna-overlay">
+                <label className="overlay-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={showCurrents}
+                    onChange={(e) => setShowCurrents(e.target.checked)}
+                  />
+                  currents
+                </label>
+                <button
+                  className="overlay-checkbox"
+                  onClick={() => { setYaw3d(30); setPitch3d(25); setZoom3d(1.0); }}
+                  style={{ cursor: "pointer", border: "1px solid #2a2f38" }}
+                >
+                  reset view
+                </button>
               </div>
             </>
           )}
