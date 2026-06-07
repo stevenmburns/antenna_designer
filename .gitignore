@@ -15,3 +15,5 @@ src/antenna_designer/*.html
 *.so
 .venv/
 pg/
+node_modules/
+web/frontend/dist/
