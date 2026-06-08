@@ -11,11 +11,11 @@ class Builder(AntennaBuilder):
         {
             "design_freq": 28.47,
             "freq": 28.47,
-            "base": 10,
+            "base": 10.0,
             "top_height_factor": 0.4903,
             "mid_height_factor": 0.1042,
             "width_factor": 0.1577,
-            "slant_degrees": 30,
+            "slant_degrees": 30.0,
         }
     )
 

@@ -13,9 +13,9 @@ class Builder(Array2x2Builder):
             "angle_radians_top": 0.9111,
             "length_factor_bot": 1.1276,
             "angle_radians_bot": 0.9215,
-            "base": 15,
-            "del_y": 4,
-            "del_z": 2,
+            "base": 15.0,
+            "del_y": 4.0,
+            "del_z": 2.0,
         }
     )
 

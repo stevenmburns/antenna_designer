@@ -12,13 +12,13 @@ class Builder(Array2x4Builder):
             "slope_ibot": 0.512,
             "slope_otop": 0.658,
             "slope_obot": 0.512,
-            "base": 7,
+            "base": 7.0,
             "length_itop": 5.771,
             "length_ibot": 5.68,
             "length_otop": 5.771,
             "length_obot": 5.68,
-            "del_y": 4,
-            "del_z": 2,
+            "del_y": 4.0,
+            "del_z": 2.0,
         }
     )
 

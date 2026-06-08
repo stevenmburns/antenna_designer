@@ -9,7 +9,7 @@ class Builder(AntennaBuilder):
         {
             "design_freq": 28.47,
             "freq": 28.47,
-            "base": 7,
+            "base": 7.0,
             "length_factor": 1.0800,
             "angle_radians": 1.0889,
         }
@@ -19,7 +19,7 @@ class Builder(AntennaBuilder):
         {
             "design_freq": 28.47,
             "freq": 28.47,
-            "base": 7,
+            "base": 7.0,
             "length_factor": 1.0650,
             "angle_radians": 0.7671,
         }
@@ -29,7 +29,7 @@ class Builder(AntennaBuilder):
         {
             "design_freq": 28.47,
             "freq": 28.47,
-            "base": 7,
+            "base": 7.0,
             "length_factor": 1.0800,
             "angle_radians": 1.0889,
         }

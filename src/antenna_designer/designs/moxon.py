@@ -6,7 +6,7 @@ class Builder(AntennaBuilder):
     original_params = MappingProxyType(
         {
             "freq": 28.57,
-            "base": 7,
+            "base": 7.0,
             "halfdriver": (147.25 / 2 + 22 + 3 / 16) * 0.0254,
             "aspect_ratio": (53 + 11 / 16) / 147.25,
             "tipspacer_factor": (4 + 1 / 16) / (53 + 11 / 16),
@@ -17,7 +17,7 @@ class Builder(AntennaBuilder):
     default_params = MappingProxyType(
         {
             "freq": 28.57,
-            "base": 7,
+            "base": 7.0,
             "halfdriver": 2.4597430629596713,
             "aspect_ratio": 0.3646010186757216,
             "tipspacer_factor": 0.07729647745945359,
@@ -28,7 +28,7 @@ class Builder(AntennaBuilder):
     opt_params = MappingProxyType(
         {
             "freq": 28.57,
-            "base": 7,
+            "base": 7.0,
             "halfdriver": 2.4454699666515394,
             "aspect_ratio": 0.3646010186757216,
             "tipspacer_factor": 0.047061074343758946,

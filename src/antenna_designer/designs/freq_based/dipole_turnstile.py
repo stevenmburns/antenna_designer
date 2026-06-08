@@ -8,7 +8,7 @@ class Builder(AntennaBuilder):
         {
             "design_freq": 28.47,
             "freq": 28.47,
-            "base": 7,
+            "base": 7.0,
             # Half-wave dipole in free space resonates near 0.48*lambda; tuned
             # slightly short to land closer to resonance with the finite wire
             # radius assumed elsewhere.
