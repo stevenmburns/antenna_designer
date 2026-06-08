@@ -299,11 +299,42 @@ def _ui_scalar(default_params: dict, key: str, default):
     return default
 
 
+def _auto_default_view(cls) -> str:
+    """Pick a 2D projection from the spans of the antenna's wires.
+
+    Rule: if x_span is small (the antenna lies in the y-z plane —
+    typical for dipoles, V's, loops, fan/bowtie variants), default to
+    `yz`. Otherwise return the plane of the two largest spans (xy / yz
+    / xz). The 0.5 m threshold catches feed-gap micro-offsets like
+    fan_dipole's 0.22 m without flipping to xy.
+
+    Hand-overridden via ui_params['default_view']; designs whose axis
+    layout doesn't match this rule (vertical, moxonarray) supply the
+    explicit value.
+    """
+    try:
+        b = cls()
+        pts = []
+        for p0, p1, _n, _e in b.build_wires():
+            pts.append(p0)
+            pts.append(p1)
+        a = np.asarray(pts, dtype=float)
+    except Exception:
+        return "xy"
+    sx = float(a[:, 0].max() - a[:, 0].min())
+    sy = float(a[:, 1].max() - a[:, 1].min())
+    sz = float(a[:, 2].max() - a[:, 2].min())
+    if sx < 0.5:
+        return "yz"
+    spans = sorted([("x", sx), ("y", sy), ("z", sz)], key=lambda t: t[1], reverse=True)
+    return "".join(sorted(s[0] for s in spans[:2]))
+
+
 def _make_example(name: str, cls) -> AntennaExample:
     dp = dict(cls.default_params)
     ui = dict(dp.get("ui_params") or {})
 
-    default_view = _ui_scalar(dp, "default_view", "xy")
+    default_view = _ui_scalar(dp, "default_view", _auto_default_view(cls))
     target_z0 = float(_ui_scalar(dp, "target_z0", 50.0))  # noqa: F841 — surfaced later
     multi_feed = bool(_ui_scalar(dp, "multi_feed", False))
     meas_range = (
@@ -402,15 +433,28 @@ def _make_example(name: str, cls) -> AntennaExample:
 # ---------------------------------------------------------------------------
 
 
-_SKIP_MODULES = {"freq_based"}  # subpackage of free-form scripts, not Builders
-
-
 def list_designs() -> list[str]:
-    names = []
+    """Discover every Builder file under designs/.
+
+    Top-level files register under their bare stem (`invvee`). Files
+    inside a subpackage (today only `freq_based/`) register under the
+    dotted path the user sees in the UI (`freq_based.invvee`) — same
+    convention as the Python import path, minus the leading
+    `antenna_designer.designs.`. The dotted name is what `register_all`
+    feeds back to importlib too.
+    """
+    names: list[str] = []
     for p in sorted(DESIGNS_DIR.glob("*.py")):
-        if p.stem.startswith("_") or p.stem in _SKIP_MODULES:
+        if p.stem.startswith("_"):
             continue
         names.append(p.stem)
+    for sub in sorted(d for d in DESIGNS_DIR.iterdir() if d.is_dir()):
+        if sub.name.startswith("_") or sub.name == "__pycache__":
+            continue
+        for p in sorted(sub.glob("*.py")):
+            if p.stem.startswith("_"):
+                continue
+            names.append(f"{sub.name}.{p.stem}")
     return names
 
 
