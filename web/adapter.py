@@ -34,6 +34,7 @@ from typing import Any
 
 import numpy as np
 
+from antenna_designer.engines.pynec import PyNECEngine
 from antenna_designer.engines.pysim import PysimEngine
 from pysim import BSplinePySim, SinusoidalPySim, TriangularPySim
 
@@ -253,6 +254,16 @@ def _make_pysim_engine(req: dict, builder):
     )
 
 
+def _make_pynec_engine(req: dict, builder):
+    # PyNECEngine accepts the same ground-spec vocabulary as PysimEngine
+    # — None / "pec" / ("finite", eps_r, sigma) — but defaults to a
+    # finite ground rather than free space if you pass nothing. Match
+    # PysimEngine's behaviour: ground off => free space, ground on =>
+    # PEC plane at z=0.
+    ground = _ground_for_engine(req, 0.0) or "free"
+    return PyNECEngine(builder, ground=ground)
+
+
 # ---------------------------------------------------------------------------
 # Response packing
 # ---------------------------------------------------------------------------
@@ -300,6 +311,22 @@ def _feed_indices(engine, currents) -> tuple[int, int]:
     cum = np.concatenate([[0.0], np.cumsum(deltas)])
     j = int(np.argmin(np.abs(cum - float(arclen))))
     return int(pl_idx), j
+
+
+def _pynec_feed_indices(builder, currents) -> tuple[int, int]:
+    """PyNECEngine returns one WireCurrents per build_wires() tuple in
+    the same order, so the feed wire index is just the position of
+    the first excitation-bearing tuple. Place the marker on that
+    wire's centre knot — close enough to NEC's per-segment feed for a
+    UI dot.
+    """
+    for i, (_p0, _p1, _n, ev) in enumerate(builder.build_wires()):
+        if ev is not None:
+            if i >= len(currents):
+                return 0, 0
+            k = currents[i].knot_positions.shape[0]
+            return i, k // 2
+    return 0, 0
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +448,95 @@ def _make_example(name: str, cls) -> AntennaExample:
             out["feeds"] = [{"z_re": float(z.real), "z_im": float(z.imag)} for z in zs]
         return out
 
+    def pynec_build(req: dict) -> dict:
+        # web.pynec_backend.pattern() expects this to return a build
+        # dict with at least:
+        #   context      — a nec_context with geometry built, ground
+        #                  card applied, and excitation cards in place
+        #   feed_seg     — 1-indexed segment number of the source
+        #                  (only consulted by the default _run_solve()
+        #                  excite path; ours supplies pynec_pattern_excite
+        #                  so it's only present for parity)
+        #   feed_tag     — NEC wire tag carrying the feed
+        #   n_per_wire   — historical, _run_solve threads it through
+        #                  but doesn't actually use it
+        #   ground       — bool (informational; gn_card already on the
+        #                  context)
+        #   ground_fast  — bool (same)
+        #   z_offset     — antenna height above ground, surfaced in
+        #                  the pattern response
+        #   _engine      — keep the PyNECEngine alive so the
+        #                  underlying nec_context isn't released
+        #                  before rp_card runs
+        design_freq = float(req.get("design_freq_mhz", dp.get("freq", 14.0)))
+        meas_freq = float(req.get("measurement_freq_mhz", design_freq))
+        builder = _build_builder(cls, req)
+        builder.freq = meas_freq
+        if has_design_freq:
+            builder.design_freq = design_freq
+        eng = _make_pynec_engine(req, builder)
+        # Find the first excited wire to fill the feed_seg / feed_tag
+        # parity fields. PyNECEngine.excitation_pairs is (tag, sub_seg,
+        # voltage); take the first.
+        feed_tag, feed_seg, _v = (eng.excitation_pairs or [(1, 1, 0)])[0]
+        return {
+            "context": eng.c,
+            "feed_seg": int(feed_seg),
+            "feed_tag": int(feed_tag),
+            "n_per_wire": 1,
+            "ground": bool(req.get("ground", False)),
+            "ground_fast": False,
+            "z_offset": 0.0,
+            "_engine": eng,
+        }
+
+    def pynec_pattern_excite(b: dict, freq_mhz: float) -> None:
+        # PyNECEngine already applied the gn_card and ex_card during
+        # _build_geometry, so the pattern endpoint only needs to set
+        # the frequency and execute. Reusing _run_solve() would add a
+        # second ex_card on top of the one already in place.
+        c = b["context"]
+        c.fr_card(0, 1, float(freq_mhz), 0)
+        c.xq_card(0)
+
+    def pynec_solve(req: dict) -> dict:
+        # Mirror pysim_solve but route through PyNECEngine. Response
+        # shape is identical so the frontend renders the result the
+        # same way; the `solver` field gets stamped to "pynec" by
+        # server.solve()'s outer wrapper.
+        design_freq = float(req.get("design_freq_mhz", dp.get("freq", 14.0)))
+        meas_freq = float(req.get("measurement_freq_mhz", design_freq))
+        builder = _build_builder(cls, req)
+        builder.freq = meas_freq
+        if has_design_freq:
+            builder.design_freq = design_freq
+        eng = _make_pynec_engine(req, builder)
+        t0 = time.perf_counter()
+        zs = eng.impedance()
+        currents = eng.current_distribution()
+        solve_ms = (time.perf_counter() - t0) * 1e3
+        feed_wire_idx, feed_knot_idx = _pynec_feed_indices(builder, currents)
+        z_primary = zs[0] if zs else complex(0.0, 0.0)
+        out = {
+            "geometry": name,
+            "wires": _pack_wires(currents),
+            "feed_wire_index": feed_wire_idx,
+            "feed_knot_index": feed_knot_idx,
+            "z_in_re": float(z_primary.real),
+            "z_in_im": float(z_primary.imag),
+            "design_freq_mhz": design_freq,
+            "measurement_freq_mhz": meas_freq,
+            "lambda_design_m": C_LIGHT / (design_freq * 1e6),
+            "solve_ms": solve_ms,
+            "ground": bool(req.get("ground", False)),
+            "height_m": 0.0,
+            "ground_eps_r": _PEC_GROUND_EPS_R,
+            "ground_sigma": _PEC_GROUND_SIGMA,
+        }
+        if multi_feed and len(zs) > 1:
+            out["feeds"] = [{"z_re": float(z.real), "z_im": float(z.imag)} for z in zs]
+        return out
+
     def pysim_sweep(req: dict, freqs_mhz: list[float]):
         builder = _build_builder(cls, req)
         # PysimEngine reads builder.freq only for the initial wavelength
@@ -450,6 +566,9 @@ def _make_example(name: str, cls) -> AntennaExample:
         label=name.replace("_", " "),
         pysim_solve=pysim_solve,
         pysim_sweep=pysim_sweep,
+        pynec_solve=pynec_solve,
+        pynec_build=pynec_build,
+        pynec_pattern_excite=pynec_pattern_excite,
         multi_feed=multi_feed,
         param_schema=param_schema,
         bands=bands,
