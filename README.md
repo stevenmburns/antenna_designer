@@ -14,7 +14,7 @@
 | src/antenna\_designer/designs/bowtiearray2x4.py          |        7 |        0 |    100% |           |
 | src/antenna\_designer/designs/bowtiearray.py             |        7 |        0 |    100% |           |
 | src/antenna\_designer/designs/dipole.py                  |       17 |        0 |    100% |           |
-| src/antenna\_designer/designs/fandipole.py               |       59 |       13 |     78% |   115-134 |
+| src/antenna\_designer/designs/fandipole.py               |       59 |       13 |     78% |   120-139 |
 | src/antenna\_designer/designs/freq\_based/delta\_loop.py |       34 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/hentenna.py    |       35 |        1 |     97% |        42 |
 | src/antenna\_designer/designs/freq\_based/invvee.py      |       27 |        0 |    100% |           |
