@@ -1,0 +1,776 @@
+"""FastAPI server for the interactive antenna UI.
+
+All geometries live in web.examples — each registered antenna bundles its
+pysim solve/sweep and pynec build/solve into one file. Dispatchers here
+look the geometry up in EXAMPLES and call its callables; adding or
+removing an antenna doesn't touch this file.
+
+The response shape is uniform across geometries — each wire is a sequence of
+knots with per-knot complex currents and the feed lives on one of the wires —
+so the frontend draws every geometry the same way.
+
+Run: uvicorn web.server:app --reload
+"""
+
+from __future__ import annotations
+
+# Configure BLAS/OpenMP thread counts BEFORE numpy/scipy/PyNEC import — each
+# library snapshots the env at its own import time and ignores later changes.
+#
+# OPENBLAS_NUM_THREADS=1: numpy/scipy bring their own OpenBLAS thread pool
+#   that sits idle most of the request lifetime but contends with PyNEC's
+#   MKL/OpenBLAS-LAPACKE pool for cores. vtune confirmed this was costing
+#   ~8% wall time at NP=4 on the gather-scatter fill.
+#
+# OMP_NUM_THREADS / MKL_NUM_THREADS: with the gather-scatter matrix fill
+#   (see PR #21) the per-source parallel-for inside cmset() and MKL/OpenBLAS'
+#   zgetrf both want available cores. Default to the physical-core count
+#   (not logical / HT count) — see _physical_cpu_count(); the FP-vector-
+#   saturated quadrature inner loops gain nothing from HT siblings and
+#   actually slow down ~15% from execution-unit contention on KBL-class
+#   chips. An operator can override via the env to share with other
+#   workloads on the same host.
+#
+# Older comment explaining why we used to pin everything to 1: the interactive
+# workload is many small solves (≤ 250×250 dense complex matrices), and on
+# the pre-gather-scatter code path thread orchestration costs dwarfed the
+# per-call work — a 2-director live solve went from 220 ms (8 threads) to
+# 67 ms (1 thread) on an 8-core box. That regression is no longer reproducible
+# with the current build: matrix fill itself parallelizes, the OMP team is
+# spawned once per cmset(), and OpenBLAS contention is removed by the
+# OPENBLAS_NUM_THREADS=1 pin above.
+import os
+
+
+def _physical_cpu_count() -> int:
+    """Number of physical cores (not logical / HT siblings).
+
+    Our quadrature kernels are FP-vector-saturated (libmvec AVX2 sin/cos
+    inner loops, no spare FU bandwidth), so two HT siblings on one physical
+    core contend for execution units rather than overlap. Ad-hoc bench on
+    KBL-R 4C/8T showed 4-thread runs ~15% faster than 8-thread runs of the
+    swept-ground hot path. Pin to physical-core count to skip that loss.
+    """
+    try:
+        cores = set()
+        phys, coreid = None, None
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                key, _, val = line.partition(":")
+                key = key.strip()
+                val = val.strip()
+                if key == "physical id":
+                    phys = val
+                elif key == "core id":
+                    coreid = val
+                elif not line.strip() and phys is not None and coreid is not None:
+                    cores.add((phys, coreid))
+                    phys, coreid = None, None
+        if phys is not None and coreid is not None:
+            cores.add((phys, coreid))
+        if cores:
+            return len(cores)
+    except OSError:
+        pass
+    # Fallback: assume 2 HT siblings per core on x86. Wrong on chips without
+    # HT, but in that case the caller can override via the env var.
+    return max(1, (os.cpu_count() or 1) // 2)
+
+
+_NPROC = str(_physical_cpu_count())
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", _NPROC)
+os.environ.setdefault("MKL_NUM_THREADS", _NPROC)
+# Between OMP parallel regions the workers default to busy-spinning on the
+# team barrier (GOMP_SPINCOUNT ~300k, ~80 ms on KBL). Each pysim solve runs
+# only ~1 ms of C++ kernel then ~10–20 ms of Python serial work (basis-coef
+# build, sparse matmul, LU solve); the workers spin through all of that
+# Python time on every solve. On the N=21 hentenna width-sweep harness
+# (`scripts/vtune_hentenna_width_sweep.py`) VTune attributed ~63% of sin's
+# CPU and ~32% of pynec's CPU to `libgomp` barrier-wait under this default.
+# Make workers park immediately so the spin time goes away — wall-clock
+# drops ~4× on both solvers at N=21 (sin 78 → 19 ms/step, pynec 67 → 9 ms).
+os.environ.setdefault("OMP_WAIT_POLICY", "PASSIVE")
+os.environ.setdefault("GOMP_SPINCOUNT", "0")
+
+# ruff: noqa: E402 — imports below must follow the env-var setup above so
+# OpenBLAS picks up the thread count at its own import time.
+import json
+import time
+
+import numpy as np
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+
+from pysim.bspline import BSplinePySim
+from pysim.sinusoidal import SinusoidalPySim
+from pysim.triangular import TriangularPySim
+
+from . import pynec_backend
+from .examples import REGISTRY as EXAMPLES
+
+
+# Per-model option allowlist. Frontend sends `pysim_model` + `model_options`
+# (a flat dict); we forward only the kwargs each class accepts, so an
+# unrecognised option from a stale client never raises. Defaults match the
+# class signatures so unset options behave identically to the old code.
+_PYSIM_MODEL_KEYS = {
+    "triangular": ("n_qp_reg", "n_qp_off"),
+    "sinusoidal": ("n_qp_const",),
+    "bspline": (
+        "degree",
+        "n_qp_pair",
+        "n_qp_source",
+        "feed_smoothing_factor",
+        "use_singular_enrichment",
+        "n_qp_sing",
+        "enrichment_min_k",
+        "enrichment_variant",
+        "tikhonov_lambda",
+        "auto_tap_ratio_threshold",
+    ),
+}
+_PYSIM_MODELS = {
+    "triangular": TriangularPySim,
+    "sinusoidal": SinusoidalPySim,
+    "bspline": BSplinePySim,
+}
+
+
+_PYSIM_MODELS_WITH_GROUND = {"triangular", "bspline", "sinusoidal"}
+
+
+def _make_pysim_sim(req: dict, **base_kwargs):
+    """Instantiate the PySim model the request selected.
+
+    base_kwargs are the geometry-derived constructor kwargs every model
+    accepts (wires, n_per_edge_per_wire, feed_*, wavelength, halfdriver_factor,
+    nsegs, junctions). All three pysim models now accept ground_z; the set
+    is kept as an allowlist so future models that don't support it can be
+    excluded by name. model_options entries are filtered through the
+    per-model allowlist.
+    """
+    model = req.get("pysim_model", "triangular")
+    if model not in _PYSIM_MODELS:
+        model = "triangular"
+    cls = _PYSIM_MODELS[model]
+    allowed = _PYSIM_MODEL_KEYS[model]
+
+    opts = req.get("model_options") or {}
+    extra = {k: opts[k] for k in allowed if k in opts}
+
+    if model not in _PYSIM_MODELS_WITH_GROUND:
+        base_kwargs.pop("ground_z", None)
+
+    return cls(**base_kwargs, **extra)
+
+
+# Target per-chunk wall time for the adaptive pysim /sweep chunking. The
+# chunk size is tuned each iteration so a batch takes roughly this long —
+# enough to amortise per-call overhead and benefit from numpy batching,
+# small enough that an aborted fetch only wastes ~this much CPU before the
+# next disconnect check kicks in.
+_CHUNK_TARGET_MS = 500
+
+
+app = FastAPI(title="pysim interactive")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+C_LIGHT = 299_792_458.0  # m/s, matches TriangularPySim's eps*mu derivation to ~1e-9
+_EPS0 = 8.854187817e-12  # F/m
+
+
+def _attach_derived_em_fields(out: dict) -> None:
+    """Augment the solve response with frequency-derived EM scalars the
+    frontend would otherwise compute from raw physics constants.
+
+    Sets:
+      - `k_meas_m_inv`: wavenumber 2π f / c at measurement freq (rad/m)
+      - `ground_eps_im`: imaginary part of the complex relative permittivity
+        of the ground, -σ / (ω ε₀); 0 when ground is off or σ=0.
+
+    The frontend reads these directly so it doesn't need to carry C_LIGHT
+    or ε₀ literals. `lambda_design_m` is already shipped by each example.
+    """
+    f_hz = float(out["measurement_freq_mhz"]) * 1e6
+    omega = 2.0 * np.pi * f_hz
+    out["k_meas_m_inv"] = omega / C_LIGHT
+    sigma = float(out.get("ground_sigma", 0.0) or 0.0)
+    out["ground_eps_im"] = -sigma / (omega * _EPS0) if omega > 0 else 0.0
+
+
+def _compute_directivity_norm(out: dict, n_theta: int = 45, n_phi: int = 90) -> None:
+    """Attach `directivity_norm` = 4π / ∫|M_perp|² dΩ to the response.
+
+    Multiplying this by the frontend's azimuth-cut |M_perp(π/2, φ)|² yields
+    absolute directivity D(φ) (linear); 10·log10(D) is dBi.
+
+    With ground enabled, integrates only the upper hemisphere and adds the
+    Fresnel-reflected contribution from the geometric image so the
+    normalization matches what the JS far-field code displays.
+    """
+    k = float(out["k_meas_m_inv"])
+    ground_on = bool(out.get("ground", False))
+
+    mids, drs, i_mids = [], [], []
+    for w in out["wires"]:
+        # Prefer the finer-grained sample arrays (knot + segment-midpoint)
+        # when the model produced them, so non-tent bases get their intra-
+        # segment curvature integrated. Falls back to knot arrays for any
+        # backend that only ships knot data (PyNEC).
+        if "sample_positions" in w:
+            pts = np.asarray(w["sample_positions"], dtype=np.float64)
+            cur = np.asarray(
+                w["sample_currents_re"], dtype=np.float64
+            ) + 1j * np.asarray(w["sample_currents_im"], dtype=np.float64)
+        else:
+            pts = np.asarray(w["knot_positions"], dtype=np.float64)
+            cur = np.asarray(w["knot_currents_re"], dtype=np.float64) + 1j * np.asarray(
+                w["knot_currents_im"], dtype=np.float64
+            )
+        drs.append(pts[1:] - pts[:-1])
+        mids.append(0.5 * (pts[1:] + pts[:-1]))
+        i_mids.append(0.5 * (cur[1:] + cur[:-1]))
+    mid = np.concatenate(mids, axis=0)  # (Nseg, 3)
+    dr = np.concatenate(drs, axis=0)  # (Nseg, 3)
+    i_mid = np.concatenate(i_mids, axis=0)  # (Nseg,)
+
+    # Cell-centered grid. With ground, sample only the upper hemisphere so
+    # the integral is over the half-space the antenna actually radiates into.
+    if ground_on:
+        theta = (np.arange(n_theta) + 0.5) * (np.pi / 2 / n_theta)
+        dtheta = np.pi / 2 / n_theta
+    else:
+        theta = (np.arange(n_theta) + 0.5) * (np.pi / n_theta)
+        dtheta = np.pi / n_theta
+    phi = np.arange(n_phi) * (2 * np.pi / n_phi)
+    sin_t, cos_t = np.sin(theta), np.cos(theta)
+    cos_p, sin_p = np.cos(phi), np.sin(phi)
+
+    rx = sin_t[:, None] * cos_p[None, :]
+    ry = sin_t[:, None] * sin_p[None, :]
+    rz = np.broadcast_to(cos_t[:, None], (n_theta, n_phi))
+    rhat = np.stack([rx, ry, rz], axis=-1)  # (nθ, nφ, 3)
+
+    phase = k * np.einsum("ijc,nc->ijn", rhat, mid)  # (nθ, nφ, Nseg)
+    expp = np.exp(1j * phase)
+    weighted = i_mid[:, None] * dr  # (Nseg, 3)
+    M = np.einsum("ijn,nc->ijc", expp, weighted)  # (nθ, nφ, 3)
+    m_dot_r = np.sum(M * rhat, axis=-1)
+    M_perp = M - m_dot_r[..., None] * rhat
+
+    if ground_on:
+        # PEC-image method, then Fresnel-correct the reflected wave per-ray.
+        # Image current: horizontal components flipped, vertical preserved.
+        # This reproduces PEC reflection when ρ_h=-1, ρ_v=+1, and lets us
+        # apply the actual finite-ground coefficients to that same image.
+        mid_img = mid * np.array([1.0, 1.0, -1.0])
+        dr_img = dr * np.array([-1.0, -1.0, 1.0])
+        weighted_img = i_mid[:, None] * dr_img
+        phase_img = k * np.einsum("ijc,nc->ijn", rhat, mid_img)
+        expp_img = np.exp(1j * phase_img)
+        M_img = np.einsum("ijn,nc->ijc", expp_img, weighted_img)
+        m_img_dot_r = np.sum(M_img * rhat, axis=-1)
+        M_img_perp = M_img - m_img_dot_r[..., None] * rhat
+
+        # Polarization basis at each ray: ĥ = ẑ × r̂ (perp to plane of
+        # incidence), v̂ = r̂ × ĥ (in plane of incidence, perp to r̂).
+        s = np.sqrt(rx * rx + ry * ry)
+        s_safe = np.where(s > 1e-12, s, 1.0)
+        h_hat = np.stack([-ry / s_safe, rx / s_safe, np.zeros_like(rx)], axis=-1)
+        v_hat = np.stack([-rx * rz / s_safe, -ry * rz / s_safe, s], axis=-1)
+
+        M_img_h = np.sum(M_img_perp * h_hat, axis=-1)  # complex (nθ, nφ)
+        M_img_v = np.sum(M_img_perp * v_hat, axis=-1)
+
+        eps_c = out["ground_eps_r"] + 1j * out["ground_eps_im"]
+        cos_ti = rz
+        sin2_ti = s * s
+        Q = np.sqrt(eps_c - sin2_ti)
+        rho_h = (cos_ti - Q) / (cos_ti + Q)
+        rho_v = (eps_c * cos_ti - Q) / (eps_c * cos_ti + Q)
+
+        # Reflected: ρ_v on the v-pol component, −ρ_h on the h-pol component
+        # (the minus sign folds the PEC image's pre-applied horizontal flip
+        # back out so ρ_h=−1 recovers the PEC limit exactly).
+        M_refl = (rho_v * M_img_v)[..., None] * v_hat - (rho_h * M_img_h)[
+            ..., None
+        ] * h_hat
+        M_perp = M_perp + M_refl
+
+    mag2 = np.sum((M_perp.real**2 + M_perp.imag**2), axis=-1)  # (nθ, nφ)
+
+    dphi = 2 * np.pi / n_phi
+    p_rad = float(np.sum(mag2 * sin_t[:, None]) * dtheta * dphi)
+    out["directivity_norm"] = (4 * np.pi / p_rad) if p_rad > 0 else 0.0
+
+
+def _wire_record(
+    knots: np.ndarray,
+    currents: np.ndarray,
+    label: str,
+    sample_currents: np.ndarray | None = None,
+) -> dict:
+    """Package one wire's record for the JSON response. `currents` is a
+    length-M_w complex array (one per mesh knot) as produced by each
+    model's `currents_at_knots(coeffs)` method.
+
+    When `sample_currents` is provided, additional `sample_positions` /
+    `sample_currents_re` / `sample_currents_im` arrays are attached at
+    knots-and-midpoints interleaved (2*N_seg + 1 entries per wire). This is
+    what `_compute_directivity_norm` and the frontend renderers consume to
+    resolve intra-segment basis curvature (B-spline d=2, sinusoidal three-
+    term) and the B-spline enrichment shape that vanishes at every knot.
+    """
+    currents = np.asarray(currents, dtype=np.complex128)
+    if currents.shape[0] != knots.shape[0]:
+        raise ValueError(
+            f"_wire_record: currents/knots length mismatch "
+            f"({currents.shape[0]} vs {knots.shape[0]})"
+        )
+    out = {
+        "label": label,
+        "knot_positions": knots.tolist(),
+        "knot_currents_re": currents.real.tolist(),
+        "knot_currents_im": currents.imag.tolist(),
+    }
+    if sample_currents is not None:
+        sample_currents = np.asarray(sample_currents, dtype=np.complex128)
+        n_seg = knots.shape[0] - 1
+        expected = 2 * n_seg + 1
+        if sample_currents.shape[0] != expected:
+            raise ValueError(
+                f"_wire_record: sample_currents length {sample_currents.shape[0]} "
+                f"!= expected 2*N_seg+1 = {expected}"
+            )
+        sample_positions = np.empty((expected, 3), dtype=np.float64)
+        sample_positions[0::2] = knots
+        sample_positions[1::2] = 0.5 * (knots[:-1] + knots[1:])
+        out["sample_positions"] = sample_positions.tolist()
+        out["sample_currents_re"] = sample_currents.real.tolist()
+        out["sample_currents_im"] = sample_currents.imag.tolist()
+    return out
+
+
+def _sample_arc_for_wire(knots: np.ndarray) -> np.ndarray:
+    """Build interleaved (knot_arc, midpoint_arc, knot_arc, ...) array from a
+    wire's 3D knot positions. Segment lengths come from successive-knot
+    distances along the polyline.
+    """
+    knots = np.asarray(knots, dtype=np.float64)
+    h_seg = np.linalg.norm(knots[1:] - knots[:-1], axis=1)
+    arc_at_knot = np.concatenate([[0.0], np.cumsum(h_seg)])
+    mid_arc = 0.5 * (arc_at_knot[:-1] + arc_at_knot[1:])
+    sample_arc = np.empty(2 * h_seg.shape[0] + 1, dtype=np.float64)
+    sample_arc[0::2] = arc_at_knot
+    sample_arc[1::2] = mid_arc
+    return sample_arc
+
+
+def _pack_pysim_wires(sim, coeffs, knot_arrays, labels) -> list[dict]:
+    """Build wire records for every pysim wire with both knot-level currents
+    AND finer-grained mid-segment samples (one extra sample per segment).
+
+    Calls `sim.currents_at_knots(coeffs)` once for the knot values and once
+    more with an `s_array` of per-wire interleaved knot-and-midpoint arcs.
+    The model's basis is then evaluated exactly at the midpoints — including
+    the B-spline enrichment basis Φ_sing, which is zero at the knots but
+    non-zero in the interior.
+    """
+    sample_arcs = [_sample_arc_for_wire(k) for k in knot_arrays]
+    knot_currents = sim.currents_at_knots(coeffs)
+    sample_currents = sim.currents_at_knots(coeffs, s_array=sample_arcs)
+    return [
+        _wire_record(
+            np.asarray(knot_arrays[i]),
+            knot_currents[i],
+            labels[i],
+            sample_currents=sample_currents[i],
+        )
+        for i in range(len(knot_arrays))
+    ]
+
+
+# Pysim PEC ground: pass these to the response so the frontend's Fresnel
+# far-field code treats the surface as a perfect electric conductor
+# (ρ_h → −1, ρ_v → +1 in the eps_r → ∞ limit).
+_PEC_GROUND_EPS_R = 1.0e10
+_PEC_GROUND_SIGMA = 0.0
+
+
+def _read_ground(req: dict) -> tuple[bool, float, float]:
+    """Common request parsing: returns (ground_on, height_m, z_offset).
+
+    height_m is the antenna height above ground when ground_on=True; z_offset
+    is what each geometry helper adds to its native (z=0) coordinates.
+    """
+    ground_on = bool(req.get("ground", False))
+    height_m = float(req.get("height_m", 0.0))
+    z_offset = height_m if ground_on else 0.0
+    return ground_on, height_m, z_offset
+
+
+def _polyline_knots(polyline: np.ndarray, npe_list: list[int]) -> np.ndarray:
+    """Concatenated per-edge knot positions, with shared corners deduped."""
+    parts = []
+    for i, n_e in enumerate(npe_list):
+        seg = np.linspace(polyline[i], polyline[i + 1], n_e + 1)
+        parts.append(seg if i == 0 else seg[1:])
+    return np.vstack(parts)
+
+
+def solve(req: dict) -> dict:
+    geometry = req.get("geometry", "inverted_v")
+    use_pynec = req.get("solver") == "pynec" and pynec_backend.HAVE_PYNEC
+    if use_pynec:
+        out = pynec_backend.solve(req)
+        _attach_derived_em_fields(out)
+        _compute_directivity_norm(out)
+        return out
+    ex = EXAMPLES.get(geometry) or EXAMPLES["inverted_v"]
+    out = ex.pysim_solve(req)
+    out["solver"] = "pysim"
+    _attach_derived_em_fields(out)
+    _compute_directivity_norm(out)
+    return out
+
+
+@app.post("/sweep")
+async def sweep_endpoint(req: dict, request: Request):
+    """Stream sweep points as NDJSON, one (freq, Z) per line.
+
+    Streaming so the UI can show partial results as they're computed, and
+    so the server can stop mid-sweep when the client disconnects — without
+    this the user's slider drags abort the fetch client-side but the server
+    keeps grinding through all 41 expensive PyNEC ground solves, starving
+    the live /ws solves of CPU.
+    """
+    freqs = [float(f) for f in req.get("freqs_mhz", [])]
+    geometry = req.get("geometry", "inverted_v")
+    use_pynec = req.get("solver") == "pynec" and pynec_backend.HAVE_PYNEC
+    solver_name = "pynec" if use_pynec else "pysim"
+
+    async def gen():
+        if not freqs:
+            yield json.dumps({"done": True, "solver": solver_name}) + "\n"
+            return
+
+        if use_pynec:
+            # Per-point loop with disconnect check; lets us bail before the
+            # next ~100 ms PyNEC ground solve when the user moves a slider.
+            # Multi-feed geometries (bowtie) take the multifeed sweep so
+            # per-feed Z streams alongside the primary z_re / z_im.
+            is_multifeed = geometry == "bowtie"
+            for f in freqs:
+                if await request.is_disconnected():
+                    return
+                if is_multifeed:
+                    primary, feeds_z = await run_in_threadpool(
+                        pynec_backend._sweep_at_multifeed, req, f
+                    )
+                    record = {
+                        "freq_mhz": f,
+                        "z_re": float(primary.real),
+                        "z_im": float(primary.imag),
+                        "feeds_z_re": [float(z_.real) for z_ in feeds_z],
+                        "feeds_z_im": [float(z_.imag) for z_ in feeds_z],
+                        "solver": solver_name,
+                    }
+                else:
+                    z = await run_in_threadpool(pynec_backend._sweep_at, req, f)
+                    record = {
+                        "freq_mhz": f,
+                        "z_re": float(z.real),
+                        "z_im": float(z.imag),
+                        "solver": solver_name,
+                    }
+                yield json.dumps(record) + "\n"
+        else:
+            # pysim's batched sweep is ~10x faster per-call than per-point,
+            # but a 5-band fan dipole sweep at n_per_wire=21, 41 freqs takes
+            # ~6 s and holds several hundred MB of J tensors — long enough
+            # that rapid slider drags would otherwise pile up concurrent
+            # computes in the threadpool, exhausting threads or memory and
+            # surfacing as a 500 at the Vite proxy.
+            #
+            # Chunk the sweep so we can check is_disconnected between
+            # batches. Per-freq cost has a bowl curve in chunk size:
+            # tiny chunks pay per-call overhead, huge chunks thrash memory
+            # bandwidth. For the 5-band fan-dipole geometry the sweet spot
+            # is chunk_size ≈ 8 (115 ms/freq); for an inverted V it's much
+            # larger (single-digit ms/freq, all freqs in one go is fine).
+            #
+            # Aim each chunk at roughly _CHUNK_TARGET_MS so the cancellation
+            # granularity is consistent across geometries. Start with an
+            # 8-chunk heuristic, then after each chunk recompute the next
+            # size from observed per-freq cost. Converges in ~1 iteration.
+            sweep_ex = EXAMPLES.get(geometry) or EXAMPLES["inverted_v"]
+            sweep_fn = sweep_ex.pysim_sweep
+            chunk_size = max(1, len(freqs) // 8)
+            start = 0
+            while start < len(freqs):
+                if await request.is_disconnected():
+                    return
+                chunk = freqs[start : start + chunk_size]
+                t0 = time.perf_counter()
+                sweep_result = await run_in_threadpool(sweep_fn, req, chunk)
+                # Multi-feed sweeps (bowtie array) return a 4-tuple with
+                # per-feed Z appended. Everything else stays on the
+                # original 2-tuple shape; the legacy z_re / z_im fields
+                # always carry the primary feed for back-compat.
+                feeds_re_chunk: list[list[float]] | None = None
+                feeds_im_chunk: list[list[float]] | None = None
+                if len(sweep_result) == 4:
+                    z_re, z_im, feeds_re_chunk, feeds_im_chunk = sweep_result
+                else:
+                    z_re, z_im = sweep_result
+                chunk_ms = (time.perf_counter() - t0) * 1000
+                for i, f in enumerate(chunk):
+                    record: dict = {
+                        "freq_mhz": f,
+                        "z_re": z_re[i],
+                        "z_im": z_im[i],
+                        "solver": solver_name,
+                    }
+                    if feeds_re_chunk is not None:
+                        record["feeds_z_re"] = feeds_re_chunk[i]
+                        record["feeds_z_im"] = feeds_im_chunk[i]
+                    yield json.dumps(record) + "\n"
+                start += len(chunk)
+                # Adapt for the next chunk: target _CHUNK_TARGET_MS per
+                # batch. Per-freq cost is a weak function of chunk size
+                # (bowl curve), so this converges quickly.
+                if chunk_ms > 0 and len(chunk) > 0:
+                    per_freq_ms = chunk_ms / len(chunk)
+                    chunk_size = max(1, round(_CHUNK_TARGET_MS / per_freq_ms))
+
+        yield json.dumps({"done": True, "solver": solver_name}) + "\n"
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson")
+
+
+def _solve_z_only(req: dict) -> tuple[complex, list[complex] | None]:
+    """Run the geometry-specific solver and return only the input impedance.
+
+    Returns (primary_z, feeds_z) where feeds_z is the per-feed Z list for
+    multi-feed geometries (bowtie 1×2 array) and None for single-feed
+    geometries. Skips the directivity-norm integral that `solve()` would
+    otherwise tack on — for the /converge sweep we only need Z(N), and
+    at N ≳ 60 the directivity step adds non-negligible cost.
+    """
+    geometry = req.get("geometry", "inverted_v")
+    use_pynec = req.get("solver") == "pynec" and pynec_backend.HAVE_PYNEC
+    if use_pynec:
+        res = pynec_backend.solve(req)
+    else:
+        ex = EXAMPLES.get(geometry) or EXAMPLES["inverted_v"]
+        res = ex.pysim_solve(req)
+    primary = complex(res["z_in_re"], res["z_in_im"])
+    feeds_list = res.get("feeds")
+    feeds_z: list[complex] | None = (
+        [complex(f["z_re"], f["z_im"]) for f in feeds_list]
+        if feeds_list and len(feeds_list) > 1
+        else None
+    )
+    return primary, feeds_z
+
+
+@app.post("/converge")
+async def converge_endpoint(req: dict, request: Request):
+    """Stream impedance vs segments/wire as NDJSON, one (n, Z) per line.
+
+    The frontend passes `n_values: list[int]`; we re-solve the geometry at
+    each N (overriding `n_per_wire`) and yield the result before starting
+    the next solve. Streaming so the user sees the trajectory build up
+    incrementally — the largest-N solves take noticeably longer (~N³ for
+    the dense LU) and the user shouldn't have to wait for the whole sweep
+    to see early points.
+
+    Cancels on client disconnect (slider drag interrupts a stale sweep)
+    using the same pattern as /sweep.
+    """
+    n_values = [int(n) for n in req.get("n_values", [])]
+    use_pynec = req.get("solver") == "pynec" and pynec_backend.HAVE_PYNEC
+    solver_name = "pynec" if use_pynec else "pysim"
+
+    async def gen():
+        for n in n_values:
+            if await request.is_disconnected():
+                return
+            req_n = dict(req)
+            req_n["n_per_wire"] = n
+            try:
+                z, feeds_z = await run_in_threadpool(_solve_z_only, req_n)
+            except Exception as e:
+                # One-off solver failures (e.g. degenerate geometry at very
+                # small N) shouldn't abort the whole sweep — note the error
+                # for this N and keep going.
+                yield (
+                    json.dumps(
+                        {
+                            "n_per_wire": n,
+                            "error": str(e),
+                            "solver": solver_name,
+                        }
+                    )
+                    + "\n"
+                )
+                continue
+            record: dict = {
+                "n_per_wire": n,
+                "z_re": float(z.real),
+                "z_im": float(z.imag),
+                "solver": solver_name,
+            }
+            # Multi-feed geometries (bowtie 1×2 array) ship per-feed Z so
+            # the frontend can plot one convergence trail per port. Single-
+            # feed geometries omit the field; the stream shape is unchanged.
+            if feeds_z is not None:
+                record["feeds_z_re"] = [float(z_.real) for z_ in feeds_z]
+                record["feeds_z_im"] = [float(z_.imag) for z_ in feeds_z]
+            yield json.dumps(record) + "\n"
+        yield json.dumps({"done": True, "solver": solver_name}) + "\n"
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson")
+
+
+@app.post("/pattern")
+async def pattern_endpoint(req: dict):
+    """NEC's rp_card-computed gain pattern. PyNEC-only."""
+    if req.get("solver") != "pynec" or not pynec_backend.HAVE_PYNEC:
+        return {"available": False}
+    return await run_in_threadpool(pynec_backend.pattern, req)
+
+
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}
+
+
+@app.get("/examples")
+def examples_endpoint():
+    """Serve the registered antenna examples + their parameter schemas.
+
+    The frontend reads this on mount to populate the geometry dropdown
+    and render the parameter sliders generically. Each example reports
+    its `multi_feed` flag (affects the response handling for arrays of
+    feeds) plus a result_schema that may mix scalar ResultFieldSpec
+    rows with ResultGroupSpec repeat groups.
+    """
+
+    def _serialize_schema_item(item) -> dict:
+        # Discriminate by attribute: ParamGroupSpec has `params`, ParamSpec
+        # doesn't. Recurses so groups-in-groups serialize cleanly (the
+        # frontend only renders one level today but the wire format is
+        # already general).
+        if hasattr(item, "params"):
+            return {
+                "kind": "group",
+                "name": item.name,
+                "label_template": item.label_template,
+                "repeat_count": item.repeat_count,
+                "max_repeats": item.max_repeats,
+                "params": [_serialize_schema_item(p) for p in item.params],
+                "default_overrides": list(item.default_overrides),
+                "link_meas_freq_to_param": item.link_meas_freq_to_param,
+            }
+        return {
+            "name": item.name,
+            "label": item.label,
+            "default": item.default,
+            "kind": item.kind,
+            "min": item.min,
+            "max": item.max,
+            "step": item.step,
+            "precision": item.precision,
+            "unit": item.unit,
+            "visible_when": item.visible_when,
+            "enum_options": (
+                list(item.enum_options) if item.enum_options is not None else None
+            ),
+            "range_from_enum_option": item.range_from_enum_option,
+            "on_change_set": item.on_change_set,
+            "linked_to_design_freq": item.linked_to_design_freq,
+        }
+
+    out = []
+    for name, ex in EXAMPLES.items():
+        out.append(
+            {
+                "name": ex.name,
+                "label": ex.label,
+                "multi_feed": ex.multi_feed,
+                "param_schema": [_serialize_schema_item(p) for p in ex.param_schema],
+                "result_schema": [
+                    (
+                        {
+                            "kind": "group",
+                            "name": r.name,
+                            "label_template": r.label_template,
+                            "fields": [
+                                {
+                                    "field": f.field,
+                                    "label": f.label,
+                                    "precision": f.precision,
+                                    "unit": f.unit,
+                                }
+                                for f in r.fields
+                            ],
+                        }
+                        if hasattr(r, "fields")
+                        else {
+                            "field": r.field,
+                            "label": r.label,
+                            "precision": r.precision,
+                            "unit": r.unit,
+                        }
+                    )
+                    for r in ex.result_schema
+                ],
+                "bands": [
+                    {
+                        "key": b.key,
+                        "label": b.label,
+                        "freq_mhz": b.freq_mhz,
+                        "min_mhz": b.min_mhz,
+                        "max_mhz": b.max_mhz,
+                    }
+                    for b in ex.bands
+                ],
+                "meas_freq_range_mhz": (
+                    list(ex.meas_freq_range_mhz)
+                    if ex.meas_freq_range_mhz is not None
+                    else None
+                ),
+                "default_view": ex.default_view,
+                "sweep_policy": {
+                    "anchor": ex.sweep_policy.anchor,
+                    "lo_factor": ex.sweep_policy.lo_factor,
+                    "hi_factor": ex.sweep_policy.hi_factor,
+                },
+            }
+        )
+    out.sort(key=lambda e: e["label"])
+    return {"examples": out}
+
+
+@app.websocket("/ws")
+async def ws_endpoint(ws: WebSocket):
+    await ws.accept()
+    try:
+        while True:
+            raw = await ws.receive_text()
+            req = json.loads(raw)
+            result = await run_in_threadpool(solve, req)
+            await ws.send_text(json.dumps(result))
+    except WebSocketDisconnect:
+        return

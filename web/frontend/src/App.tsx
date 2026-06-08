@@ -1,0 +1,3676 @@
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+
+type Wire = {
+  label: string;
+  knot_positions: [number, number, number][];
+  knot_currents_re: number[];
+  knot_currents_im: number[];
+  // Optional finer-grained samples: knots interleaved with segment midpoints
+  // (length 2*N_seg + 1). Present from pysim backends, absent from PyNEC.
+  sample_positions?: [number, number, number][];
+  sample_currents_re?: number[];
+  sample_currents_im?: number[];
+};
+
+// Schema served by `GET /examples`. The backend's web/examples/_base.py
+// owns the source of truth; this type just mirrors the JSON shape.
+type SchemaEnumOption = {
+  value: string;
+  label: string;
+  // Free-form metadata. Fan_dipole's band entries carry freq_min /
+  // freq_max / freq_default for range_from_enum_option + on_change_set.
+  [key: string]: unknown;
+};
+
+type SchemaParamSpec = {
+  name: string;
+  label: string;
+  default: number | string | boolean;
+  kind: "float" | "int" | "bool" | "enum";
+  min: number | null;
+  max: number | null;
+  step: number | null;
+  precision: number;
+  unit: string | null;
+  visible_when: { name: string; op: string; value: number } | null;
+  enum_options?: SchemaEnumOption[] | null;
+  range_from_enum_option?: { param: string; min_key: string; max_key: string } | null;
+  on_change_set?: { set: string; from_enum_key: string } | null;
+  linked_to_design_freq?: boolean;
+};
+
+type SchemaParamGroupSpec = {
+  kind: "group";
+  name: string;
+  label_template: string;
+  repeat_count: string;
+  max_repeats: number;
+  params: SchemaItem[];
+  default_overrides: { [param: string]: unknown }[];
+  // When set, names a sibling param inside this group's `params`
+  // (typically "freq") whose per-instance value the frontend pushes
+  // into the global measFreq state on every touch of any leaf inside
+  // that instance. Gated by the linkMeas toggle.
+  link_meas_freq_to_param?: string | null;
+};
+
+type SchemaItem = SchemaParamSpec | SchemaParamGroupSpec;
+
+function isGroup(item: SchemaItem): item is SchemaParamGroupSpec {
+  return (item as SchemaParamGroupSpec).kind === "group";
+}
+
+// State for a schema-driven antenna: nested map where scalars are
+// numbers (float/int) or strings (enum), and groups are arrays of
+// child bags (one per instance, pre-allocated to max_repeats).
+type ParamValueBag = {
+  [key: string]: number | string | boolean | ParamValueBag[];
+};
+
+type ResultFieldSpec = {
+  field: string;
+  label: string;
+  precision: number;
+  unit: string | null;
+};
+
+type SweepPolicy = {
+  anchor: "design_freq" | "meas_freq";
+  lo_factor: number;
+  hi_factor: number;
+};
+
+type BandSpec = {
+  key: string;
+  label: string;
+  freq_mhz: number;
+  min_mhz: number;
+  max_mhz: number;
+};
+
+type ResultGroupItem = {
+  kind: "group";
+  name: string;
+  label_template: string;
+  fields: ResultFieldSpec[];
+};
+type ResultSchemaItem = ResultFieldSpec | ResultGroupItem;
+
+type ExampleDescriptor = {
+  name: string;
+  label: string;
+  multi_feed: boolean;
+  param_schema: SchemaItem[];
+  result_schema: ResultSchemaItem[];
+  bands: BandSpec[];
+  meas_freq_range_mhz: [number, number] | null;
+  default_view: Projection;
+  sweep_policy: SweepPolicy;
+};
+
+function applyVisibility(spec: SchemaParamSpec, values: ParamValueBag): boolean {
+  const v = spec.visible_when;
+  if (!v) return true;
+  const cur = values[v.name];
+  if (cur == null) return true;
+  // Visibility comparisons only make sense for numeric controls today
+  // (e.g. yagi's `n_directors > 0`). Enum-valued conditions would need
+  // a different comparator — flag in v1 but punt on implementation.
+  if (typeof cur !== "number") return true;
+  switch (v.op) {
+    case "eq": return cur === v.value;
+    case "ne": return cur !== v.value;
+    case "gt": return cur > v.value;
+    case "ge": return cur >= v.value;
+    case "lt": return cur < v.value;
+    case "le": return cur <= v.value;
+    default: return true;
+  }
+}
+
+// Seed defaults for one ParamValueBag from a flat list of schema items.
+// `overrides` (optional) overlays per-instance defaults from a group's
+// default_overrides[i] entry — used when seeding a group instance.
+function seedDefaults(
+  schema: SchemaItem[],
+  overrides?: { [k: string]: unknown },
+): ParamValueBag {
+  const out: ParamValueBag = {};
+  for (const item of schema) {
+    if (isGroup(item)) {
+      const arr: ParamValueBag[] = [];
+      for (let i = 0; i < item.max_repeats; i++) {
+        arr.push(seedDefaults(item.params, item.default_overrides[i]));
+      }
+      out[item.name] = arr;
+    } else {
+      const ov = overrides?.[item.name];
+      if (ov !== undefined) {
+        out[item.name] = ov as number | string | boolean;
+      } else if (item.kind === "enum") {
+        out[item.name] = String(item.default);
+      } else if (item.kind === "bool") {
+        out[item.name] = Boolean(item.default);
+      } else {
+        out[item.name] = Number(item.default);
+      }
+    }
+  }
+  return out;
+}
+
+// Walk the schema collecting (param, value) pairs for every leaf marked
+// `linked_to_design_freq`. Fan_dipole's first band's freq is the
+// canonical example: when it changes, the global design frequency
+// should follow.
+function findLinkedDesignFreq(
+  schema: SchemaItem[],
+  values: ParamValueBag,
+): number | null {
+  for (const item of schema) {
+    if (isGroup(item)) {
+      const instances = values[item.name];
+      if (!Array.isArray(instances) || instances.length === 0) continue;
+      // Only the first instance's linked param drives design freq.
+      // Extending to "any instance" needs a tie-break policy; not
+      // worth designing until a second antenna asks for it.
+      const found = findLinkedDesignFreq(item.params, instances[0]);
+      if (found != null) return found;
+    } else if (item.linked_to_design_freq) {
+      const v = values[item.name];
+      if (typeof v === "number") return v;
+    }
+  }
+  return null;
+}
+
+function ParamForm({
+  schema,
+  values,
+  onChange,
+  pathPrefix = [],
+}: {
+  schema: SchemaItem[];
+  values: ParamValueBag;
+  onChange: (path: (string | number)[], value: number | string | boolean) => void;
+  pathPrefix?: (string | number)[];
+}) {
+  return (
+    <>
+      {schema.map((item) => {
+        if (isGroup(item)) {
+          const countRaw = values[item.repeat_count];
+          const count = typeof countRaw === "number" ? Math.round(countRaw) : 0;
+          const instances = values[item.name];
+          if (!Array.isArray(instances)) return null;
+          return (
+            <div key={item.name} className="param-group">
+              {Array.from({ length: Math.min(count, instances.length) }, (_, i) => (
+                <div key={`${item.name}-${i}`} className="param-group-instance">
+                  <div className="param-group-header">
+                    {item.label_template.replace("{i}", String(i))}
+                  </div>
+                  <ParamForm
+                    schema={item.params}
+                    values={instances[i]}
+                    onChange={onChange}
+                    pathPrefix={[...pathPrefix, item.name, i]}
+                  />
+                </div>
+              ))}
+            </div>
+          );
+        }
+        // Scalar leaf.
+        if (!applyVisibility(item, values)) return null;
+        const currentRaw = values[item.name];
+        const currentNum =
+          typeof currentRaw === "number" ? currentRaw : Number(item.default);
+        const currentStr =
+          typeof currentRaw === "string" ? currentRaw : String(item.default);
+
+        // Resolve dynamic min/max from a sibling enum's currently-
+        // selected option, when configured. Falls back to the static
+        // min/max if the lookup misses.
+        let effMin = item.min ?? 0;
+        let effMax = item.max ?? 1;
+        const rfe = item.range_from_enum_option;
+        if (rfe) {
+          const siblingVal = values[rfe.param];
+          const siblingSchema = schema.find(
+            (s) => !isGroup(s) && s.name === rfe.param,
+          ) as SchemaParamSpec | undefined;
+          const opts = siblingSchema?.enum_options;
+          if (opts && typeof siblingVal === "string") {
+            const opt = opts.find((o) => o.value === siblingVal);
+            if (opt) {
+              const lo = opt[rfe.min_key];
+              const hi = opt[rfe.max_key];
+              if (typeof lo === "number") effMin = lo;
+              if (typeof hi === "number") effMax = hi;
+            }
+          }
+        }
+
+        if (item.kind === "bool") {
+          const checked = Boolean(currentRaw ?? item.default);
+          return (
+            <div key={item.name} className="field field-bool">
+              <label className="field-bool-label">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) =>
+                    onChange(
+                      [...pathPrefix, item.name],
+                      (e.target as HTMLInputElement).checked,
+                    )
+                  }
+                />
+                <span>{item.label}</span>
+              </label>
+            </div>
+          );
+        }
+
+        if (item.kind === "enum") {
+          const opts = item.enum_options ?? [];
+          return (
+            <div key={item.name} className="field">
+              <label>
+                <span>{item.label}</span>
+              </label>
+              <select
+                value={currentStr}
+                onChange={(e) => {
+                  const next = (e.target as HTMLSelectElement).value;
+                  onChange([...pathPrefix, item.name], next);
+                  // On-change side effect: set a sibling's value to a
+                  // key from the new enum option. Fan_dipole uses this
+                  // to snap freq to the band's default.
+                  const oc = item.on_change_set;
+                  if (oc) {
+                    const opt = opts.find((o) => o.value === next);
+                    if (opt) {
+                      const k = opt[oc.from_enum_key];
+                      if (typeof k === "number" || typeof k === "string") {
+                        onChange([...pathPrefix, oc.set], k);
+                      }
+                    }
+                  }
+                }}
+              >
+                {opts.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          );
+        }
+
+        const shown =
+          item.kind === "int"
+            ? String(Math.round(currentNum))
+            : currentNum.toFixed(item.precision);
+        return (
+          <div key={item.name} className="field">
+            <label>
+              <span>{item.label}</span>
+              <span>{shown}{item.unit ?? ""}</span>
+            </label>
+            <input
+              type="range"
+              min={effMin}
+              max={effMax}
+              step={item.step ?? 0.001}
+              value={currentNum}
+              onInput={(e) =>
+                onChange(
+                  [...pathPrefix, item.name],
+                  Number((e.target as HTMLInputElement).value),
+                )
+              }
+            />
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function formatScalar(raw: unknown, precision: number, unit: string | null): string {
+  return typeof raw === "number" ? `${raw.toFixed(precision)}${unit ?? ""}` : "—";
+}
+
+// label_template substitutions for ResultGroupItem:
+//   {i}            → 0-based index
+//   {i1}           → 1-based index
+//   {name:.Nf}     → result[name][i] formatted as a fixed-N-decimal float
+function renderGroupLabel(template: string, i: number, result: Record<string, unknown> | null): string {
+  let out = template.replace(/\{i1\}/g, String(i + 1)).replace(/\{i\}/g, String(i));
+  out = out.replace(/\{(\w+):\.(\d+)f\}/g, (_, name: string, decimals: string) => {
+    const arr = result?.[name];
+    if (!Array.isArray(arr)) return "—";
+    const v = arr[i];
+    return typeof v === "number" ? v.toFixed(Number(decimals)) : "—";
+  });
+  return out;
+}
+
+function ResultPanel({
+  schema,
+  result,
+}: {
+  schema: ResultSchemaItem[];
+  result: Record<string, unknown> | null;
+}) {
+  // Render one row per schema entry. Scalar items read the field off the
+  // response by name; group items repeat over the first inner field's
+  // top-level array. Missing/non-numeric values render as an em-dash so
+  // the row layout doesn't collapse mid-update.
+  return (
+    <>
+      {schema.map((item) => {
+        if ("kind" in item && item.kind === "group") {
+          const repeatField = item.fields[0]?.field;
+          const arr = repeatField ? result?.[repeatField] : undefined;
+          if (!Array.isArray(arr)) return null;
+          return (
+            <Fragment key={`result-group-${item.name}`}>
+              {arr.map((_, i) => (
+                <div className="row" key={`result-group-${item.name}-${i}`}>
+                  <span>{renderGroupLabel(item.label_template, i, result)}</span>
+                  <span className="val">
+                    {item.fields.map((f, fi) => {
+                      const sub = result?.[f.field];
+                      const v = Array.isArray(sub) ? sub[i] : undefined;
+                      return (
+                        <span key={`${item.name}-${i}-${fi}`}>
+                          {formatScalar(v, f.precision, f.unit)}
+                        </span>
+                      );
+                    })}
+                  </span>
+                </div>
+              ))}
+            </Fragment>
+          );
+        }
+        const s = item as ResultFieldSpec;
+        return (
+          <div className="row" key={`result-${s.field}`}>
+            <span>{s.label}</span>
+            <span className="val">{formatScalar(result?.[s.field], s.precision, s.unit)}</span>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+type FeedEntry = {
+  wire_index: number;
+  knot_index: number;
+  z_re: number;
+  z_im: number;
+  v_re: number;
+  v_im: number;
+};
+
+type SolveResponse = {
+  geometry: string;
+  wires: Wire[];
+  feed_wire_index: number;
+  feed_knot_index: number;
+  z_in_re: number;
+  z_in_im: number;
+  /** Multi-feed geometries (bowtie 1×2 array) populate this; single-feed
+   *  geometries omit it. Primary feed is feeds[0] when present. */
+  feeds?: FeedEntry[];
+  design_freq_mhz: number;
+  measurement_freq_mhz: number;
+  lambda_design_m: number;
+  solve_ms: number;
+  directivity_norm?: number;
+  ground?: boolean;
+  height_m?: number;
+  ground_eps_r?: number;
+  ground_sigma?: number;
+  ground_eps_im?: number;
+  k_meas_m_inv?: number;
+  // V-specific
+  arm_len_m?: number;
+  // Yagi-specific
+  driver_length_m?: number;
+  reflector_length_m?: number;
+  spacing_m?: number;
+  // Moxon-specific
+  long_m?: number;
+  short_m?: number;
+  tipspacer_m?: number;
+  t0_m?: number;
+  halfdriver_m?: number;
+  // Hexbeam-specific
+  radius_m?: number;
+  t1_m?: number;
+  // Fan dipole-specific
+  n_bands?: number;
+  band_lengths_m?: number[];
+  band_freqs_mhz?: number[];
+  slope?: number;
+  cone_radius_m?: number;
+  // Hentenna-specific
+  half_width_m?: number;
+  top_height_m?: number;
+  mid_offset_m?: number;
+  // Bowtie-1×2-array-specific
+  y_m?: number;
+  z_m?: number;
+  length_m?: number;
+  del_y_m?: number;
+  phase_lr_deg?: number;
+  /** Per-geometry SWR / Smith chart reference impedance. Falls back to
+   *  50 Ω when the server doesn't supply one. Bowtie array returns 100 Ω
+   *  because each element is designed for a 100 Ω feedline. */
+  z0_ohms?: number;
+};
+
+// Backend selector — three PySim model variants + PyNEC. Per-backend
+// `model_options` are forwarded to server.py's _make_pysim_sim.
+type Backend = "triangular" | "sinusoidal" | "bspline" | "pynec";
+
+const BACKEND_LABEL: Record<Backend, string> = {
+  triangular: "Triangular",
+  sinusoidal: "Sinusoidal",
+  bspline: "B-spline",
+  pynec: "PyNEC",
+};
+
+const BACKEND_ORDER: Backend[] = ["triangular", "sinusoidal", "bspline", "pynec"];
+
+// All three pysim models have the PEC image-method ground; PyNEC uses
+// its own Sommerfeld / reflection-coefficient ground. Kept as an explicit
+// list so future backends without ground support can be excluded by name.
+function backendSupportsGround(b: Backend): boolean {
+  return (
+    b === "triangular" || b === "bspline" || b === "sinusoidal" || b === "pynec"
+  );
+}
+
+type CommonOpts = { nPerWire: number; wireRadius: number };
+
+type TriangularOpts = CommonOpts & { nQpReg: number; nQpOff: number };
+type SinusoidalOpts = CommonOpts & { nQpConst: number };
+type BSplineOpts = CommonOpts & {
+  degree: 1 | 2;
+  nQpPair: number;
+  feedSmoothingFactor: number | null; // null = sharp delta-gap
+  useSingularEnrichment: boolean;
+  // "raw"      → Φ_sing(t) = t·log(t), PR #45/#47 original shape.
+  // "stable"   → Φ_sing − bubble-subspace L²-projection: faster large-N
+  //              convergence on dominant-pair K=3 junctions; larger
+  //              small-N transient; loses Y-fixture cusp benefit. d=1
+  //              collapses to raw bit-exact.
+  // "tikhonov" → raw basis + λ·s·I penalty on Z_ee at solve time.
+  //              λ→0 is raw; λ→∞ kills enrichment. λ=0.1 preserves
+  //              Y-fixture cusp; λ=1.0 fully suppresses the small-N
+  //              transient on dominant-pair K=3 junctions but loses Y cusp.
+  // "auto"     → two-pass: solve once without enrichment, measure
+  //              tap_ratio at each K≥3 junction, apply raw enrichment
+  //              only where tap_ratio > autoTapRatioThreshold. Cleanly
+  //              separates dominant-pair K=3 (tap_ratio ≈ 0.16) from
+  //              balanced 3-way (Y ≈ 0.50). The selectivity that
+  //              raw/stable/tikhonov can't deliver algebraically.
+  enrichmentVariant: "raw" | "stable" | "tikhonov" | "auto";
+  tikhonovLambda: number;
+  autoTapRatioThreshold: number;
+  nQpSing: number;
+  enrichmentMinK: number;
+  nQpSource: number;
+};
+type PyNECOpts = CommonOpts;
+
+type BackendOptsMap = {
+  triangular: TriangularOpts;
+  sinusoidal: SinusoidalOpts;
+  bspline: BSplineOpts;
+  pynec: PyNECOpts;
+};
+
+const DEFAULT_BACKEND_OPTS: BackendOptsMap = {
+  triangular: { nPerWire: 30, wireRadius: 0.0005, nQpReg: 4, nQpOff: 4 },
+  sinusoidal: { nPerWire: 30, wireRadius: 0.0005, nQpConst: 8 },
+  bspline: {
+    nPerWire: 30,
+    wireRadius: 0.0005,
+    degree: 2,
+    nQpPair: 4,
+    feedSmoothingFactor: null,
+    useSingularEnrichment: false,
+    enrichmentVariant: "raw",
+    tikhonovLambda: 0.1,
+    autoTapRatioThreshold: 0.3,
+    nQpSing: 32,
+    enrichmentMinK: 3,
+    nQpSource: 16,
+  },
+  pynec: { nPerWire: 30, wireRadius: 0.0005 },
+};
+
+// Three abstract solver slots. Each holds one backend choice and its
+// options; the user picks A/B/C with the row of buttons, configures the
+// inhabitants from the per-slot gear menu. Lets the same UI compare
+// e.g. "Triangular @ N=40" against "B-spline @ N=21 with enrichment"
+// without losing either setup.
+type Slot = "A" | "B" | "C";
+const SLOT_ORDER: Slot[] = ["A", "B", "C"];
+
+type SlotConfig = {
+  backend: Backend;
+  opts: BackendOptsMap[Backend];
+};
+
+const DEFAULT_SLOTS: Record<Slot, SlotConfig> = {
+  A: {
+    backend: "triangular",
+    opts: { ...DEFAULT_BACKEND_OPTS.triangular, nPerWire: 40 },
+  },
+  B: {
+    backend: "bspline",
+    opts: {
+      ...DEFAULT_BACKEND_OPTS.bspline,
+      nPerWire: 21,
+    },
+  },
+  C: {
+    backend: "pynec",
+    opts: { ...DEFAULT_BACKEND_OPTS.pynec, nPerWire: 41 },
+  },
+};
+
+// Translates the camelCase frontend options into the snake_case kwargs the
+// server forwards to each PySim model class constructor.
+function modelOptionsForRequest(
+  backend: Backend,
+  opts: BackendOptsMap[Backend],
+): Record<string, unknown> {
+  if (backend === "triangular") {
+    const o = opts as TriangularOpts;
+    return { n_qp_reg: o.nQpReg, n_qp_off: o.nQpOff };
+  }
+  if (backend === "sinusoidal") {
+    const o = opts as SinusoidalOpts;
+    return { n_qp_const: o.nQpConst };
+  }
+  if (backend === "bspline") {
+    const o = opts as BSplineOpts;
+    return {
+      degree: o.degree,
+      n_qp_pair: o.nQpPair,
+      n_qp_source: o.nQpSource,
+      feed_smoothing_factor: o.feedSmoothingFactor,
+      use_singular_enrichment: o.useSingularEnrichment,
+      enrichment_variant: o.enrichmentVariant,
+      tikhonov_lambda: o.tikhonovLambda,
+      auto_tap_ratio_threshold: o.autoTapRatioThreshold,
+      n_qp_sing: o.nQpSing,
+      enrichment_min_k: o.enrichmentMinK,
+    };
+  }
+  return {};
+}
+
+type SolveRequest = {
+  geometry: string;
+  solver: "pysim" | "pynec";
+  pysim_model?: "triangular" | "sinusoidal" | "bspline";
+  model_options?: Record<string, unknown>;
+  n_per_wire: number;
+  design_freq_mhz: number;
+  measurement_freq_mhz: number;
+  wire_radius: number;
+  ground: boolean;
+  ground_fast: boolean;
+  height_m: number;
+  // V
+  angle_deg?: number;
+  halfdriver_factor?: number;
+  // Yagi
+  driver_length_factor?: number;
+  reflector_length_factor?: number;
+  spacing_wavelengths?: number;
+  n_directors?: number;
+  director_spacing_wavelengths?: number;
+  director_size_factor?: number;
+  // Moxon (+ hexbeam: hexbeam reuses tipspacer_factor and t0_factor too)
+  aspect_ratio?: number;
+  tipspacer_factor?: number;
+  t0_factor?: number;
+  // Fan dipole
+  n_bands?: number;
+  band_lengths_m?: number[];
+  band_freqs_mhz?: number[];
+  band_halfdriver_factors?: number[];
+  slope?: number;
+  cone_radius_m?: number;
+  // Hentenna
+  width_factor?: number;
+  top_height_factor?: number;
+  mid_height_factor?: number;
+  // Bowtie 1×2 array (slope shared with fan_dipole tip-droop convention)
+  length_factor?: number;
+  del_y_m?: number;
+  phase_lr_deg?: number;
+};
+
+type SweepData = {
+  freqs_mhz: number[];
+  z_re: number[];
+  z_im: number[];
+  /** Multi-feed geometries (bowtie 1×2 array) populate these; each row is a
+   *  per-feed Z array of length n_feeds. Index alignment with freqs_mhz.
+   *  Single-feed geometries omit them and the Smith chart falls back to
+   *  the legacy single-trajectory render driven by z_re/z_im. */
+  feeds_z_re?: number[][];
+  feeds_z_im?: number[][];
+};
+
+type ConvergeData = {
+  n_values: number[];
+  z_re: number[];
+  z_im: number[];
+  // Richardson extrapolation Z(1/N) → Z(0). Filled once ≥3 points are in.
+  z_re_extrap: number | null;
+  z_im_extrap: number | null;
+  /** Multi-feed convergence — per-N per-feed Z. Outer index aligns with
+   *  n_values; inner index aligns with feed order. Single-feed
+   *  geometries omit these and the chart falls back to the legacy
+   *  single-trail render driven by z_re/z_im. */
+  feeds_z_re?: number[][];
+  feeds_z_im?: number[][];
+  /** Per-feed Richardson Z*. Indexed by feed order, same length as a row
+   *  of feeds_z_re. Entries are null until ≥3 sample points are in. */
+  feeds_z_re_extrap?: (number | null)[];
+  feeds_z_im_extrap?: (number | null)[];
+};
+
+// Log-spaced segments-per-wire ladder for the convergence sweep. Hentenna's
+// 8N+2 total segments at N=68 puts the dense LU at a ~550-cell matrix —
+// still snappy at this N range on all backends, but enough span to see
+// O(1/N) trajectories clearly. Same ladder across backends so the curves
+// are directly comparable when the user switches slots.
+const CONVERGE_N_VALUES: number[] = [8, 12, 17, 24, 34, 48, 68];
+
+// Richardson-style extrapolation Z(1/N) → Z(N→∞). Fits Z = a₀ + a₁·h + a₂·h²
+// (h = 1/N) on the last `nLast` points via least squares and returns a₀.
+// Quadratic gives a sane answer for O(1/N) limit (BSpline/Triangular without
+// enrichment) AND O(1/N^p) for p slightly above 1 — basis-cap, enrichment,
+// etc. With ≤2 points we can't fit; return null.
+function richardsonExtrap(
+  invN: number[],
+  vals: number[],
+  nLast = 5,
+): number | null {
+  const m = Math.min(nLast, invN.length);
+  if (m < 3) return null;
+  const start = invN.length - m;
+  // Solve Ax = b for x = [a₀, a₁, a₂] using normal equations on the last m
+  // points. m × 3 → 3 × 3 — small, no need for an LAPACK call.
+  let s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0;
+  let t0 = 0, t1 = 0, t2 = 0;
+  for (let i = start; i < invN.length; i++) {
+    const h = invN[i];
+    const y = vals[i];
+    s0 += 1;
+    s1 += h;
+    s2 += h * h;
+    s3 += h * h * h;
+    s4 += h * h * h * h;
+    t0 += y;
+    t1 += y * h;
+    t2 += y * h * h;
+  }
+  // 3x3 linear system: [[s0,s1,s2],[s1,s2,s3],[s2,s3,s4]] · [a0,a1,a2] = [t0,t1,t2]
+  const m00 = s0, m01 = s1, m02 = s2;
+  const m10 = s1, m11 = s2, m12 = s3;
+  const m20 = s2, m21 = s3, m22 = s4;
+  const det =
+    m00 * (m11 * m22 - m12 * m21) -
+    m01 * (m10 * m22 - m12 * m20) +
+    m02 * (m10 * m21 - m11 * m20);
+  if (Math.abs(det) < 1e-30) return null;
+  const a0 =
+    (t0 * (m11 * m22 - m12 * m21) -
+      m01 * (t1 * m22 - m12 * t2) +
+      m02 * (t1 * m21 - m11 * t2)) /
+    det;
+  return a0;
+}
+
+type PatternData = {
+  theta_deg: number[];
+  phi_deg: number[];
+  gain_dbi: number[][];
+  measurement_freq_mhz: number;
+};
+
+const WS_URL = `ws://${window.location.host}/ws`;
+
+type View = "antenna" | "azimuth" | "elevation" | "smith";
+const VIEWS: { id: View; label: string }[] = [
+  { id: "antenna", label: "Antenna" },
+  { id: "azimuth", label: "Azimuth (xy)" },
+  { id: "elevation", label: "Elevation (yz)" },
+  { id: "smith", label: "Smith" },
+];
+
+// Antenna-canvas camera projections. Pick two world axes to map to canvas
+// (horizontal, vertical) and project. The hidden axis is the camera ray.
+type Projection = "xy" | "xz" | "yz";
+const PROJECTIONS: { id: Projection; label: string; horizAxis: 0|1|2; vertAxis: 0|1|2 }[] = [
+  { id: "xy", label: "Top (xy)",   horizAxis: 0, vertAxis: 1 },
+  { id: "xz", label: "Front (xz)", horizAxis: 0, vertAxis: 2 },
+  { id: "yz", label: "Side (yz)",  horizAxis: 1, vertAxis: 2 },
+];
+
+function useSlideSize(maxSize = 720) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState(maxSize);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      const s = Math.min(rect.width, rect.height, maxSize);
+      setSize(Math.max(160, Math.floor(s) - 16));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [maxSize]);
+  return { ref, size };
+}
+
+function useThumbColumnSize(
+  stripRef: React.RefObject<HTMLDivElement>,
+  maxThumb = 280,
+) {
+  // Vertical thumbstrip: each of 3 thumbs takes ~1/3 of the strip's actual
+  // rendered height. Fixed overhead per fit:
+  //   strip padding (10+10) + gaps between thumbs (2*8) +
+  //   per-thumb (button padding 10 + label ~14 + gap 4 + border 2) * 3 ≈ 126
+  const [size, setSize] = useState(180);
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const update = () => {
+      const h = el.clientHeight;
+      if (h <= 0) return;
+      const perThumb = (h - 130) / 3;
+      setSize(Math.max(100, Math.min(maxThumb, Math.floor(perThumb))));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [stripRef, maxThumb]);
+  return size;
+}
+
+export function App() {
+  const [geometry, setGeometry] = useState<string>("");
+
+  // Schema-driven parameter controls. Each registered example bundles
+  // its parameter schema in web/examples/<name>.py; the backend serves
+  // them on GET /examples and we render generic sliders from the result.
+  //
+  // Multi-band antennas (fan_dipole) get a nested shape for groups —
+  // `paramValues[name].bands` is an array of per-instance bags,
+  // pre-allocated to ParamGroupSpec.max_repeats so dialing the
+  // repeat-count down and back up preserves the values.
+  const [examples, setExamples] = useState<ExampleDescriptor[]>([]);
+  const [examplesError, setExamplesError] = useState<string | null>(null);
+  const [paramValues, setParamValues] = useState<Record<string, ParamValueBag>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/examples")
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled) return;
+        const list: ExampleDescriptor[] = j.examples ?? [];
+        setExamples(list);
+        setExamplesError(null);
+        // Walk each example's schema and pre-seed defaults — including
+        // pre-allocated group instance arrays — so the sliders have
+        // something to render against on first show.
+        setParamValues((prev) => {
+          const next = { ...prev };
+          for (const ex of list) {
+            if (next[ex.name]) continue;
+            next[ex.name] = seedDefaults(ex.param_schema);
+          }
+          return next;
+        });
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setExamplesError(String(e?.message ?? e));
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Auto-select the first example once /examples resolves, and recover if
+  // the current selection disappears (e.g. backend dropped an example).
+  useEffect(() => {
+    if (examples.length === 0) return;
+    if (!examples.some((e) => e.name === geometry)) {
+      setGeometry(examples[0].name);
+    }
+  }, [examples, geometry]);
+
+  const currentExample = examples.find((e) => e.name === geometry);
+  const currentValues = paramValues[geometry] ?? {};
+  // Stable, primitive-only signature of the active antenna's params for
+  // useEffect dependency arrays. Object identity isn't reliable because
+  // setParamValues replaces the inner object on every onChange.
+  const currentValuesKey = useMemo(
+    () => JSON.stringify(currentValues),
+    [currentValues],
+  );
+  // Deep-immutable path setter. ParamForm calls with paths like
+  // ["bands", 2, "freq"] for nested groups, or ["angle_deg"] for
+  // scalars. Recursive clone along the path so React sees a new
+  // reference at every level it watches.
+  function setParamAtPath(
+    path: (string | number)[],
+    value: number | string | boolean,
+  ) {
+    const setIn = (node: unknown, ps: (string | number)[]): unknown => {
+      if (ps.length === 0) return value;
+      const [head, ...rest] = ps;
+      if (typeof head === "number") {
+        const arr = ((node as unknown[]) ?? []).slice();
+        arr[head] = setIn(arr[head], rest);
+        return arr;
+      }
+      const obj = { ...((node as Record<string, unknown>) ?? {}) };
+      obj[head] = setIn(obj[head], rest);
+      return obj;
+    };
+    let newRoot: ParamValueBag | null = null;
+    setParamValues((prev) => {
+      newRoot = setIn(prev[geometry] ?? {}, path) as ParamValueBag;
+      return { ...prev, [geometry]: newRoot };
+    });
+
+    // Schema-driven meas-freq follow: if the change touched a leaf
+    // inside a group instance, and that group declares
+    // `link_meas_freq_to_param`, push the instance's value of that
+    // sibling param into measFreq. Lets multi-band antennas track
+    // whichever band the user is currently tuning when linkMeas is on.
+    if (!linkMeas || newRoot == null || path.length < 3) return;
+    const groupName = path[0];
+    const instanceIdx = path[1];
+    if (typeof groupName !== "string" || typeof instanceIdx !== "number") return;
+    const ex = currentExample;
+    if (!ex) return;
+    const group = ex.param_schema.find(
+      (s) => isGroup(s) && s.name === groupName,
+    ) as SchemaParamGroupSpec | undefined;
+    if (!group || !group.link_meas_freq_to_param) return;
+    const instances = (newRoot as ParamValueBag)[groupName];
+    if (!Array.isArray(instances)) return;
+    const inst = instances[instanceIdx];
+    if (!inst) return;
+    const freqValue = inst[group.link_meas_freq_to_param];
+    if (typeof freqValue === "number") setMeasFreq(freqValue);
+  }
+  // Fan_dipole was hand-rolled here pre-PR — fanNBands / fanBandIds /
+  // fanBandFreqs / fanHalfdriverFactors / fanSlope / fanConeRadius
+  // useState hooks plus a fanBandLengths memo. All of that now lives in
+  // paramValues["fan_dipole"], seeded from the schema's defaults +
+  // default_overrides. The deletion removed ~25 lines of state plus the
+  // setFanBandSlot / setFanBandFreq / setFanHalfdriverFactor helpers.
+  // Solver slots A / B / C — each one holds its own backend + options so
+  // the user can switch between configured solvers with a single click
+  // and tune each one independently from its gear menu.
+  const [activeSlot, setActiveSlot] = useState<Slot>("A");
+  const [slots, setSlots] = useState<Record<Slot, SlotConfig>>(DEFAULT_SLOTS);
+  const [gearOpen, setGearOpen] = useState<Slot | null>(null);
+  const activeConfig = slots[activeSlot];
+  const backend = activeConfig.backend;
+  const currentOpts = activeConfig.opts;
+  const nPerWire = currentOpts.nPerWire;
+  const wireRadius = currentOpts.wireRadius;
+  // Stable hash of the active slot's config so useEffect can depend on it.
+  const backendOptsKey = JSON.stringify(activeConfig);
+  function updateSlotOpts(slot: Slot, patch: Partial<BackendOptsMap[Backend]>) {
+    setSlots((prev) => ({
+      ...prev,
+      [slot]: {
+        ...prev[slot],
+        opts: { ...prev[slot].opts, ...patch } as BackendOptsMap[Backend],
+      },
+    }));
+  }
+  function setSlotBackend(slot: Slot, newBackend: Backend) {
+    // Preserve segments-per-wire and wire-radius across the swap so the
+    // user keeps their geometry-sizing choices when comparing models;
+    // model-specific kwargs revert to that backend's defaults.
+    setSlots((prev) => {
+      const prevOpts = prev[slot].opts;
+      const defaults = DEFAULT_BACKEND_OPTS[newBackend];
+      return {
+        ...prev,
+        [slot]: {
+          backend: newBackend,
+          opts: {
+            ...defaults,
+            nPerWire: prevOpts.nPerWire,
+            wireRadius: prevOpts.wireRadius,
+          } as BackendOptsMap[Backend],
+        },
+      };
+    });
+  }
+  function resetSlot(slot: Slot) {
+    setSlots((prev) => ({ ...prev, [slot]: DEFAULT_SLOTS[slot] }));
+  }
+  // band/designFreq/measFreq seed to placeholders; the auto-select
+  // effect below picks the first band of the active example and
+  // overwrites them once /examples resolves.
+  const [band, setBand] = useState<string>("");
+  const [designFreq, setDesignFreq] = useState(14.3);
+  const [measFreq, setMeasFreq] = useState(14.3);
+  const [linkMeas, setLinkMeas] = useState(true);
+  // Ground plane (PyNEC only). Geometry is lifted by heightM when enabled.
+  const [groundEnabled, setGroundEnabled] = useState(false);
+  const [groundFast, setGroundFast] = useState(false);
+  const [heightM, setHeightM] = useState(7.0);
+  // Far-field cut angles. The azimuth plot slices the pattern at elevation
+  // `azElevDeg`; the elevation plot slices the vertical plane at azimuth
+  // bearing `elevAzDeg` (0° = +x). Defaults give the conventional views.
+  const [azElevDeg, setAzElevDeg] = useState(15);
+  // Default elevation-cut azimuth is 0° (+x) for every geometry: Yagi,
+  // moxon, and hexbeam beam +x; the inverted V now runs its arms along
+  // ±y so its broadside lobe also peaks at ±x.
+  const [elevAzDeg, setElevAzDeg] = useState(0);
+
+  // When linked, design and measurement freq move together.
+  function updateDesignFreq(v: number) {
+    setDesignFreq(v);
+    if (linkMeas) setMeasFreq(v);
+  }
+  function toggleLink(next: boolean) {
+    setLinkMeas(next);
+    if (next) setMeasFreq(designFreq);
+  }
+
+  // The pre-PR setFanBandSlot / setFanBandFreq / setFanHalfdriverFactor
+  // helpers (which also juggled measFreq to follow band tuning) are gone
+  // — schema-driven ParamForm fires onChange for each input directly.
+  // The "tuning a band → snap measFreq to that band's freq" affordance
+  // was a fan-dipole-only side effect; recreating it generically would
+  // require the schema to express "set this global state when a sibling
+  // group leaf changes," which doesn't pay for itself for one antenna.
+  // measFreq still follows designFreq via the linkMeas useEffect below.
+
+  const [result, setResult] = useState<SolveResponse | null>(null);
+  const [status, setStatus] = useState<"connecting" | "open" | "closed">("connecting");
+  const [rttMs, setRttMs] = useState<number | null>(null);
+  const [sweep, setSweep] = useState<SweepData | null>(null);
+  const [sweepRunning, setSweepRunning] = useState(false);
+  // Smith-chart overlay toggles. Both are debounced sweeps that re-fire
+  // whenever any antenna/backend parameter changes; gating them with these
+  // checkboxes lets the user pause an expensive sweep (e.g. BSpline d=2
+  // convergence on slow geometries) without leaving the Smith view.
+  const [sweepEnabled, setSweepEnabled] = useState(true);
+  const [convergeEnabled, setConvergeEnabled] = useState(false);
+  const [converge, setConverge] = useState<ConvergeData | null>(null);
+  const [convergeRunning, setConvergeRunning] = useState(false);
+  // NEC's rp_card pattern, fetched on a debounce so we don't fire one per
+  // slider tick. Overlaid on the cuts as a comparison line.
+  const [pattern, setPattern] = useState<PatternData | null>(null);
+  const [view, setView] = useState<View>("antenna");
+  const [cameraProjection, setCameraProjection] = useState<Projection>("xy");
+  // When the user switches antennas, reset the camera to that example's
+  // natural starting view (declared on the backend via default_view).
+  // Explicit user override sticks until the next geometry change.
+  useEffect(() => {
+    if (currentExample) setCameraProjection(currentExample.default_view);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentExample?.name]);
+
+  // Schema-driven design-freq link: when the active example has any
+  // leaf marked `linked_to_design_freq`, sync the global designFreq
+  // state to its value.
+  const linkedDesignFreq = useMemo(
+    () =>
+      currentExample
+        ? findLinkedDesignFreq(currentExample.param_schema, currentValues)
+        : null,
+    // currentValues is a fresh reference whenever setParamValues fires;
+    // currentValuesKey is the stable primitive signature.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentExample, currentValuesKey],
+  );
+  useEffect(() => {
+    if (linkedDesignFreq != null) {
+      setDesignFreq(linkedDesignFreq);
+      if (linkMeas) setMeasFreq(linkedDesignFreq);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedDesignFreq, linkMeas]);
+  // Antenna-canvas current visualization is split into two independent
+  // toggles: the per-segment current-magnitude heatmap (wire color/width)
+  // and the |I| envelope curve overlay. Either or both can be turned off;
+  // the wires and feed marker are always drawn.
+  const [showHeatmap, setShowHeatmap] = useState(true);
+  const [showEnvelope, setShowEnvelope] = useState(true);
+  const { ref: slideRef, size: chartSize } = useSlideSize(720);
+  const thumbStripRef = useRef<HTMLDivElement>(null);
+  const thumbSize = useThumbColumnSize(thumbStripRef, 280);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+      const idx = VIEWS.findIndex((v) => v.id === view);
+      const next = e.key === "ArrowDown" ? (idx + 1) % VIEWS.length : (idx - 1 + VIEWS.length) % VIEWS.length;
+      setView(VIEWS[next].id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [view]);
+
+  const sweepTimerRef = useRef<number | null>(null);
+  const sweepAbortRef = useRef<AbortController | null>(null);
+  const patternTimerRef = useRef<number | null>(null);
+  const patternAbortRef = useRef<AbortController | null>(null);
+  const convergeTimerRef = useRef<number | null>(null);
+  const convergeAbortRef = useRef<AbortController | null>(null);
+
+  const wsRef = useRef<WebSocket | null>(null);
+  const inFlightRef = useRef(false);
+  const pendingRef = useRef<SolveRequest | null>(null);
+  const sendStartRef = useRef(0);
+
+  function buildRequest(): SolveRequest {
+    // Solver-family ground notes: PyNEC uses Sommerfeld-Norton (or the
+    // fast reflection-coefficient approximation) with εr=10, σ=0.002;
+    // pysim's Triangular and B-spline models use the PEC image method.
+    // Sinusoidal is free-space-only — the gear UI grays the toggle for it.
+    const groundActive = groundEnabled && backendSupportsGround(backend);
+    const base: SolveRequest = {
+      geometry,
+      solver: backend === "pynec" ? "pynec" : "pysim",
+      n_per_wire: nPerWire,
+      design_freq_mhz: designFreq,
+      measurement_freq_mhz: measFreq,
+      wire_radius: wireRadius,
+      ground: groundActive,
+      ground_fast: groundActive && groundFast,
+      height_m: heightM,
+    };
+    if (backend !== "pynec") {
+      base.pysim_model = backend;
+      const opts = modelOptionsForRequest(backend, currentOpts);
+      // BSplinePySim rejects ground_z + use_singular_enrichment together
+      // (image reaction for enrichment bases isn't worked out yet). Force
+      // enrichment off in the request when ground is active so the user
+      // gets a sensible solve instead of a server error; the gear shows
+      // an inline note.
+      if (backend === "bspline" && groundActive) {
+        opts.use_singular_enrichment = false;
+      }
+      base.model_options = opts;
+    }
+    // Schema-driven antennas (all of them now): merge the active
+    // paramValues straight in. For fan_dipole this includes a nested
+    // `bands: [{band_id, freq, length_factor}, ...]` array; the backend
+    // unpacks it in _bands_from_request().
+    Object.assign(base, currentValues);
+    return base;
+  }
+
+  const currentBands: BandSpec[] = currentExample?.bands ?? [];
+
+  // When the active example changes (or first loads), snap band /
+  // designFreq / measFreq to the first band of that example. Skipped
+  // entirely for examples that suppress the row (bands === []) — those
+  // own their design freq via their own schema controls.
+  useEffect(() => {
+    if (!currentExample) return;
+    if (currentBands.length === 0) {
+      if (band !== "") setBand("");
+      return;
+    }
+    if (currentBands.some((b) => b.key === band)) return;
+    const first = currentBands[0];
+    setBand(first.key);
+    setDesignFreq(first.freq_mhz);
+    if (linkMeas) setMeasFreq(first.freq_mhz);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentExample]);
+
+  function selectBand(nextKey: string) {
+    const nb = currentBands.find((b) => b.key === nextKey);
+    if (!nb) return;
+    setBand(nextKey);
+    setDesignFreq(nb.freq_mhz);
+    if (linkMeas) setMeasFreq(nb.freq_mhz);
+    else if (measFreq < nb.min_mhz || measFreq > nb.max_mhz) {
+      setMeasFreq(nb.freq_mhz);
+    }
+  }
+
+  // Measurement-band quick selector: jumps measFreq to the band centre and
+  // auto-unlinks from design so the antenna geometry isn't retuned.
+  function selectMeasBand(nextKey: string) {
+    const nb = currentBands.find((b) => b.key === nextKey);
+    if (!nb) return;
+    if (linkMeas) setLinkMeas(false);
+    setMeasFreq(nb.freq_mhz);
+  }
+
+  // Which band (if any) currently contains the measurement freq — drives
+  // the active-tab highlight on the meas-band selector. Falls outside any
+  // band → no tab highlighted.
+  function bandContaining(f: number): string | null {
+    for (const b of currentBands) {
+      if (f >= b.min_mhz && f <= b.max_mhz) return b.key;
+    }
+    return null;
+  }
+
+  // The latest control values, used to send a new request when the prior one
+  // completes (drops intermediate values rather than queuing them all up).
+  const controlsRef = useRef<SolveRequest>(buildRequest());
+
+  useEffect(() => {
+    controlsRef.current = buildRequest();
+    requestSolve();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    geometry, backend, backendOptsKey,
+    currentValuesKey,
+    designFreq, measFreq,
+    groundEnabled, groundFast, heightM,
+  ]);
+
+  // Debounced sweep across measurement freq. Re-runs whenever any antenna
+  // parameter changes. Single-band geometries sweep around designFreq, so
+  // moving the measFreq slider doesn't re-sweep (the existing data already
+  // covers the new slider position). Fan dipole sweeps around measFreq,
+  // so measFreq is part of the deps there to re-anchor.
+  useEffect(() => {
+    // Cancel any in-flight sweep fetch immediately. Without this the
+    // previous sweep keeps streaming for hundreds of ms (PyNEC ground at
+    // 100 ms/point × 41 points = ~4 s) and starves the live /ws solve of
+    // CPU — the user moves a slider but the next impedance update is
+    // delayed behind the now-stale sweep finishing.
+    sweepAbortRef.current?.abort();
+    if (sweepTimerRef.current) {
+      window.clearTimeout(sweepTimerRef.current);
+    }
+    setSweep(null);
+    setSweepRunning(false);
+    if (!sweepEnabled) {
+      return;
+    }
+    sweepTimerRef.current = window.setTimeout(() => {
+      runSweep();
+      sweepTimerRef.current = null;
+    }, 500);
+    return () => {
+      if (sweepTimerRef.current) window.clearTimeout(sweepTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    geometry, backend, backendOptsKey,
+    currentValuesKey,
+    designFreq,
+    groundEnabled, groundFast, heightM,
+    sweepEnabled,
+    currentExample?.sweep_policy.anchor === "meas_freq" ? measFreq : null,
+  ]);
+
+  // Debounced convergence sweep over segments-per-wire. Independent of the
+  // freq sweep above: re-runs on any antenna/backend change, gated by its
+  // own overlay checkbox. The active slot's `nPerWire` is *overridden* by
+  // the ladder values for the duration of the sweep — the per-slot opts
+  // stay untouched, so the live /ws solve keeps using the user's setting.
+  useEffect(() => {
+    convergeAbortRef.current?.abort();
+    if (convergeTimerRef.current) {
+      window.clearTimeout(convergeTimerRef.current);
+    }
+    setConverge(null);
+    setConvergeRunning(false);
+    if (!convergeEnabled) {
+      return;
+    }
+    convergeTimerRef.current = window.setTimeout(() => {
+      runConverge();
+      convergeTimerRef.current = null;
+    }, 500);
+    return () => {
+      if (convergeTimerRef.current) window.clearTimeout(convergeTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    geometry, backend, backendOptsKey,
+    currentValuesKey,
+    designFreq, measFreq,
+    groundEnabled, groundFast, heightM,
+    convergeEnabled,
+  ]);
+
+  // Debounced NEC pattern fetch. PyNEC only — for pysim there's no rp_card
+  // equivalent. Tracks measurement freq too (unlike the impedance sweep).
+  useEffect(() => {
+    if (patternTimerRef.current) window.clearTimeout(patternTimerRef.current);
+    setPattern(null);
+    if (backend !== "pynec") return;
+    patternTimerRef.current = window.setTimeout(() => {
+      runPattern();
+      patternTimerRef.current = null;
+    }, 500);
+    return () => {
+      if (patternTimerRef.current) window.clearTimeout(patternTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    geometry, backend, backendOptsKey,
+    currentValuesKey,
+    designFreq, measFreq,
+    groundEnabled, groundFast, heightM,
+  ]);
+
+  async function runSweep() {
+    sweepAbortRef.current?.abort();
+    const controller = new AbortController();
+    sweepAbortRef.current = controller;
+
+    // Sweep range, log-spaced. Sommerfeld-Norton ground is ~100x slower
+    // per point, so halve the resolution there to keep total sweep time
+    // near free-space cost. Fast (reflection-coefficient) ground and pysim
+    // PEC ground are cheap enough for full resolution.
+    //
+    // Anchor + span come from the active example's sweep_policy. See
+    // SweepPolicy in web/examples/_base.py for the meaning of the fields.
+    const slowGround = backend === "pynec" && groundEnabled && !groundFast;
+    const N = slowGround ? 21 : 41;
+    const policy = currentExample?.sweep_policy;
+    const sweepAnchor = policy?.anchor === "meas_freq" ? measFreq : designFreq;
+    const fLo = Math.max(0.5, sweepAnchor * (policy?.lo_factor ?? 0.8));
+    const fHi = Math.min(60, sweepAnchor * (policy?.hi_factor ?? 1.25));
+    const freqs = Array.from({ length: N }, (_, i) =>
+      Math.exp(Math.log(fLo) + (i / (N - 1)) * (Math.log(fHi) - Math.log(fLo))),
+    );
+
+    const body = { ...buildRequest(), freqs_mhz: freqs };
+    setSweepRunning(true);
+    const acc: SweepData = {
+      freqs_mhz: [],
+      z_re: [],
+      z_im: [],
+      feeds_z_re: undefined,
+      feeds_z_im: undefined,
+    };
+    try {
+      const resp = await fetch("/sweep", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!resp.ok || !resp.body) throw new Error(`sweep failed: ${resp.status}`);
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!line) continue;
+          const pt = JSON.parse(line);
+          if (pt.done) continue;
+          acc.freqs_mhz.push(pt.freq_mhz);
+          acc.z_re.push(pt.z_re);
+          acc.z_im.push(pt.z_im);
+          // Multi-feed sweep records (bowtie) ship per-feed Z alongside
+          // the primary. Allocate the per-feed buffers lazily on first
+          // sight so single-feed sweeps stay on the original code path.
+          if (Array.isArray(pt.feeds_z_re) && Array.isArray(pt.feeds_z_im)) {
+            if (!acc.feeds_z_re) acc.feeds_z_re = [];
+            if (!acc.feeds_z_im) acc.feeds_z_im = [];
+            acc.feeds_z_re.push(pt.feeds_z_re);
+            acc.feeds_z_im.push(pt.feeds_z_im);
+          }
+          if (!controller.signal.aborted) {
+            // New object so React re-renders the Smith chart per point.
+            setSweep({
+              freqs_mhz: acc.freqs_mhz.slice(),
+              z_re: acc.z_re.slice(),
+              z_im: acc.z_im.slice(),
+              feeds_z_re: acc.feeds_z_re
+                ? acc.feeds_z_re.map((row) => row.slice())
+                : undefined,
+              feeds_z_im: acc.feeds_z_im
+                ? acc.feeds_z_im.map((row) => row.slice())
+                : undefined,
+            });
+          }
+        }
+      }
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      console.error("sweep error", e);
+    } finally {
+      if (sweepAbortRef.current === controller) {
+        sweepAbortRef.current = null;
+        setSweepRunning(false);
+      }
+    }
+  }
+
+  async function runConverge() {
+    convergeAbortRef.current?.abort();
+    const controller = new AbortController();
+    convergeAbortRef.current = controller;
+
+    // The active slot's nPerWire is irrelevant during a converge sweep —
+    // n_values overrides it on the server. We strip `n_per_wire` from the
+    // request anyway to make that explicit.
+    const body = { ...buildRequest(), n_values: CONVERGE_N_VALUES };
+    setConvergeRunning(true);
+    const acc: ConvergeData = {
+      n_values: [],
+      z_re: [],
+      z_im: [],
+      z_re_extrap: null,
+      z_im_extrap: null,
+      feeds_z_re: undefined,
+      feeds_z_im: undefined,
+      feeds_z_re_extrap: undefined,
+      feeds_z_im_extrap: undefined,
+    };
+    try {
+      const resp = await fetch("/converge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!resp.ok || !resp.body) throw new Error(`converge failed: ${resp.status}`);
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!line) continue;
+          const pt = JSON.parse(line);
+          if (pt.done) continue;
+          // A solver failure for one N (rare — degenerate small-N geometry)
+          // is reported by the backend as {n_per_wire, error}; skip rather
+          // than poisoning the trajectory.
+          if (pt.error) continue;
+          acc.n_values.push(pt.n_per_wire);
+          acc.z_re.push(pt.z_re);
+          acc.z_im.push(pt.z_im);
+          // Multi-feed convergence records ship per-feed Z alongside the
+          // primary; allocate the buffers lazily on first sight.
+          if (Array.isArray(pt.feeds_z_re) && Array.isArray(pt.feeds_z_im)) {
+            if (!acc.feeds_z_re) acc.feeds_z_re = [];
+            if (!acc.feeds_z_im) acc.feeds_z_im = [];
+            acc.feeds_z_re.push(pt.feeds_z_re);
+            acc.feeds_z_im.push(pt.feeds_z_im);
+          }
+          const invN = acc.n_values.map((n) => 1 / n);
+          acc.z_re_extrap = richardsonExtrap(invN, acc.z_re);
+          acc.z_im_extrap = richardsonExtrap(invN, acc.z_im);
+          // Per-feed Richardson Z*. Each feed's series is the column of
+          // feeds_z_re / feeds_z_im at that feed index across all sampled
+          // N values; richardsonExtrap returns null until ≥3 points are
+          // in, so the diamonds light up the same time the primary one
+          // does.
+          if (acc.feeds_z_re && acc.feeds_z_im) {
+            const nFeeds = acc.feeds_z_re[0].length;
+            const feedsRe: (number | null)[] = [];
+            const feedsIm: (number | null)[] = [];
+            for (let fi = 0; fi < nFeeds; fi++) {
+              const re = acc.feeds_z_re.map((row) => row[fi]);
+              const im = acc.feeds_z_im.map((row) => row[fi]);
+              feedsRe.push(richardsonExtrap(invN, re));
+              feedsIm.push(richardsonExtrap(invN, im));
+            }
+            acc.feeds_z_re_extrap = feedsRe;
+            acc.feeds_z_im_extrap = feedsIm;
+          }
+          if (!controller.signal.aborted) {
+            setConverge({
+              n_values: acc.n_values.slice(),
+              z_re: acc.z_re.slice(),
+              z_im: acc.z_im.slice(),
+              z_re_extrap: acc.z_re_extrap,
+              z_im_extrap: acc.z_im_extrap,
+              feeds_z_re: acc.feeds_z_re
+                ? acc.feeds_z_re.map((row) => row.slice())
+                : undefined,
+              feeds_z_im: acc.feeds_z_im
+                ? acc.feeds_z_im.map((row) => row.slice())
+                : undefined,
+              feeds_z_re_extrap: acc.feeds_z_re_extrap
+                ? acc.feeds_z_re_extrap.slice()
+                : undefined,
+              feeds_z_im_extrap: acc.feeds_z_im_extrap
+                ? acc.feeds_z_im_extrap.slice()
+                : undefined,
+            });
+          }
+        }
+      }
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      console.error("converge error", e);
+    } finally {
+      if (convergeAbortRef.current === controller) {
+        convergeAbortRef.current = null;
+        setConvergeRunning(false);
+      }
+    }
+  }
+
+  async function runPattern() {
+    patternAbortRef.current?.abort();
+    const controller = new AbortController();
+    patternAbortRef.current = controller;
+    try {
+      const resp = await fetch("/pattern", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildRequest()),
+        signal: controller.signal,
+      });
+      if (!resp.ok) throw new Error(`pattern failed: ${resp.status}`);
+      const data = await resp.json();
+      if (!data.available) {
+        setPattern(null);
+        return;
+      }
+      if (!controller.signal.aborted) setPattern(data as PatternData);
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      console.error("pattern error", e);
+    } finally {
+      if (patternAbortRef.current === controller) patternAbortRef.current = null;
+    }
+  }
+
+  function requestSolve() {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      pendingRef.current = controlsRef.current;
+      return;
+    }
+    if (inFlightRef.current) {
+      // Coalesce: latest controls will be picked up when the response arrives.
+      pendingRef.current = controlsRef.current;
+      return;
+    }
+    inFlightRef.current = true;
+    sendStartRef.current = performance.now();
+    ws.send(JSON.stringify(controlsRef.current));
+  }
+
+  useEffect(() => {
+    const ws = new WebSocket(WS_URL);
+    wsRef.current = ws;
+    ws.onopen = () => {
+      setStatus("open");
+      // A prior socket's pending response can never arrive here; clear the
+      // in-flight flag so this socket can start sending. StrictMode and HMR
+      // both tear down + recreate this socket and would otherwise leave the
+      // flag stuck true, blocking all subsequent slider-driven solves.
+      inFlightRef.current = false;
+      pendingRef.current = controlsRef.current;
+      requestSolve();
+    };
+    ws.onclose = () => {
+      setStatus("closed");
+      inFlightRef.current = false;
+    };
+    ws.onerror = () => {
+      setStatus("closed");
+      inFlightRef.current = false;
+    };
+    ws.onmessage = (ev) => {
+      setRttMs(performance.now() - sendStartRef.current);
+      const data: SolveResponse = JSON.parse(ev.data);
+      inFlightRef.current = false;
+      setResult(data);
+      // If controls changed while waiting, fire the next solve immediately.
+      if (pendingRef.current) {
+        pendingRef.current = null;
+        requestSolve();
+      }
+    };
+    return () => ws.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="app">
+      <aside className="sidebar">
+        <h1>pysim — interactive</h1>
+
+        <div className="geometry-select-row">
+          <label className="geometry-select-label" htmlFor="geometry-select">
+            antenna
+          </label>
+          <select
+            id="geometry-select"
+            className="geometry-select"
+            value={geometry}
+            onChange={(e) => setGeometry(e.target.value)}
+          >
+            {examples.map((ex) => (
+              <option key={ex.name} value={ex.name}>
+                {ex.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {examplesError && (
+          <div className="examples-error">
+            Failed to load /examples: {examplesError}
+          </div>
+        )}
+
+        {currentExample && (
+          <ParamForm
+            schema={currentExample.param_schema}
+            values={currentValues}
+            onChange={setParamAtPath}
+          />
+        )}
+
+        {currentBands.length > 0 && (() => {
+          const active = currentBands.find((b) => b.key === band) ?? currentBands[0];
+          return (
+            <div className="field">
+              <label>
+                <span>design freq</span>
+                <span>{designFreq.toFixed(3)} MHz</span>
+              </label>
+              <div className="geometry-tabs band-tabs" role="tablist">
+                {currentBands.map((b) => (
+                  <button
+                    key={b.key}
+                    role="tab"
+                    aria-selected={band === b.key}
+                    className={band === b.key ? "active" : ""}
+                    onClick={() => selectBand(b.key)}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="range"
+                min={active.min_mhz}
+                max={active.max_mhz}
+                step={0.005}
+                value={designFreq}
+                onInput={(e) => updateDesignFreq(Number((e.target as HTMLInputElement).value))}
+              />
+            </div>
+          );
+        })()}
+
+        <div className="group-label">simulation</div>
+
+        <div className="field">
+          <label>
+            <span>solver slot</span>
+            <span>{BACKEND_LABEL[backend]} · N={nPerWire}</span>
+          </label>
+          <div className="backend-tabs" role="tablist">
+            {SLOT_ORDER.map((s) => {
+              const cfg = slots[s];
+              return (
+                <div key={s} className="backend-tab-cell">
+                  <button
+                    role="tab"
+                    aria-selected={activeSlot === s}
+                    className={`backend-tab-btn ${activeSlot === s ? "active" : ""}`}
+                    title={`${BACKEND_LABEL[cfg.backend]}, N=${cfg.opts.nPerWire}`}
+                    onClick={() => setActiveSlot(s)}
+                  >
+                    <span className="slot-letter">{s}</span>
+                    <span className="slot-sub">{BACKEND_LABEL[cfg.backend]}</span>
+                  </button>
+                  <button
+                    className="backend-gear-btn"
+                    title={`Slot ${s} options`}
+                    aria-label={`Slot ${s} options`}
+                    onClick={() => setGearOpen(s)}
+                  >
+                    ⚙
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {!backendSupportsGround(backend) && groundEnabled && (
+          <div className="field" title="This backend doesn't model ground; ignored until you switch to one that does.">
+            <em style={{ color: "var(--muted)", fontSize: 12 }}>
+              ground plane ignored for {BACKEND_LABEL[backend]}
+            </em>
+          </div>
+        )}
+
+        <div className="field">
+          <label
+            className="link-toggle"
+            title={
+              backend === "pynec"
+                ? "Sommerfeld-Norton ground (εr=10, σ=0.002 S/m)"
+                : "PEC image-method ground (perfect electric conductor)"
+            }
+          >
+            <input
+              type="checkbox"
+              checked={groundEnabled}
+              disabled={!backendSupportsGround(backend)}
+              onChange={(e) => setGroundEnabled(e.target.checked)}
+            />
+            ground plane{" "}
+            {backend === "pynec"
+              ? "(εr=10, σ=0.002 S/m)"
+              : "(PEC, perfect conductor)"}
+          </label>
+          {backend === "pynec" && groundEnabled && (
+            <label
+              className="link-toggle"
+              title="Reflection-coefficient approximation (NEC ITYPE=0). ~10x faster per solve than Sommerfeld-Norton; degrades for very-low antennas near the horizon."
+            >
+              <input
+                type="checkbox"
+                checked={groundFast}
+                onChange={(e) => setGroundFast(e.target.checked)}
+              />
+              fast ground (reflection coefficient)
+            </label>
+          )}
+        </div>
+
+        {groundEnabled && (
+          <div className="field">
+            <label>
+              <span>height above ground</span>
+              <span>{heightM.toFixed(2)} m</span>
+            </label>
+            <input
+              type="range"
+              min={0.5}
+              max={30}
+              step={0.1}
+              value={heightM}
+              onInput={(e) => setHeightM(Number((e.target as HTMLInputElement).value))}
+            />
+          </div>
+        )}
+
+        <div className="field">
+          <label>
+            <span>measurement freq</span>
+            <span>{measFreq.toFixed(3)} MHz</span>
+          </label>
+          {/* Multi-band examples override meas_freq_range_mhz so the
+              slider spans every band rather than ±25% of one design freq. */}
+          {currentBands.length > 0 && (
+            <div className="geometry-tabs band-tabs" role="tablist">
+              {currentBands.map((b) => {
+                const active = bandContaining(measFreq) === b.key;
+                return (
+                  <button
+                    key={b.key}
+                    role="tab"
+                    aria-selected={active}
+                    className={active ? "active" : ""}
+                    onClick={() => selectMeasBand(b.key)}
+                  >
+                    {b.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <input
+            type="range"
+            min={
+              currentExample?.meas_freq_range_mhz
+                ? currentExample.meas_freq_range_mhz[0]
+                : Math.max(0.5, designFreq * 0.8)
+            }
+            max={
+              currentExample?.meas_freq_range_mhz
+                ? currentExample.meas_freq_range_mhz[1]
+                : Math.min(60, designFreq * 1.25)
+            }
+            step={0.005}
+            value={measFreq}
+            disabled={linkMeas}
+            onInput={(e) => setMeasFreq(Number((e.target as HTMLInputElement).value))}
+          />
+          <label className="link-toggle">
+            <input
+              type="checkbox"
+              checked={linkMeas}
+              onChange={(e) => toggleLink(e.target.checked)}
+            />
+            lock to design freq
+          </label>
+        </div>
+
+        <div className="group-label">far-field cuts</div>
+
+        <div className="field">
+          <label>
+            <span>azimuth at elevation</span>
+            <span>{azElevDeg.toFixed(0)}°</span>
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={89}
+            step={1}
+            value={azElevDeg}
+            onInput={(e) => setAzElevDeg(Number((e.target as HTMLInputElement).value))}
+          />
+        </div>
+
+        <div className="field">
+          <label>
+            <span>elevation at azimuth</span>
+            <span>{elevAzDeg.toFixed(0)}°</span>
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={359}
+            step={1}
+            value={elevAzDeg}
+            onInput={(e) => setElevAzDeg(Number((e.target as HTMLInputElement).value))}
+          />
+        </div>
+
+        <div className="readout">
+          <div className="row">
+            <span>R</span>
+            <span className="val">{result ? `${result.z_in_re.toFixed(2)} Ω` : "—"}</span>
+          </div>
+          <div className="row">
+            <span>X</span>
+            <span className={result && Math.abs(result.z_in_im) < 2 ? "val val-hot" : "val"}>
+              {result ? `${result.z_in_im.toFixed(2)} Ω` : "—"}
+            </span>
+          </div>
+          {currentExample && (
+            <ResultPanel
+              schema={currentExample.result_schema}
+              result={result as Record<string, unknown> | null}
+            />
+          )}
+          {currentExample?.multi_feed && result?.feeds && result.feeds.length > 1 && (
+            <div className="feeds-table">
+              <div className="feeds-table-header">per-feed Z (V/I)</div>
+              {result.feeds.map((f, i) => (
+                <div className="row" key={`feed-z-${i}`}>
+                  <span>
+                    feed {i} ∠{Math.round(Math.atan2(f.v_im, f.v_re) * 180 / Math.PI)}°
+                  </span>
+                  <span className="val">
+                    {f.z_re.toFixed(1)} {f.z_im >= 0 ? "+" : "−"} j
+                    {Math.abs(f.z_im).toFixed(1)} Ω
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="row">
+            <span>|I_feed|</span>
+            <span className="val">
+              {result ? feedMag(result).toExponential(3) : "—"}
+            </span>
+          </div>
+          <div className="row">
+            <span>solve</span>
+            <span className="val">{result ? `${result.solve_ms.toFixed(1)} ms` : "—"}</span>
+          </div>
+          <div className="row">
+            <span>SWR ({(result?.z0_ohms ?? 50).toFixed(0)} Ω)</span>
+            <span className="val">
+              {result
+                ? formatSwr(result.z_in_re, result.z_in_im, result.z0_ohms ?? 50)
+                : "—"}
+            </span>
+          </div>
+          <div className="row">
+            <span>rtt</span>
+            <span className="val">{rttMs != null ? `${rttMs.toFixed(1)} ms` : "—"}</span>
+          </div>
+        </div>
+
+        {gearOpen && (
+          <BackendConfigModal
+            slot={gearOpen}
+            backend={slots[gearOpen].backend}
+            opts={slots[gearOpen].opts}
+            onChangeBackend={(b) => setSlotBackend(gearOpen, b)}
+            onPatch={(patch) => updateSlotOpts(gearOpen, patch)}
+            onReset={() => resetSlot(gearOpen)}
+            onClose={() => setGearOpen(null)}
+          />
+        )}
+      </aside>
+
+      <main className="stage">
+        <div className="thumbstrip" ref={thumbStripRef}>
+          {VIEWS.filter((v) => v.id !== view).map((v) => (
+            <button
+              key={v.id}
+              className="thumb"
+              onClick={() => setView(v.id)}
+              title={`Switch to ${v.label}`}
+            >
+              <div
+                className="thumb-canvas"
+                style={{ width: thumbSize, height: thumbSize }}
+              >
+                <ViewPanel
+                  view={v.id}
+                  size={thumbSize}
+                  fill={false}
+                  result={result}
+                  sweep={sweep}
+                  converge={converge}
+                  pattern={pattern}
+                  measFreqMhz={measFreq}
+                  sweepRunning={sweepRunning}
+                  convergeRunning={convergeRunning}
+                  azElevDeg={azElevDeg}
+                  elevAzDeg={elevAzDeg}
+                  cameraProjection={cameraProjection}
+                  showHeatmap={showHeatmap}
+                  showEnvelope={showEnvelope}
+                  multiFeed={currentExample?.multi_feed ?? false}
+                />
+              </div>
+              <div className="thumb-label">{v.label}</div>
+            </button>
+          ))}
+        </div>
+        <div className="carousel-slide" ref={slideRef}>
+          {view === "antenna" && (
+            <div className="antenna-overlay">
+              <div className="projection-toggle">
+                {PROJECTIONS.map((p) => (
+                  <button
+                    key={p.id}
+                    className={p.id === cameraProjection ? "active" : ""}
+                    onClick={() => setCameraProjection(p.id)}
+                    title={`Project onto the ${p.id} plane`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <label
+                className="overlay-checkbox"
+                title="Color wire segments by current magnitude; modulate wire width"
+              >
+                <input
+                  type="checkbox"
+                  checked={showHeatmap}
+                  onChange={(e) => setShowHeatmap(e.target.checked)}
+                />
+                heatmapped currents
+              </label>
+              <label
+                className="overlay-checkbox"
+                title="Draw the |I| envelope curve along each wire"
+              >
+                <input
+                  type="checkbox"
+                  checked={showEnvelope}
+                  onChange={(e) => setShowEnvelope(e.target.checked)}
+                />
+                current waveforms
+              </label>
+            </div>
+          )}
+          {view === "smith" && (
+            <div className="smith-overlay">
+              <label
+                className="overlay-checkbox"
+                title="Sweep Z across measurement freq and plot the locus on the Smith chart"
+              >
+                <input
+                  type="checkbox"
+                  checked={sweepEnabled}
+                  onChange={(e) => setSweepEnabled(e.target.checked)}
+                />
+                freq sweep
+              </label>
+              <label
+                className="overlay-checkbox"
+                title={`Re-solve at N = ${CONVERGE_N_VALUES.join(", ")} segments/wire and Richardson-extrapolate Z to N→∞`}
+              >
+                <input
+                  type="checkbox"
+                  checked={convergeEnabled}
+                  onChange={(e) => setConvergeEnabled(e.target.checked)}
+                />
+                converge sweep
+              </label>
+            </div>
+          )}
+          <ViewPanel
+            view={view}
+            size={chartSize}
+            fill={view === "antenna"}
+            result={result}
+            sweep={sweep}
+            converge={converge}
+            pattern={pattern}
+            measFreqMhz={measFreq}
+            sweepRunning={sweepRunning}
+            convergeRunning={convergeRunning}
+            azElevDeg={azElevDeg}
+            elevAzDeg={elevAzDeg}
+            cameraProjection={cameraProjection}
+            showHeatmap={showHeatmap}
+            showEnvelope={showEnvelope}
+            multiFeed={currentExample?.multi_feed ?? false}
+          />
+        </div>
+        <div className="status">ws: {status}</div>
+      </main>
+    </div>
+  );
+}
+
+type BackendConfigProps = {
+  slot: Slot;
+  backend: Backend;
+  opts: BackendOptsMap[Backend];
+  onChangeBackend: (b: Backend) => void;
+  onPatch: (patch: Partial<BackendOptsMap[Backend]>) => void;
+  onReset: () => void;
+  onClose: () => void;
+};
+
+function BackendConfigModal({
+  slot,
+  backend,
+  opts,
+  onChangeBackend,
+  onPatch,
+  onReset,
+  onClose,
+}: BackendConfigProps) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="backend-config-overlay" onClick={onClose}>
+      <div
+        className="backend-config-modal"
+        role="dialog"
+        aria-label={`Slot ${slot} options`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="backend-config-header">
+          <strong>Slot {slot} — {BACKEND_LABEL[backend]}</strong>
+          <button className="backend-config-close" onClick={onClose} aria-label="Close">×</button>
+        </div>
+
+        <div className="backend-config-body">
+          <div className="field">
+            <label>
+              <span>solver</span>
+              <span>{BACKEND_LABEL[backend]}</span>
+            </label>
+            <div className="geometry-tabs" role="tablist">
+              {BACKEND_ORDER.map((b) => (
+                <button
+                  key={b}
+                  role="tab"
+                  aria-selected={backend === b}
+                  className={backend === b ? "active" : ""}
+                  onClick={() => onChangeBackend(b)}
+                >
+                  {BACKEND_LABEL[b]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <NumberField
+            label="segments / wire (N)"
+            value={opts.nPerWire}
+            min={4}
+            max={120}
+            step={1}
+            onChange={(v) => onPatch({ nPerWire: v })}
+          />
+          <NumberField
+            label="wire radius (m)"
+            value={opts.wireRadius}
+            step={0.0001}
+            onChange={(v) => onPatch({ wireRadius: v })}
+          />
+
+          {backend === "triangular" && (
+            <>
+              <NumberField
+                label="n_qp_reg (same-edge GL pts)"
+                value={(opts as TriangularOpts).nQpReg}
+                min={2}
+                max={16}
+                step={1}
+                onChange={(v) => onPatch({ nQpReg: v } as never)}
+              />
+              <NumberField
+                label="n_qp_off (cross-edge GL pts)"
+                value={(opts as TriangularOpts).nQpOff}
+                min={2}
+                max={16}
+                step={1}
+                onChange={(v) => onPatch({ nQpOff: v } as never)}
+              />
+            </>
+          )}
+
+          {backend === "sinusoidal" && (
+            <NumberField
+              label="n_qp_const (GL pts)"
+              value={(opts as SinusoidalOpts).nQpConst}
+              min={2}
+              max={32}
+              step={1}
+              onChange={(v) => onPatch({ nQpConst: v } as never)}
+            />
+          )}
+
+          {backend === "bspline" && (
+            <BSplineFields
+              opts={opts as BSplineOpts}
+              onPatch={(p) => onPatch(p as never)}
+            />
+          )}
+
+          {backend === "pynec" && (
+            <em style={{ color: "var(--muted)", fontSize: 12 }}>
+              PyNEC has no extra solver knobs here — ground type / fast ground
+              live in the main panel.
+            </em>
+          )}
+        </div>
+
+        <div className="backend-config-footer">
+          <button className="backend-config-reset" onClick={onReset}>
+            reset to defaults
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BSplineFields({
+  opts,
+  onPatch,
+}: {
+  opts: BSplineOpts;
+  onPatch: (p: Partial<BSplineOpts>) => void;
+}) {
+  return (
+    <>
+      <div className="field">
+        <label>
+          <span>degree</span>
+          <span>{opts.degree}</span>
+        </label>
+        <div className="geometry-tabs" role="tablist">
+          {[1, 2].map((d) => (
+            <button
+              key={d}
+              role="tab"
+              aria-selected={opts.degree === d}
+              className={opts.degree === d ? "active" : ""}
+              onClick={() => onPatch({ degree: d as 1 | 2 })}
+            >
+              d={d}
+            </button>
+          ))}
+        </div>
+      </div>
+      <NumberField
+        label="n_qp_pair (GL pts/axis)"
+        value={opts.nQpPair}
+        min={2}
+        max={16}
+        step={1}
+        onChange={(v) => onPatch({ nQpPair: v })}
+      />
+      <div className="field">
+        <label className="link-toggle" title="Replace delta-gap source with cos² bump of width α·h_feed; helps where basis-limited convergence shows on straight-wire feeds.">
+          <input
+            type="checkbox"
+            checked={opts.feedSmoothingFactor != null}
+            onChange={(e) =>
+              onPatch({ feedSmoothingFactor: e.target.checked ? 3 : null })
+            }
+          />
+          feed source smoothing
+        </label>
+        {opts.feedSmoothingFactor != null && (
+          <NumberField
+            label="α (bump width / h_feed)"
+            value={opts.feedSmoothingFactor}
+            min={0.5}
+            max={10}
+            step={0.5}
+            onChange={(v) => onPatch({ feedSmoothingFactor: v })}
+          />
+        )}
+        {opts.feedSmoothingFactor != null && (
+          <NumberField
+            label="n_qp_source"
+            value={opts.nQpSource}
+            min={4}
+            max={64}
+            step={1}
+            onChange={(v) => onPatch({ nQpSource: v })}
+          />
+        )}
+      </div>
+      <div className="field">
+        <label className="link-toggle" title="Add (u/h)·log(u/h) singular basis at K ≥ enrichment_min_k junctions; flips O(1/N) → ~O(1/N^(d+1)) on dominant-pair K=3 junctions (most current flowing through two of three wires).">
+          <input
+            type="checkbox"
+            checked={opts.useSingularEnrichment}
+            onChange={(e) => onPatch({ useSingularEnrichment: e.target.checked })}
+          />
+          K≥3 junction singular enrichment
+        </label>
+        {opts.useSingularEnrichment && (
+          <>
+            <NumberField
+              label="n_qp_sing (GL pts/axis)"
+              value={opts.nQpSing}
+              min={8}
+              max={64}
+              step={1}
+              onChange={(v) => onPatch({ nQpSing: v })}
+            />
+            <NumberField
+              label="enrichment_min_k"
+              value={opts.enrichmentMinK}
+              min={2}
+              max={6}
+              step={1}
+              onChange={(v) => onPatch({ enrichmentMinK: v })}
+            />
+            <label
+              className="link-toggle"
+              title="raw = original Φ_sing = (u/h)·log(u/h); stable = Φ_sing minus bubble-subspace L²-projection (loses Y cusp); tikhonov = raw + λ·s·I penalty on Z_ee (shrinks all α uniformly); auto = two-pass per-junction selectivity via tap_ratio (dominant-pair K=3 → off, balanced 3-way → on)."
+            >
+              variant:
+              <select
+                value={opts.enrichmentVariant}
+                onChange={(e) =>
+                  onPatch({
+                    enrichmentVariant: e.target.value as
+                      | "raw"
+                      | "stable"
+                      | "tikhonov"
+                      | "auto",
+                  })
+                }
+              >
+                <option value="raw">raw</option>
+                <option value="stable">stable</option>
+                <option value="tikhonov">tikhonov</option>
+                <option value="auto">auto</option>
+              </select>
+            </label>
+            {opts.enrichmentVariant === "tikhonov" && (
+              <NumberField
+                label="tikhonov_lambda (λ)"
+                value={opts.tikhonovLambda}
+                min={0}
+                max={10}
+                step={0.05}
+                onChange={(v) => onPatch({ tikhonovLambda: v })}
+              />
+            )}
+            {opts.enrichmentVariant === "auto" && (
+              <NumberField
+                label="auto_tap_ratio_threshold"
+                value={opts.autoTapRatioThreshold}
+                min={0}
+                max={1}
+                step={0.05}
+                onChange={(v) => onPatch({ autoTapRatioThreshold: v })}
+              />
+            )}
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="field">
+      <label>
+        <span>{label}</span>
+        <span>{value}</span>
+      </label>
+      <input
+        type="number"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        onChange={(e) => {
+          const v = Number(e.target.value);
+          if (!Number.isNaN(v)) onChange(v);
+        }}
+      />
+    </div>
+  );
+}
+
+function feedMag(r: SolveResponse): number {
+  const w = r.wires[r.feed_wire_index];
+  if (!w) return 0;
+  const re = w.knot_currents_re[r.feed_knot_index];
+  const im = w.knot_currents_im[r.feed_knot_index];
+  return Math.hypot(re, im);
+}
+
+function reflectionCoefficient(r: number, x: number, z0: number) {
+  // Γ = (Z - Z0) / (Z + Z0), with Z = r + jx (Z0 real).
+  const denom = (r + z0) * (r + z0) + x * x;
+  const gRe = (r * r - z0 * z0 + x * x) / denom;
+  const gIm = (2 * x * z0) / denom;
+  return { gRe, gIm, gMag: Math.hypot(gRe, gIm) };
+}
+
+function formatSwr(r: number, x: number, z0: number): string {
+  const { gMag } = reflectionCoefficient(r, x, z0);
+  if (gMag >= 0.9999) return "∞";
+  const swr = (1 + gMag) / (1 - gMag);
+  if (swr > 99) return swr.toFixed(0);
+  return swr.toFixed(2);
+}
+
+function ViewPanel({
+  view,
+  size,
+  fill,
+  result,
+  sweep,
+  converge,
+  pattern,
+  measFreqMhz,
+  sweepRunning,
+  convergeRunning,
+  azElevDeg,
+  elevAzDeg,
+  cameraProjection,
+  showHeatmap,
+  showEnvelope,
+  multiFeed,
+}: {
+  view: View;
+  size: number;
+  fill: boolean;
+  result: SolveResponse | null;
+  sweep: SweepData | null;
+  converge: ConvergeData | null;
+  pattern: PatternData | null;
+  measFreqMhz: number;
+  sweepRunning: boolean;
+  convergeRunning: boolean;
+  azElevDeg: number;
+  elevAzDeg: number;
+  cameraProjection: Projection;
+  showHeatmap: boolean;
+  showEnvelope: boolean;
+  multiFeed: boolean;
+}) {
+  if (view === "antenna") {
+    return (
+      <div className={fill ? "antenna-fill" : "antenna-thumb"}
+           style={fill ? undefined : { width: size, height: size }}>
+        <CurrentCanvas
+          result={result}
+          projection={cameraProjection}
+          showHeatmap={showHeatmap}
+          showEnvelope={showEnvelope}
+        />
+      </div>
+    );
+  }
+  if (view === "azimuth") {
+    return (
+      <FarFieldChart
+        result={result}
+        pattern={pattern}
+        size={size}
+        cut="xy"
+        azElevDeg={azElevDeg}
+        elevAzDeg={elevAzDeg}
+      />
+    );
+  }
+  if (view === "elevation") {
+    return (
+      <FarFieldChart
+        result={result}
+        pattern={pattern}
+        size={size}
+        cut="yz"
+        azElevDeg={azElevDeg}
+        elevAzDeg={elevAzDeg}
+      />
+    );
+  }
+  return (
+    <SmithChart
+      r={result?.z_in_re ?? 0}
+      x={result?.z_in_im ?? 0}
+      z0={result?.z0_ohms ?? 50}
+      size={size}
+      sweep={sweep}
+      converge={converge}
+      measFreqMhz={measFreqMhz}
+      running={sweepRunning}
+      convergeRunning={convergeRunning}
+      feeds={result?.feeds}
+      multiFeed={multiFeed}
+    />
+  );
+}
+
+type FarFieldCut = "xy" | "yz";
+
+function FarFieldChart({
+  result,
+  pattern,
+  size,
+  cut,
+  azElevDeg,
+  elevAzDeg,
+}: {
+  result: SolveResponse | null;
+  pattern: PatternData | null;
+  size: number;
+  cut: FarFieldCut;
+  azElevDeg: number;
+  elevAzDeg: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(size * dpr);
+    canvas.height = Math.floor(size * dpr);
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    ctx.fillStyle = "#0d1015";
+    ctx.fillRect(0, 0, size, size);
+
+    const cx = size / 2;
+    const cy = size / 2;
+    const R = size / 2 - 14;
+
+    const groundOn = !!result?.ground;
+    // Azimuth cut: cone above horizon at elevation azElevDeg. With ground
+    // off, the conventional setting is 0° (the xy plane). With ground on,
+    // 0° is grazing and Fresnel kills the pattern, so something like 15°
+    // gives a useful view — the slider lets the user pick.
+    const azElevRad = (azElevDeg * Math.PI) / 180;
+    const azSinT = Math.cos(azElevRad); // sin(polar θ from +z) = cos(elevation)
+    const azCosT = Math.sin(azElevRad); // cos(polar θ) = sin(elevation)
+    // Elevation cut: vertical great circle through azimuth bearing elevAzDeg.
+    // t=0 lies at +elevAz horizon; t=π/2 is zenith; t=π is at the opposite
+    // horizon; t=3π/2 is nadir (below ground, zeroed when ground is on).
+    const elevAzRad = (elevAzDeg * Math.PI) / 180;
+    const elevAzCos = Math.cos(elevAzRad);
+    const elevAzSin = Math.sin(elevAzRad);
+
+    // Radial axis: absolute directivity in dBi over a fixed displayable
+    // range of +10 (outer edge) to −20 (origin). Labeled ticks are at the
+    // multiples of 6 strictly inside that range: +6, 0, −6, −12, −18.
+    const DBI_TOP = 10;
+    const DB_SPAN = 30;
+    const dbiToFrac = (db: number) => Math.max(0, (db - (DBI_TOP - DB_SPAN)) / DB_SPAN);
+    ctx.strokeStyle = "#2a313d";
+    ctx.lineWidth = 0.6;
+    ctx.fillStyle = "#4a5160";
+    ctx.font = "9px ui-monospace, monospace";
+    for (const db of [6, 0, -6, -12, -18]) {
+      const f = dbiToFrac(db);
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * f, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.fillText(`${db > 0 ? "+" : ""}${db}`, cx + 2, cy - R * f - 1);
+    }
+    ctx.beginPath();
+    ctx.moveTo(cx - R, cy);
+    ctx.lineTo(cx + R, cy);
+    ctx.moveTo(cx, cy - R);
+    ctx.lineTo(cx, cy + R);
+    ctx.stroke();
+
+    // Axis labels: xy cut uses world x/y around the rim; yz cut shows the
+    // azimuth bearing on the horizontal pair and zenith/nadir on vertical.
+    ctx.fillStyle = "#4a5160";
+    ctx.font = "10px ui-monospace, monospace";
+    const cutLabel =
+      cut === "xy"
+        ? `az @ ${azElevDeg}° elev (dBi)`
+        : `elev @ ${elevAzDeg}° az (dBi)`;
+    ctx.fillText(cutLabel, 6, 14);
+    ctx.fillStyle = "#7b8493";
+    if (cut === "xy") {
+      ctx.fillText("+x", cx + R - 14, cy + 11);
+      ctx.fillText("−x", cx - R + 2, cy + 11);
+      ctx.fillText("+y", cx - 8, cy - R + 12);
+      ctx.fillText("−y", cx - 7, cy + R - 2);
+    } else {
+      ctx.fillText("zen", cx - 9, cy - R + 12);
+      ctx.fillText("nad", cx - 9, cy + R - 2);
+    }
+
+    // Cross-reference: a single dashed spoke showing where the *other* cut
+    // slices this plot. The opposite side is implied by symmetry.
+    const markerStyle = "rgba(180, 140, 250, 0.7)";
+    {
+      const canvasAngleRad =
+        cut === "xy"
+          ? (elevAzDeg * Math.PI) / 180  // azimuth plot: elevation cut's bearing
+          : (azElevDeg * Math.PI) / 180; // elevation plot: azimuth cut's elevation
+      const cosA = Math.cos(canvasAngleRad);
+      const sinA = Math.sin(canvasAngleRad);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + cosA * R, cy - sinA * R);
+      ctx.strokeStyle = markerStyle;
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    if (!result) return;
+
+    // Planar cut: r̂(t) = u·cos t + v·sin t, where (u, v) are the two world
+    // basis vectors in the cut plane (xy: (x̂, ŷ); yz: (ŷ, ẑ)). For each
+    // direction compute the moment integral over ALL wires:
+    //   M(r̂) = Σ_segments I_mid · (r_{n+1} − r_n) · exp(jk r̂·r_mid)
+    // and take |M_perp|² (component perpendicular to r̂).
+    //
+    // With a ground plane, also accumulate the PEC-image moment (segments
+    // mirrored through z=0, horizontal current direction flipped) and apply
+    // Fresnel coefficients per ray to get the reflected wave. Above-horizon
+    // only; rays into the ground contribute nothing.
+    const N_DIR = 180;
+    // Wavenumber and complex ground permittivity are precomputed by the
+    // server (`k_meas_m_inv`, `ground_eps_im`) so this renderer stays
+    // free of physics constants. Fallbacks keep older responses working.
+    const k = result.k_meas_m_inv ?? 0;
+    const epsRe = result.ground_eps_r ?? 1;
+    const epsIm = result.ground_eps_im ?? 0;
+
+    // Flatten per-segment quantities across every wire. Prefer the finer-
+    // grained sample arrays (knots interleaved with segment midpoints) when
+    // the backend supplies them; that way non-tent bases (B-spline d=2,
+    // sinusoidal three-term) and the B-spline enrichment shape — all of
+    // which carry intra-segment curvature the knot-only samples drop — get
+    // resolved at twice the cadence. PyNEC stays on the knot path.
+    let nSeg = 0;
+    for (const w of result.wires) {
+      const pts = w.sample_positions ?? w.knot_positions;
+      nSeg += pts.length - 1;
+    }
+    const dx = new Float64Array(nSeg);
+    const dy = new Float64Array(nSeg);
+    const dz = new Float64Array(nSeg);
+    const midx = new Float64Array(nSeg);
+    const midy = new Float64Array(nSeg);
+    const midz = new Float64Array(nSeg);
+    const Ire = new Float64Array(nSeg);
+    const Iim = new Float64Array(nSeg);
+    let off = 0;
+    for (const w of result.wires) {
+      const pts = w.sample_positions ?? w.knot_positions;
+      const cre = w.sample_currents_re ?? w.knot_currents_re;
+      const cim = w.sample_currents_im ?? w.knot_currents_im;
+      for (let n = 0; n < pts.length - 1; n++) {
+        const a = pts[n];
+        const b = pts[n + 1];
+        dx[off] = b[0] - a[0];
+        dy[off] = b[1] - a[1];
+        dz[off] = b[2] - a[2];
+        midx[off] = 0.5 * (a[0] + b[0]);
+        midy[off] = 0.5 * (a[1] + b[1]);
+        midz[off] = 0.5 * (a[2] + b[2]);
+        Ire[off] = 0.5 * (cre[n] + cre[n + 1]);
+        Iim[off] = 0.5 * (cim[n] + cim[n + 1]);
+        off++;
+      }
+    }
+
+    const mag2s = new Array<number>(N_DIR);
+    let maxMag2 = 0;
+
+    for (let pi = 0; pi < N_DIR; pi++) {
+      const t = (2 * Math.PI * pi) / N_DIR;
+      const ct = Math.cos(t);
+      const st = Math.sin(t);
+      // xy cut: cone at the chosen elevation. yz cut: vertical great circle
+      // through the chosen azimuth bearing (cos t · (cos φ, sin φ) on the
+      // horizontal plane, plus sin t on z).
+      const rx = cut === "xy" ? azSinT * ct : elevAzCos * ct;
+      const ry = cut === "xy" ? azSinT * st : elevAzSin * ct;
+      const rz = cut === "xy" ? azCosT : st;
+
+      // Rays into the ground (rz < 0) carry no far field.
+      if (groundOn && rz < 0) {
+        mag2s[pi] = 0;
+        continue;
+      }
+
+      let mxRe = 0, mxIm = 0, myRe = 0, myIm = 0, mzRe = 0, mzIm = 0;
+      // Image moment accumulators (only used when groundOn).
+      let ixRe = 0, ixIm = 0, iyRe = 0, iyIm = 0, izRe = 0, izIm = 0;
+      for (let n = 0; n < nSeg; n++) {
+        const phase = k * (rx * midx[n] + ry * midy[n] + rz * midz[n]);
+        const cph = Math.cos(phase);
+        const sph = Math.sin(phase);
+        // I_mid * exp(jphase)
+        const ire = Ire[n] * cph - Iim[n] * sph;
+        const iim = Ire[n] * sph + Iim[n] * cph;
+        mxRe += ire * dx[n];
+        mxIm += iim * dx[n];
+        myRe += ire * dy[n];
+        myIm += iim * dy[n];
+        mzRe += ire * dz[n];
+        mzIm += iim * dz[n];
+
+        if (groundOn) {
+          // Image position: (x, y, -z). Image current dir: (-dx, -dy, +dz).
+          const phaseI = k * (rx * midx[n] + ry * midy[n] - rz * midz[n]);
+          const cphI = Math.cos(phaseI);
+          const sphI = Math.sin(phaseI);
+          const ireI = Ire[n] * cphI - Iim[n] * sphI;
+          const iimI = Ire[n] * sphI + Iim[n] * cphI;
+          ixRe += ireI * -dx[n]; ixIm += iimI * -dx[n];
+          iyRe += ireI * -dy[n]; iyIm += iimI * -dy[n];
+          izRe += ireI *  dz[n]; izIm += iimI *  dz[n];
+        }
+      }
+      // Direct M_perp = M − (M·r̂) r̂
+      const mDotRre = mxRe * rx + myRe * ry + mzRe * rz;
+      const mDotRim = mxIm * rx + myIm * ry + mzIm * rz;
+      let pxRe = mxRe - mDotRre * rx;
+      let pxIm = mxIm - mDotRim * rx;
+      let pyRe = myRe - mDotRre * ry;
+      let pyIm = myIm - mDotRim * ry;
+      let pzRe = mzRe - mDotRre * rz;
+      let pzIm = mzIm - mDotRim * rz;
+
+      if (groundOn) {
+        // Image M_perp.
+        const iDotRre = ixRe * rx + iyRe * ry + izRe * rz;
+        const iDotRim = ixIm * rx + iyIm * ry + izIm * rz;
+        const qxRe = ixRe - iDotRre * rx;
+        const qxIm = ixIm - iDotRim * rx;
+        const qyRe = iyRe - iDotRre * ry;
+        const qyIm = iyIm - iDotRim * ry;
+        const qzRe = izRe - iDotRre * rz;
+        const qzIm = izIm - iDotRim * rz;
+
+        // Polarization basis at r̂. ĥ = ẑ × r̂ / |·|, v̂ = r̂ × ĥ.
+        // Degenerate at the zenith (s≈0); pick arbitrary axes — both pol
+        // coefficients agree there, so the choice doesn't affect the sum.
+        const s = Math.sqrt(rx * rx + ry * ry);
+        let hx: number, hy: number, hz: number;
+        let vx: number, vy: number, vz: number;
+        if (s > 1e-9) {
+          hx = -ry / s; hy = rx / s; hz = 0;
+          vx = -rx * rz / s; vy = -ry * rz / s; vz = s;
+        } else {
+          hx = 1; hy = 0; hz = 0;
+          vx = 0; vy = 1; vz = 0;
+        }
+
+        // Decompose image perp onto (ĥ, v̂) — complex scalars.
+        const qhRe = qxRe * hx + qyRe * hy + qzRe * hz;
+        const qhIm = qxIm * hx + qyIm * hy + qzIm * hz;
+        const qvRe = qxRe * vx + qyRe * vy + qzRe * vz;
+        const qvIm = qxIm * vx + qyIm * vy + qzIm * vz;
+
+        // Fresnel reflection coefficients (complex). cos θᵢ = rz, sin²θᵢ = s².
+        // ε̃ − sin²θᵢ is complex; sqrt of complex follows the principal branch.
+        const cosTi = rz;
+        const sin2Ti = s * s;
+        const aRe = epsRe - sin2Ti;
+        const aIm = epsIm;
+        // Principal-branch √(a + jb)
+        const aMag = Math.hypot(aRe, aIm);
+        const QRe = Math.sqrt(0.5 * (aMag + aRe));
+        const QIm = Math.sign(aIm || 1) * Math.sqrt(Math.max(0, 0.5 * (aMag - aRe)));
+        // ρ_h = (cosTi − Q) / (cosTi + Q)
+        const numHRe = cosTi - QRe, numHIm = -QIm;
+        const denHRe = cosTi + QRe, denHIm = QIm;
+        const denH2 = denHRe * denHRe + denHIm * denHIm;
+        const rhoHRe = (numHRe * denHRe + numHIm * denHIm) / denH2;
+        const rhoHIm = (numHIm * denHRe - numHRe * denHIm) / denH2;
+        // ρ_v = (ε̃·cosTi − Q) / (ε̃·cosTi + Q)
+        const ecRe = epsRe * cosTi, ecIm = epsIm * cosTi;
+        const numVRe = ecRe - QRe, numVIm = ecIm - QIm;
+        const denVRe = ecRe + QRe, denVIm = ecIm + QIm;
+        const denV2 = denVRe * denVRe + denVIm * denVIm;
+        const rhoVRe = (numVRe * denVRe + numVIm * denVIm) / denV2;
+        const rhoVIm = (numVIm * denVRe - numVRe * denVIm) / denV2;
+
+        // Reflected: M_refl = ρ_v · q_v · v̂ − ρ_h · q_h · ĥ.
+        // The (−ρ_h) sign folds the PEC image's pre-applied horizontal flip
+        // back out, so ρ_h=−1 reproduces the PEC reflection exactly.
+        const rvqRe = rhoVRe * qvRe - rhoVIm * qvIm;
+        const rvqIm = rhoVRe * qvIm + rhoVIm * qvRe;
+        const rhqRe = rhoHRe * qhRe - rhoHIm * qhIm;
+        const rhqIm = rhoHRe * qhIm + rhoHIm * qhRe;
+        pxRe += rvqRe * vx - rhqRe * hx;
+        pxIm += rvqIm * vx - rhqIm * hx;
+        pyRe += rvqRe * vy - rhqRe * hy;
+        pyIm += rvqIm * vy - rhqIm * hy;
+        pzRe += rvqRe * vz - rhqRe * hz;
+        pzIm += rvqIm * vz - rhqIm * hz;
+      }
+
+      const mag2 =
+        pxRe * pxRe + pxIm * pxIm +
+        pyRe * pyRe + pyIm * pyIm +
+        pzRe * pzRe + pzIm * pzIm;
+      mag2s[pi] = mag2;
+      if (mag2 > maxMag2) maxMag2 = mag2;
+    }
+
+    if (maxMag2 <= 0) return;
+
+    // Absolute directivity: D(φ) = directivity_norm · |M_perp(π/2, φ)|².
+    // If the server omitted the norm (older response), fall back to a
+    // per-frame relative scale that puts the peak at 0 dBi.
+    const norm =
+      result.directivity_norm && result.directivity_norm > 0
+        ? result.directivity_norm
+        : 1 / maxMag2;
+
+    ctx.beginPath();
+    for (let pi = 0; pi <= N_DIR; pi++) {
+      const t = (2 * Math.PI * pi) / N_DIR;
+      const D = norm * mag2s[pi % N_DIR];
+      const dBi = D > 0 ? 10 * Math.log10(D) : -Infinity;
+      const frac = dbiToFrac(dBi);
+      const px = cx + Math.cos(t) * frac * R;
+      // Canvas y flips: +y on canvas is down, so we negate to put +y at top.
+      const py = cy - Math.sin(t) * frac * R;
+      if (pi === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = "rgba(255, 209, 102, 0.12)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 209, 102, 0.9)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // NEC exact-pattern overlay (dashed cyan line) when available. Bilinear
+    // interpolation off the (θ, φ) grid; rays below horizon are skipped so
+    // the line breaks at the ground rather than wrapping to the origin.
+    if (pattern) {
+      const nt = pattern.theta_deg.length;
+      const np_ = pattern.phi_deg.length;
+      const dTheta = pattern.theta_deg[1] - pattern.theta_deg[0];
+      const dPhi = pattern.phi_deg[1] - pattern.phi_deg[0];
+      const clip = (g: number) => (g < -100 ? -100 : g);
+
+      ctx.beginPath();
+      let started = false;
+      for (let pi = 0; pi <= N_DIR; pi++) {
+        const t = (2 * Math.PI * pi) / N_DIR;
+        const ct = Math.cos(t);
+        const st = Math.sin(t);
+        const rx = cut === "xy" ? azSinT * ct : elevAzCos * ct;
+        const ry = cut === "xy" ? azSinT * st : elevAzSin * ct;
+        const rz = cut === "xy" ? azCosT : st;
+        if (rz < -1e-9) { started = false; continue; }
+
+        const thetaDeg = (Math.acos(Math.max(-1, Math.min(1, rz))) * 180) / Math.PI;
+        let phiRad = Math.atan2(ry, rx);
+        if (phiRad < 0) phiRad += 2 * Math.PI;
+        const phiDeg = (phiRad * 180) / Math.PI;
+
+        const tf = Math.max(0, Math.min(nt - 1, thetaDeg / dTheta));
+        const pf = Math.max(0, Math.min(np_ - 1, phiDeg / dPhi));
+        const t0 = Math.floor(tf), t1 = Math.min(nt - 1, t0 + 1);
+        const p0 = Math.floor(pf), p1 = Math.min(np_ - 1, p0 + 1);
+        const ft = tf - t0, fp = pf - p0;
+        const g00 = clip(pattern.gain_dbi[t0][p0]);
+        const g01 = clip(pattern.gain_dbi[t0][p1]);
+        const g10 = clip(pattern.gain_dbi[t1][p0]);
+        const g11 = clip(pattern.gain_dbi[t1][p1]);
+        const dBi =
+          g00 * (1 - ft) * (1 - fp) +
+          g01 * (1 - ft) * fp +
+          g10 * ft * (1 - fp) +
+          g11 * ft * fp;
+
+        const frac = dbiToFrac(dBi);
+        const px = cx + Math.cos(t) * frac * R;
+        const py = cy - Math.sin(t) * frac * R;
+        if (!started) { ctx.moveTo(px, py); started = true; }
+        else ctx.lineTo(px, py);
+      }
+      ctx.strokeStyle = "rgba(110, 220, 255, 0.85)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Legend swatch + label, bottom-right.
+      ctx.fillStyle = "rgba(110, 220, 255, 0.9)";
+      ctx.font = "10px ui-monospace, monospace";
+      const necText = "NEC rp_card";
+      const necTw = ctx.measureText(necText).width;
+      ctx.fillText(necText, size - necTw - 6, size - 6);
+    }
+
+    // Peak dBi annotation (top-right corner).
+    const peakDbi = 10 * Math.log10(norm * maxMag2);
+    ctx.fillStyle = "#cdd5e0";
+    ctx.font = "10px ui-monospace, monospace";
+    const peakText = `peak ${peakDbi >= 0 ? "+" : ""}${peakDbi.toFixed(1)} dBi`;
+    const tw = ctx.measureText(peakText).width;
+    ctx.fillText(peakText, size - tw - 6, 14);
+  }, [result, pattern, size, cut, azElevDeg, elevAzDeg]);
+
+  return <canvas ref={canvasRef} className="farfield" />;
+}
+
+// Per-feed colors for multi-line Smith chart overlays. Feed 0 keeps the
+// existing single-feed blue so single-feed geometries are visually
+// unchanged; subsequent feeds use distinct hues that read well on the
+// dark background. Indices beyond this list wrap, but that's only
+// reachable on >4-feed geometries (none exist yet).
+const FEED_COLORS: [number, number, number][] = [
+  [118, 208, 255],  // blue (primary)
+  [255, 196, 102],  // amber
+  [140, 230, 140],  // green
+  [255, 130, 200],  // pink
+];
+
+function feedColor(i: number, alpha = 0.85): string {
+  const [r, g, b] = FEED_COLORS[i % FEED_COLORS.length];
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Sweep trail uses a darkened variant of each feed's primary color so the
+// current-Z marker reads as "you are here" against a dimmer "trail". With
+// two feeds at identical Z (e.g. the in-phase symmetric case) the two
+// primary markers stack on top of each other but stay distinguishable from
+// the sweep cloud underneath — without this they were indistinguishable.
+function feedSweepColor(i: number, alpha = 0.85): string {
+  const [r, g, b] = FEED_COLORS[i % FEED_COLORS.length];
+  const f = 0.55; // darken factor — empirically readable on the #0d1015 bg
+  return `rgba(${Math.round(r * f)}, ${Math.round(g * f)}, ${Math.round(b * f)}, ${alpha})`;
+}
+
+function SmithChart({
+  r,
+  x,
+  z0,
+  size,
+  sweep,
+  converge,
+  measFreqMhz,
+  running,
+  convergeRunning,
+  feeds,
+  multiFeed,
+}: {
+  r: number;
+  x: number;
+  z0: number;
+  size: number;
+  sweep: SweepData | null;
+  converge: ConvergeData | null;
+  measFreqMhz: number;
+  running: boolean;
+  convergeRunning: boolean;
+  /** Multi-feed geometries pass the per-feed Z list from the latest
+   *  solve so the chart can also render N centre dots, one per port. */
+  feeds?: FeedEntry[];
+  /** From the example descriptor's `multi_feed` flag — drives the
+   *  per-feed summary rows. Decoupled from feeds[].length so the chart
+   *  reflects antenna type rather than guessing from response shape. */
+  multiFeed: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(size * dpr);
+    canvas.height = Math.floor(size * dpr);
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const cx = size / 2;
+    const cy = size / 2;
+    const R = size / 2 - 10;
+
+    ctx.fillStyle = "#0d1015";
+    ctx.fillRect(0, 0, size, size);
+
+    // Constant-r circles in the Γ plane.
+    // Each maps to a circle: center = (r/(r+1), 0), radius = 1/(r+1).
+    const rCircles: { r: number; label?: string }[] = [
+      { r: 0.2 },
+      { r: 0.5, label: "0.5" },
+      { r: 1, label: "1" },
+      { r: 2, label: "2" },
+      { r: 5 },
+    ];
+    ctx.strokeStyle = "#2a313d";
+    ctx.lineWidth = 0.6;
+    for (const { r: rn } of rCircles) {
+      const cxN = rn / (rn + 1);
+      const radN = 1 / (rn + 1);
+      ctx.beginPath();
+      ctx.arc(cx + cxN * R, cy, radN * R, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+
+    // Constant-x arcs: center = (1, 1/x), radius = 1/|x|. Clip to unit disk.
+    const xArcs = [0.2, 0.5, 1, 2, 5];
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+    ctx.clip();
+    for (const xn of xArcs) {
+      const arcCx = cx + R;
+      const rad = (1 / xn) * R;
+      // Inductive (X > 0)
+      ctx.beginPath();
+      ctx.arc(arcCx, cy - (1 / xn) * R, rad, 0, 2 * Math.PI);
+      ctx.stroke();
+      // Capacitive (X < 0)
+      ctx.beginPath();
+      ctx.arc(arcCx, cy + (1 / xn) * R, rad, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Real axis
+    ctx.strokeStyle = "#3a4150";
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(cx - R, cy);
+    ctx.lineTo(cx + R, cy);
+    ctx.stroke();
+
+    // Outer boundary (|Γ| = 1)
+    ctx.strokeStyle = "#3a4150";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    // Z0 label at center
+    ctx.fillStyle = "#4a5160";
+    ctx.font = "10px ui-monospace, monospace";
+    ctx.fillText(`Z₀ = ${z0}`, 6, 14);
+
+    // Reactance sign labels.
+    ctx.fillStyle = "#4a5160";
+    ctx.fillText("+jX", cx + R - 24, cy - R + 14);
+    ctx.fillText("−jX", cx + R - 24, cy + R - 4);
+
+    // Sweep locus: one colored trajectory per feed (or just the primary
+    // for single-feed geometries). Multi-feed geometries (bowtie) ship
+    // per-feed Z arrays via sweep.feeds_z_re / feeds_z_im; when present
+    // we render one color-distinct trajectory per port instead of the
+    // single legacy blue locus. No connecting line — sparse samples
+    // make a piecewise polyline read as artificial kinks.
+    if (sweep && sweep.freqs_mhz.length > 1) {
+      const hasMulti =
+        !!sweep.feeds_z_re &&
+        !!sweep.feeds_z_im &&
+        sweep.feeds_z_re.length === sweep.freqs_mhz.length &&
+        sweep.feeds_z_re[0].length > 1;
+      const nFeeds = hasMulti ? sweep.feeds_z_re![0].length : 1;
+
+      // Z accessor per (feed index, sample index). Single-feed falls
+      // back to the top-level z_re/z_im (same as before this change).
+      const zAt = (fi: number, i: number) =>
+        hasMulti
+          ? { re: sweep.feeds_z_re![i][fi], im: sweep.feeds_z_im![i][fi] }
+          : { re: sweep.z_re[i], im: sweep.z_im[i] };
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+      ctx.clip();
+      for (let fi = 0; fi < nFeeds; fi++) {
+        // Darkened color so the sweep cloud reads as a trail underneath
+        // the bright current-Z primary marker (drawn later, full color).
+        // Same convention for single- and multi-feed so the chart's
+        // visual grammar is uniform.
+        ctx.fillStyle = feedSweepColor(fi);
+        for (let i = 0; i < sweep.freqs_mhz.length; i++) {
+          const z = zAt(fi, i);
+          const g = reflectionCoefficient(z.re, z.im, z0);
+          const px = cx + g.gRe * R;
+          const py = cy - g.gIm * R;
+          ctx.beginPath();
+          ctx.arc(px, py, 1.5, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+
+      // Endpoint markers per feed (low-freq filled, high-freq hollow) —
+      // also drawn in the darkened sweep color so they stay part of the
+      // trail and don't compete with the bright current-Z marker.
+      const drawEndpoint = (fi: number, idx: number, filled: boolean) => {
+        const z = zAt(fi, idx);
+        const g = reflectionCoefficient(z.re, z.im, z0);
+        const px = cx + g.gRe * R;
+        const py = cy - g.gIm * R;
+        const col = feedSweepColor(fi);
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = col;
+        ctx.fillStyle = filled ? col : "rgba(13, 16, 21, 0.95)";
+        ctx.beginPath();
+        ctx.arc(px, py, 3, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+      };
+      for (let fi = 0; fi < nFeeds; fi++) {
+        drawEndpoint(fi, 0, true);
+        drawEndpoint(fi, sweep.freqs_mhz.length - 1, false);
+      }
+
+      // Freq range label across the bottom of the panel.
+      ctx.fillStyle = "#9aa3b2";
+      ctx.font = "10px ui-monospace, monospace";
+      const fLoTxt = sweep.freqs_mhz[0].toFixed(2);
+      const fHiTxt = sweep.freqs_mhz[sweep.freqs_mhz.length - 1].toFixed(2);
+      const txt = `${fLoTxt} → ${fHiTxt} MHz`;
+      ctx.fillText(txt, size - 6 - ctx.measureText(txt).width, size - 6);
+
+    }
+
+    if (running) {
+      ctx.fillStyle = "#7b8493";
+      ctx.font = "10px ui-monospace, monospace";
+      ctx.fillText("sweeping…", 6, size - 6);
+    }
+
+    // Convergence locus: Z(N) trajectory as N increases, drawn as a
+    // connected polyline per feed so the sequence direction reads as
+    // motion (vs. the freq sweep's unconnected scatter). Each feed gets
+    // its own bright color from the feed palette — the line shape
+    // distinguishes the convergence trail from the scattered freq-sweep
+    // dots, and the bright-vs-dim brightness distinguishes the bright
+    // current-Z marker from the trail's interior dots. Smallest-N point
+    // gets a hollow ring; largest-N gets a filled disc; Richardson-
+    // extrapolated Z* gets a diamond (primary feed only).
+    if (converge && converge.n_values.length >= 1) {
+      const cHasMulti =
+        !!converge.feeds_z_re &&
+        !!converge.feeds_z_im &&
+        converge.feeds_z_re.length === converge.n_values.length &&
+        converge.feeds_z_re[0].length > 1;
+      const cNFeeds = cHasMulti ? converge.feeds_z_re![0].length : 1;
+      const czAt = (fi: number, i: number) =>
+        cHasMulti
+          ? { re: converge.feeds_z_re![i][fi], im: converge.feeds_z_im![i][fi] }
+          : { re: converge.z_re[i], im: converge.z_im[i] };
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+      ctx.clip();
+      for (let fi = 0; fi < cNFeeds; fi++) {
+        ctx.strokeStyle = feedColor(fi);
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        for (let i = 0; i < converge.n_values.length; i++) {
+          const z = czAt(fi, i);
+          const g = reflectionCoefficient(z.re, z.im, z0);
+          const px = cx + g.gRe * R;
+          const py = cy - g.gIm * R;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+
+        // Per-N dots along the trajectory.
+        ctx.fillStyle = feedColor(fi);
+        for (let i = 0; i < converge.n_values.length; i++) {
+          const z = czAt(fi, i);
+          const g = reflectionCoefficient(z.re, z.im, z0);
+          const px = cx + g.gRe * R;
+          const py = cy - g.gIm * R;
+          ctx.beginPath();
+          ctx.arc(px, py, 1.8, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+
+      // Endpoint markers per feed: smallest-N hollow, largest-N filled.
+      const drawNEndpoint = (fi: number, idx: number, filled: boolean) => {
+        const z = czAt(fi, idx);
+        const g = reflectionCoefficient(z.re, z.im, z0);
+        const px = cx + g.gRe * R;
+        const py = cy - g.gIm * R;
+        const col = feedColor(fi);
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = col;
+        ctx.fillStyle = filled ? col : "rgba(13, 16, 21, 0.95)";
+        ctx.beginPath();
+        ctx.arc(px, py, 3, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+      };
+      for (let fi = 0; fi < cNFeeds; fi++) {
+        drawNEndpoint(fi, 0, false);
+        drawNEndpoint(fi, converge.n_values.length - 1, true);
+      }
+
+      // Richardson Z* markers — one diamond per feed, each in the
+      // matching bright feed color so the user can tell which trail
+      // extrapolates to which Z*. The diamond shape distinguishes the
+      // extrapolated value from the actual sampled per-N dots (small
+      // circles) and from the current-Z marker (larger outlined dot).
+      const drawExtrap = (
+        fi: number,
+        zRe: number | null,
+        zIm: number | null,
+      ) => {
+        if (zRe == null || zIm == null) return;
+        const ge = reflectionCoefficient(zRe, zIm, z0);
+        // Clip to the unit Smith disc — Richardson on a not-yet-converging
+        // series can fly outside |Γ|=1 in early frames.
+        const gMag = Math.hypot(ge.gRe, ge.gIm);
+        const k = gMag > 0.98 ? 0.98 / gMag : 1;
+        const px = cx + ge.gRe * R * k;
+        const py = cy - ge.gIm * R * k;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillStyle = feedColor(fi);
+        ctx.strokeStyle = feedColor(fi, 1.0);
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.rect(-4, -4, 8, 8);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      };
+      if (cHasMulti && converge.feeds_z_re_extrap && converge.feeds_z_im_extrap) {
+        for (let fi = 0; fi < cNFeeds; fi++) {
+          drawExtrap(
+            fi,
+            converge.feeds_z_re_extrap[fi],
+            converge.feeds_z_im_extrap[fi],
+          );
+        }
+      } else {
+        drawExtrap(0, converge.z_re_extrap, converge.z_im_extrap);
+      }
+
+    }
+    if (convergeRunning) {
+      ctx.fillStyle = "#7b8493";
+      ctx.font = "10px ui-monospace, monospace";
+      // Stack under the freq-sweep status if both are running.
+      const yOff = running ? 18 : 6;
+      ctx.fillText("converging…", 6, size - yOff);
+    }
+
+    // Current impedance marker(s). One bright dot per feed in the
+    // matching feed color, with a thin dark outline for visibility on
+    // top of the sweep cloud. Single- and multi-feed share this code
+    // path so the chart's visual grammar is uniform: dim color = trail
+    // (freq sweep), bright = "you are here." The previous golden +
+    // glow + line-from-centre treatment for single-feed is gone —
+    // single-feed and feed-0-of-multi-feed now look identical.
+    const markerPoints: Array<{ re: number; im: number; fi: number }> =
+      feeds && feeds.length > 0
+        ? feeds.map((f, fi) => ({ re: f.z_re, im: f.z_im, fi }))
+        : r > 0 || x !== 0
+          ? [{ re: r, im: x, fi: 0 }]
+          : [];
+    for (const m of markerPoints) {
+      if (m.re <= 0 && m.im === 0) continue;
+      const { gRe, gIm } = reflectionCoefficient(m.re, m.im, z0);
+      const px = cx + gRe * R;
+      const py = cy - gIm * R;
+      ctx.fillStyle = feedColor(m.fi);
+      ctx.beginPath();
+      ctx.arc(px, py, 4, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(13, 16, 21, 0.85)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Top-left summary: one row per feed (when multi-feed) or one row
+    // total (single-feed). Each row gets:
+    //   [dim swatch][bright swatch]  feed N  Z* ≈ R + jX Ω
+    // Both swatches encode the per-feed color (dim = freq-sweep trail,
+    // bright = current-Z marker / convergence trail). Z* tacks on
+    // inline in the matching bright color when ≥3 converge samples
+    // have come in, so each trail has its own visibly-colored Z*
+    // readout next to its swatch — replacing the old single purple
+    // Z* line that only tracked feeds[0].
+    const summaryFeeds: Array<{
+      fi: number;
+      extrapRe: number | null;
+      extrapIm: number | null;
+    }> = [];
+    if (multiFeed && feeds && feeds.length > 1) {
+      for (let fi = 0; fi < feeds.length; fi++) {
+        const re = converge?.feeds_z_re_extrap?.[fi] ?? null;
+        const im = converge?.feeds_z_im_extrap?.[fi] ?? null;
+        summaryFeeds.push({ fi, extrapRe: re, extrapIm: im });
+      }
+    } else if (converge && converge.n_values.length >= 1) {
+      summaryFeeds.push({
+        fi: 0,
+        extrapRe: converge.z_re_extrap,
+        extrapIm: converge.z_im_extrap,
+      });
+    } else if (feeds && feeds.length === 1) {
+      // Sweep-only single-feed run: show the swatch row so the colors
+      // on the chart are explained even without a converge.
+      summaryFeeds.push({ fi: 0, extrapRe: null, extrapIm: null });
+    }
+    if (summaryFeeds.length > 0) {
+      ctx.font = "10px ui-monospace, monospace";
+      for (let row = 0; row < summaryFeeds.length; row++) {
+        const { fi, extrapRe, extrapIm } = summaryFeeds[row];
+        const ly = 12 + row * 14;
+        // Dim swatch (sweep trail color).
+        ctx.fillStyle = feedSweepColor(fi);
+        ctx.beginPath();
+        ctx.arc(12, ly, 3, 0, 2 * Math.PI);
+        ctx.fill();
+        // Bright swatch (current-Z / convergence-trail color).
+        ctx.fillStyle = feedColor(fi);
+        ctx.beginPath();
+        ctx.arc(20, ly, 3, 0, 2 * Math.PI);
+        ctx.fill();
+        // Feed label + inline Z* (when extrap available). Text color
+        // matches the bright feed color so the row's color identity
+        // ties back to the chart trails for that feed.
+        ctx.fillStyle = feedColor(fi);
+        let txt =
+          summaryFeeds.length > 1 ? `feed ${fi}` : "";
+        if (extrapRe != null && extrapIm != null) {
+          const sign = extrapIm >= 0 ? "+" : "−";
+          const zText = `Z* ≈ ${extrapRe.toFixed(2)} ${sign} j${Math.abs(extrapIm).toFixed(2)} Ω`;
+          txt = txt ? `${txt}  ${zText}` : zText;
+        }
+        if (txt) ctx.fillText(txt, 28, ly + 3);
+      }
+    }
+
+    // Bottom-left: N-range stays neutral since it's per-converge not
+    // per-feed. Sits above the converging / sweeping status indicators.
+    if (converge && converge.n_values.length >= 1) {
+      const nLo = converge.n_values[0];
+      const nHi = converge.n_values[converge.n_values.length - 1];
+      ctx.fillStyle = "#9aa3b2";
+      ctx.font = "10px ui-monospace, monospace";
+      const baseY = running && convergeRunning ? size - 30
+        : running || convergeRunning ? size - 18
+        : size - 6;
+      ctx.fillText(`N: ${nLo} → ${nHi}`, 6, baseY);
+    }
+
+    // Center match marker
+    ctx.strokeStyle = "#5a6170";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - 4, cy);
+    ctx.lineTo(cx + 4, cy);
+    ctx.moveTo(cx, cy - 4);
+    ctx.lineTo(cx, cy + 4);
+    ctx.stroke();
+    // multiFeed is captured in the closure; without it in the deps the
+    // chart wouldn't redraw when the descriptor flag flips from its
+    // initial false to the real /examples value (true for bowtie /
+    // hexbeam_5band) — the user saw only one Z* annotation in the
+    // legend because the closure stayed wedged on the single-feed branch.
+  }, [r, x, z0, size, sweep, converge, measFreqMhz, running, convergeRunning, feeds, multiFeed]);
+
+  return <canvas ref={canvasRef} className="smith" />;
+}
+
+function CurrentCanvas({
+  result,
+  projection,
+  showHeatmap,
+  showEnvelope,
+}: {
+  result: SolveResponse | null;
+  projection: Projection;
+  showHeatmap: boolean;
+  showEnvelope: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const onResize = () => {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.floor(rect.width * dpr);
+      canvas.height = Math.floor(rect.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      draw();
+    };
+
+    function draw() {
+      if (!canvas) return;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      ctx!.clearRect(0, 0, w, h);
+
+      // Vertical axis guide.
+      ctx!.strokeStyle = "#23272f";
+      ctx!.lineWidth = 1;
+      ctx!.beginPath();
+      ctx!.moveTo(w / 2, 20);
+      ctx!.lineTo(w / 2, h - 20);
+      ctx!.stroke();
+
+      if (!result) return;
+
+      // Scale anchored to design wavelength. Worst-case extents (in λ):
+      //   horizontal: hf_max × λ/2 ≈ 0.6 λ  (both V and Yagi)
+      //   vertical:   max(V droop, Yagi spacing) ≈ 0.5 λ
+      //
+      // `s` proportionally shrinks every fixed pixel constant (padding,
+      // strokes, envelope amplitude, label sizes) so the rendering looks
+      // the same at thumbnail and main sizes. Floor keeps thumbnails
+      // legible; cap prevents very-large canvases from over-inflating.
+      const refSize = 600;
+      const s = Math.max(0.3, Math.min(1.4, Math.min(w, h) / refSize));
+      const lambdaDesign = result.lambda_design_m;
+      const pad = 50 * s;
+      const barReserveBottom = 40 * s;
+      const FILL = 0.85;
+
+      // Camera projection: pick the two world axes to map to canvas
+      // (horizontal, vertical). The hidden axis is the camera ray. App.tsx
+      // sets a per-geometry default (V/fan_dipole → "yz" side, Yagi/moxon/
+      // hexbeam → "xy" top) but the user can override via the projection
+      // toggle in the stage.
+      const projSpec = PROJECTIONS.find((p) => p.id === projection)!;
+      const horizAxis = projSpec.horizAxis;
+      const vertAxis = projSpec.vertAxis;
+      let hMin = Infinity, hMax = -Infinity;
+      let vMin = Infinity, vMax = -Infinity;
+      for (const wire of result.wires) {
+        for (const p of wire.knot_positions) {
+          if (p[horizAxis] < hMin) hMin = p[horizAxis];
+          if (p[horizAxis] > hMax) hMax = p[horizAxis];
+          if (p[vertAxis] < vMin) vMin = p[vertAxis];
+          if (p[vertAxis] > vMax) vMax = p[vertAxis];
+        }
+      }
+
+      // When ground is enabled and the vertical projection axis is z, expand
+      // the visible vertical range to include z=0 so the ground reference
+      // line lands inside the canvas. Without this, high antennas
+      // (height_m ≳ λ/2) push the ground line off-screen.
+      let vEffMin = vMin, vEffMax = vMax;
+      if (result.ground && vertAxis === 2) {
+        vEffMin = Math.min(vMin, 0);
+        vEffMax = Math.max(vMax, 0);
+      }
+      // Vertical span used to size the canvas. Floor at the wavelength
+      // worst-case so small antennas don't render comically large; grow with
+      // the ground-adjusted antenna span so high antennas zoom out enough
+      // to fit the ground line.
+      const vSpanEff = Math.max(vEffMax - vEffMin, 0.5 * lambdaDesign);
+      const scale = FILL * Math.min(
+        (w - 2 * pad) / (0.6 * lambdaDesign),
+        (h - pad - barReserveBottom) / vSpanEff,
+      );
+
+      const hC = (hMin + hMax) / 2;
+      const vC = (vEffMin + vEffMax) / 2;
+      const cx = w / 2;
+      const cy = h / 2;
+      const project = (p: [number, number, number]) => ({
+        x: cx + (p[horizAxis] - hC) * scale,
+        y: cy + (vC - p[vertAxis]) * scale, // higher vert value = higher on screen
+      });
+
+      // Ground reference line at world z=0, drawn only on side projections
+      // (vertAxis === 2) when the backend has ground enabled. Cosmetic — the
+      // math is correct regardless; this just removes the "where is the
+      // ground" guessing game from the side view. vC was adjusted above to
+      // keep this on-canvas, so no bounds check needed here.
+      if (result.ground && vertAxis === 2) {
+        const groundY = cy + vC * scale;
+        ctx!.strokeStyle = "rgba(140, 110, 70, 0.55)";
+        ctx!.lineWidth = 1;
+        ctx!.setLineDash([6, 4]);
+        ctx!.beginPath();
+        ctx!.moveTo(0, groundY);
+        ctx!.lineTo(w, groundY);
+        ctx!.stroke();
+        ctx!.setLineDash([]);
+        ctx!.fillStyle = "rgba(140, 110, 70, 0.85)";
+        ctx!.font = `${Math.max(8, Math.round(10 * s))}px ui-monospace, monospace`;
+        ctx!.fillText("ground (z = 0)", 8 * s, groundY - 4 * s);
+      }
+
+      // Global current magnitude — use sample arrays when available so the
+      // shared color scale catches mid-segment peaks (B-spline d=2 quadratic
+      // curvature, sinusoidal three-term, B-spline enrichment dip). Falls
+      // back to knot arrays for backends that don't ship samples (PyNEC).
+      let magMaxGlobal = 1e-30;
+      const perWirePts: [number, number, number][][] = [];
+      const perWireMags: number[][] = [];
+      for (const wire of result.wires) {
+        const pts = wire.sample_positions ?? wire.knot_positions;
+        const cre = wire.sample_currents_re ?? wire.knot_currents_re;
+        const cim = wire.sample_currents_im ?? wire.knot_currents_im;
+        const m = cre.map((r, i) => Math.hypot(r, cim[i]));
+        perWirePts.push(pts);
+        perWireMags.push(m);
+        for (const v of m) if (v > magMaxGlobal) magMaxGlobal = v;
+      }
+
+      ctx!.lineCap = "round";
+      ctx!.lineJoin = "round";
+
+      // One wire at a time: wire stroke + envelope.
+      const envScale = 60 * s;
+      const labelFontPx = Math.max(8, Math.round(11 * s));
+      const feedFontPx = Math.max(8, Math.round(12 * s));
+      const feedWireIdx = result.feed_wire_index;
+      for (let wi = 0; wi < result.wires.length; wi++) {
+        const wire = result.wires[wi];
+        const pts = perWirePts[wi];
+        const mags = perWireMags[wi];
+
+        for (let i = 0; i < pts.length - 1; i++) {
+          const a = project(pts[i]);
+          const b = project(pts[i + 1]);
+          if (showHeatmap) {
+            const m = (0.5 * (mags[i] + mags[i + 1])) / magMaxGlobal;
+            ctx!.strokeStyle = currentColor(m);
+            ctx!.lineWidth = (2 + 6 * m) * s;
+          } else {
+            // Plain wires: uniform color/width, no current-magnitude modulation.
+            ctx!.strokeStyle = "#9aa3b2";
+            ctx!.lineWidth = 2 * s;
+          }
+          ctx!.beginPath();
+          ctx!.moveTo(a.x, a.y);
+          ctx!.lineTo(b.x, b.y);
+          ctx!.stroke();
+        }
+
+        // Current-waveform envelope: if this is the feed wire (and the feed
+        // isn't at an end), split at the feed knot so a V's per-arm tangent
+        // flip is respected. Otherwise draw one continuous envelope.
+        // feed_knot_index lives in knot-array space; in sample space (knots
+        // interleaved with midpoints) it maps to 2*feed_knot_index.
+        if (showEnvelope) {
+          ctx!.strokeStyle = "rgba(118, 208, 255, 0.7)";
+          ctx!.lineWidth = 1.5 * s;
+          const lastIdx = pts.length - 1;
+          const hasSamples = wire.sample_positions != null;
+          const feedIdx = result.feed_knot_index * (hasSamples ? 2 : 1);
+          if (wi === feedWireIdx && feedIdx > 0 && feedIdx < lastIdx) {
+            drawArmEnvelope(ctx!, pts, mags, magMaxGlobal, project, 0, feedIdx, envScale);
+            drawArmEnvelope(ctx!, pts, mags, magMaxGlobal, project, feedIdx, lastIdx, envScale);
+          } else {
+            drawArmEnvelope(ctx!, pts, mags, magMaxGlobal, project, 0, lastIdx, envScale);
+          }
+        }
+
+        // Wire label near the leftmost knot for multi-wire geometries.
+        if (result.wires.length > 1) {
+          const lp = project(wire.knot_positions[0]);
+          ctx!.fillStyle = "#7b8493";
+          ctx!.font = `${labelFontPx}px ui-monospace, monospace`;
+          ctx!.fillText(wire.label, lp.x - 8 * s - ctx!.measureText(wire.label).width, lp.y + 3 * s);
+        }
+      }
+
+      // Feed marker(s). Multi-feed geometries (bowtie 1×2 array) expose
+      // a `feeds[]` array — render one yellow dot per feed and label with
+      // the prescribed voltage phase. Single-feed geometries fall through
+      // to the legacy feed_wire_index / feed_knot_index path.
+      const feedList = result.feeds && result.feeds.length > 0
+        ? result.feeds
+        : [{
+            wire_index: feedWireIdx,
+            knot_index: result.feed_knot_index,
+            v_re: 1, v_im: 0,
+            z_re: result.z_in_re, z_im: result.z_in_im,
+          }];
+      for (let fi = 0; fi < feedList.length; fi++) {
+        const f = feedList[fi];
+        const w_ = result.wires[f.wire_index];
+        if (!w_) continue;
+        const feed = project(w_.knot_positions[f.knot_index]);
+        ctx!.fillStyle = "#ffd166";
+        ctx!.beginPath();
+        ctx!.arc(feed.x, feed.y, 5 * s, 0, Math.PI * 2);
+        ctx!.fill();
+        ctx!.font = `${feedFontPx}px ui-monospace, monospace`;
+        const label = feedList.length > 1
+          ? `feed ${fi} ∠${Math.round(Math.atan2(f.v_im, f.v_re) * 180 / Math.PI)}°`
+          : "feed";
+        ctx!.fillText(label, feed.x + 8 * s, feed.y - 8 * s);
+      }
+
+      // λ/4 scale bar, centered horizontally under the antenna.
+      const barLenPx = (lambdaDesign / 4) * scale;
+      const barX0 = (w - barLenPx) / 2;
+      const barY = h - 24 * s;
+      ctx!.strokeStyle = "#7b8493";
+      ctx!.lineWidth = 1;
+      ctx!.beginPath();
+      ctx!.moveTo(barX0, barY);
+      ctx!.lineTo(barX0 + barLenPx, barY);
+      ctx!.moveTo(barX0, barY - 4 * s);
+      ctx!.lineTo(barX0, barY + 4 * s);
+      ctx!.moveTo(barX0 + barLenPx, barY - 4 * s);
+      ctx!.lineTo(barX0 + barLenPx, barY + 4 * s);
+      ctx!.stroke();
+      ctx!.fillStyle = "#9aa3b2";
+      ctx!.font = `${labelFontPx}px ui-monospace, monospace`;
+      const barLabel = `λ/4 = ${(lambdaDesign / 4).toFixed(2)} m`;
+      const labelW = ctx!.measureText(barLabel).width;
+      ctx!.fillText(barLabel, (w - labelW) / 2, barY - 8 * s);
+    }
+
+    onResize();
+    const obs = new ResizeObserver(onResize);
+    obs.observe(canvas);
+    return () => obs.disconnect();
+  }, [result, projection, showHeatmap, showEnvelope]);
+
+  return <canvas ref={canvasRef} />;
+}
+
+function drawArmEnvelope(
+  ctx: CanvasRenderingContext2D,
+  knots: [number, number, number][],
+  mags: number[],
+  magMax: number,
+  project: (p: [number, number, number]) => { x: number; y: number },
+  start: number,
+  end: number,
+  envScale: number,
+) {
+  if (end <= start) return;
+
+  // Per-segment normal in canvas space, oriented toward screen-up so V-style
+  // arms put their envelopes "above" the wire. For axis-aligned vertical
+  // segments ny is exactly zero and the flip is a no-op; that's fine — what
+  // matters is that the moxon's adjacent perpendicular segments get
+  // *different* normals so the bend-break below catches the corner.
+  const segN: { nx: number; ny: number }[] = [];
+  for (let i = start; i < end; i++) {
+    const p = project(knots[i]);
+    const q = project(knots[i + 1]);
+    const dx = q.x - p.x;
+    const dy = q.y - p.y;
+    const len = Math.hypot(dx, dy) || 1;
+    let nx = -dy / len;
+    let ny = dx / len;
+    if (ny > 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    segN.push({ nx, ny });
+  }
+
+  // Walk runs of segments whose normals agree (within ~3°), and start a new
+  // sub-path at each bend. Without this, a connected envelope at a 90°
+  // corner zigzags across the corner since the two adjacent segments offset
+  // their knots in perpendicular directions.
+  const BEND_TOL = 0.9986;  // cos(3°)
+  ctx.beginPath();
+  let s = 0;
+  while (s < segN.length) {
+    let e = s;
+    while (
+      e + 1 < segN.length &&
+      segN[e].nx * segN[e + 1].nx + segN[e].ny * segN[e + 1].ny >= BEND_TOL
+    ) {
+      e++;
+    }
+    const { nx, ny } = segN[s];
+    for (let k = s; k <= e + 1; k++) {
+      const ki = start + k;
+      const p = project(knots[ki]);
+      const offset = (mags[ki] / magMax) * envScale;
+      const ex = p.x + nx * offset;
+      const ey = p.y + ny * offset;
+      if (k === s) ctx.moveTo(ex, ey);
+      else ctx.lineTo(ex, ey);
+    }
+    s = e + 1;
+  }
+  ctx.stroke();
+}
+
+function currentColor(t: number): string {
+  // Cool → warm ramp: dim blue → cyan → yellow → orange.
+  const stops = [
+    [0.0, [40, 64, 96]],
+    [0.25, [60, 140, 200]],
+    [0.5, [118, 208, 255]],
+    [0.75, [255, 209, 102]],
+    [1.0, [255, 130, 80]],
+  ] as const;
+  for (let i = 1; i < stops.length; i++) {
+    const [t0, c0] = stops[i - 1];
+    const [t1, c1] = stops[i];
+    if (t <= t1) {
+      const f = (t - t0) / (t1 - t0 || 1);
+      const r = Math.round(c0[0] + (c1[0] - c0[0]) * f);
+      const g = Math.round(c0[1] + (c1[1] - c0[1]) * f);
+      const b = Math.round(c0[2] + (c1[2] - c0[2]) * f);
+      return `rgb(${r},${g},${b})`;
+    }
+  }
+  return "rgb(255,130,80)";
+}
