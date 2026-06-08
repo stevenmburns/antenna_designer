@@ -752,6 +752,7 @@ def examples_endpoint():
                     else None
                 ),
                 "default_view": ex.default_view,
+                "default_freq_mhz": ex.default_freq_mhz,
                 "sweep_policy": {
                     "anchor": ex.sweep_policy.anchor,
                     "lo_factor": ex.sweep_policy.lo_factor,

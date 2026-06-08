@@ -292,3 +292,10 @@ class AntennaExample:
     # also the vertical-loop hentenna). The user can still override
     # via the projection buttons; this just sets the starting view.
     default_view: str = "xy"
+    # The frequency this antenna is naturally designed for, in MHz.
+    # Used by the frontend to snap the band selector + design-freq /
+    # meas-freq sliders to the right starting value when the example
+    # first loads, without exposing it as a redundant schema slider.
+    # None means "no preferred freq" — frontend falls back to bands[0]
+    # or its built-in default.
+    default_freq_mhz: Optional[float] = None
