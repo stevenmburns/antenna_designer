@@ -39,6 +39,7 @@ from pysim import BSplinePySim, SinusoidalPySim, TriangularPySim
 
 from .examples import register
 from .examples._base import (
+    DEFAULT_HF_BANDS,
     DEFAULT_SWEEP_POLICY,
     AntennaExample,
     BandSpec,
@@ -113,15 +114,16 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
             hi = float(int(round(hi)))
             step = 1.0
             precision = 0
-        # `freq` is the design frequency — wire it into the global
-        # designFreq state on the frontend so changing the slider
-        # actually retunes the geometry, and so the meas-freq slider
-        # follows when linkMeas is on. Without this the global state
-        # stays at the band-tab default (e.g. 14 MHz) while the antenna
-        # is being asked to operate elsewhere, producing huge
-        # reactances at apparent "default" settings. The unit default
-        # of "MHz" makes the readout self-describing.
-        if name == "freq":
+        # `design_freq` is the geometry-sizing frequency for
+        # freq_based.* designs (wavelength = c / design_freq, then
+        # dimensions are wavelength × factors). Wire it into the
+        # global designFreq state on the frontend so the slider
+        # actually retunes the geometry AND the meas-freq slider
+        # follows when linkMeas is on. Top-level designs don't have a
+        # design_freq param — their geometry is hand-tuned in absolute
+        # meters and the measurement freq slider (at the top of the
+        # UI) is the only thing that needs to move per solve.
+        if name == "design_freq":
             unit = unit or "MHz"
             override["linked_to_design_freq"] = True  # keep around
         spec_kwargs = dict(
@@ -166,6 +168,13 @@ def _derive_schema(default_params: dict) -> tuple[ParamSpec, ...]:
     specs: list[ParamSpec] = []
     for key, default in default_params.items():
         if key == "ui_params":
+            continue
+        # `freq` is measurement frequency only — driven by the dedicated
+        # meas-freq slider at the top of the UI, never by a schema
+        # slider. The Builder's default_params['freq'] value is still
+        # used as the initial measurement freq when the example loads;
+        # the adapter just doesn't expose a redundant slider for it.
+        if key == "freq":
             continue
         override = ui.get(key)
         if override is not None and not isinstance(override, dict):
@@ -353,15 +362,15 @@ def _make_example(name: str, cls) -> AntennaExample:
     else:
         sweep_policy = DEFAULT_SWEEP_POLICY
 
-    # Suppress band tabs by default. The frontend snaps designFreq to
-    # bands[0].freq_mhz on example change, which clobbers the design's
-    # own `freq` default — and most antenna_designer designs aren't HF.
-    # A design that wants band tabs can re-enable them via ui_params.
-    bands = (
-        tuple(BandSpec(*b) for b in bands_override)
-        if bands_override is not None
-        else ()
-    )
+    # Band tabs default to the HF amateur set in canonical order. The
+    # frontend snaps to whichever band contains the design's native
+    # `freq` (looked up from the param schema's freq default) — see
+    # the useEffect on currentExample in App.tsx. Designs can still
+    # override via ui_params['bands'].
+    if bands_override is not None:
+        bands = tuple(BandSpec(*b) for b in bands_override)
+    else:
+        bands = DEFAULT_HF_BANDS
 
     param_schema = _derive_schema(dp)
 
@@ -425,6 +434,7 @@ def _make_example(name: str, cls) -> AntennaExample:
         meas_freq_range_mhz=tuple(meas_range) if meas_range else None,
         sweep_policy=sweep_policy,
         default_view=default_view,
+        default_freq_mhz=float(dp["freq"]) if "freq" in dp else None,
     )
 
 

@@ -105,6 +105,9 @@ type ExampleDescriptor = {
   bands: BandSpec[];
   meas_freq_range_mhz: [number, number] | null;
   default_view: Projection;
+  /** The freq this antenna is naturally designed for. Used by the
+   *  band-snap-on-example-change effect; null = no preferred freq. */
+  default_freq_mhz: number | null;
   sweep_policy: SweepPolicy;
 };
 
@@ -1138,9 +1141,12 @@ export function App() {
   const currentBands: BandSpec[] = currentExample?.bands ?? [];
 
   // When the active example changes (or first loads), snap band /
-  // designFreq / measFreq to the first band of that example. Skipped
-  // entirely for examples that suppress the row (bands === []) — those
-  // own their design freq via their own schema controls.
+  // designFreq / measFreq to the band whose [min, max] window contains
+  // the design's native freq (from the schema's freq ParamSpec). If
+  // there's no freq param or it falls outside every band, fall back
+  // to the first band so the snap is still well-defined. Skipped
+  // entirely for examples that suppress the row (bands === []) —
+  // those own their design freq via their own schema controls.
   useEffect(() => {
     if (!currentExample) return;
     if (currentBands.length === 0) {
@@ -1148,10 +1154,26 @@ export function App() {
       return;
     }
     if (currentBands.some((b) => b.key === band)) return;
-    const first = currentBands[0];
-    setBand(first.key);
-    setDesignFreq(first.freq_mhz);
-    if (linkMeas) setMeasFreq(first.freq_mhz);
+    const designFreqDefault = currentExample.default_freq_mhz;
+    const containing =
+      designFreqDefault !== null
+        ? currentBands.find(
+            (b) =>
+              designFreqDefault >= b.min_mhz && designFreqDefault <= b.max_mhz,
+          )
+        : null;
+    const target = containing ?? currentBands[0];
+    // Use the design's native freq when the band contains it; otherwise
+    // fall back to the band's own default. This avoids the small
+    // designFreq drift that would happen if we always snapped to
+    // band.freq_mhz (e.g. dipole's 28.57 → 10m band's 28.470).
+    const snapFreq =
+      containing && designFreqDefault !== null
+        ? designFreqDefault
+        : target.freq_mhz;
+    setBand(target.key);
+    setDesignFreq(snapFreq);
+    if (linkMeas) setMeasFreq(snapFreq);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentExample]);
 
@@ -1609,7 +1631,12 @@ export function App() {
         )}
 
         {currentBands.length > 0 && (() => {
-          const active = currentBands.find((b) => b.key === band) ?? currentBands[0];
+          // Highlight the band whose window contains the current
+          // designFreq — same behaviour as the meas-freq row below.
+          // The slider min/max also tracks that band, so sliding past
+          // its edge auto-re-anchors to the neighbouring band.
+          const activeKey = bandContaining(designFreq);
+          const active = currentBands.find((b) => b.key === activeKey) ?? currentBands[0];
           return (
             <div className="field">
               <label>
@@ -1621,8 +1648,8 @@ export function App() {
                   <button
                     key={b.key}
                     role="tab"
-                    aria-selected={band === b.key}
-                    className={band === b.key ? "active" : ""}
+                    aria-selected={activeKey === b.key}
+                    className={activeKey === b.key ? "active" : ""}
                     onClick={() => selectBand(b.key)}
                   >
                     {b.label}
