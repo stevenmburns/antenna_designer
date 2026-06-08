@@ -1,5 +1,6 @@
 """Tests for the pysim-backed SimulationEngine and the flat-wire-to-polyline
 geometry translator it sits on top of."""
+
 import numpy as np
 import pytest
 
@@ -26,7 +27,7 @@ def test_translator_chains_dipole_into_single_polyline():
 
 
 def test_pysim_impedance_in_realistic_range():
-    z, = PysimEngine(Builder()).impedance()
+    (z,) = PysimEngine(Builder()).impedance()
     assert z.real > 30 and z.real < 150, f"unrealistic R: {z}"
     # Imaginary part can swing widely with formulation/ground, just sanity-
     # check it stays in a plausible band rather than blowing up.
@@ -49,13 +50,15 @@ def test_pysim_matches_pynec_in_free_space():
     and reactance close enough to confirm the translator's feed-point
     mapping is correct."""
     b = Builder()
-    z_nec, = PyNECEngine(b, ground=None).impedance()
-    z_pysim, = PysimEngine(b).impedance()
+    (z_nec,) = PyNECEngine(b, ground=None).impedance()
+    (z_pysim,) = PysimEngine(b).impedance()
     real_rel = abs(z_pysim.real - z_nec.real) / abs(z_nec.real)
     assert real_rel < 0.10, f"real parts diverged: nec={z_nec}, pysim={z_pysim}"
     # Reactance offsets between formulations are larger at sub-resonant
     # dipole lengths; absolute, not relative, headroom is the right test.
-    assert abs(z_pysim.imag - z_nec.imag) < 20.0, f"reactance diverged: nec={z_nec}, pysim={z_pysim}"
+    assert abs(z_pysim.imag - z_nec.imag) < 20.0, (
+        f"reactance diverged: nec={z_nec}, pysim={z_pysim}"
+    )
 
 
 def test_pysim_engine_declares_far_field_support():
@@ -66,7 +69,9 @@ def test_pysim_far_field_shape_matches_pynec():
     """The FarField shape (rings dims, thetas/phis arrays) has to match
     PyNEC's so plot_patterns, compare_patterns etc. work for both."""
     b = Builder()
-    ff_nec = PyNECEngine(b, ground=None).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+    ff_nec = PyNECEngine(b, ground=None).far_field(
+        n_theta=90, n_phi=360, del_theta=1, del_phi=1
+    )
     ff_ps = PysimEngine(b).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
     assert np.array_equal(ff_nec.thetas, ff_ps.thetas)
     assert np.array_equal(ff_nec.phis, ff_ps.phis)
@@ -79,18 +84,30 @@ def test_pysim_free_space_directivity_matches_pynec():
     two independent MoM solvers. 0.1 dBi headroom is generous for what
     is, on the dipole, sub-0.02 dBi agreement in practice."""
     b = Builder()
-    ff_nec = PyNECEngine(b, ground=None).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+    ff_nec = PyNECEngine(b, ground=None).far_field(
+        n_theta=90, n_phi=360, del_theta=1, del_phi=1
+    )
     ff_ps = PysimEngine(b).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
-    assert abs(ff_ps.max_gain - ff_nec.max_gain) < 0.1, (ff_nec.max_gain, ff_ps.max_gain)
+    assert abs(ff_ps.max_gain - ff_nec.max_gain) < 0.1, (
+        ff_nec.max_gain,
+        ff_ps.max_gain,
+    )
 
 
 def test_pysim_pec_ground_directivity_matches_pynec():
     """PEC ground via image method on both sides. Tight agreement
     expected since the physics is identical."""
     b = Builder()
-    ff_nec = PyNECEngine(b, ground="pec").far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
-    ff_ps = PysimEngine(b, ground="pec").far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
-    assert abs(ff_ps.max_gain - ff_nec.max_gain) < 0.1, (ff_nec.max_gain, ff_ps.max_gain)
+    ff_nec = PyNECEngine(b, ground="pec").far_field(
+        n_theta=90, n_phi=360, del_theta=1, del_phi=1
+    )
+    ff_ps = PysimEngine(b, ground="pec").far_field(
+        n_theta=90, n_phi=360, del_theta=1, del_phi=1
+    )
+    assert abs(ff_ps.max_gain - ff_nec.max_gain) < 0.1, (
+        ff_nec.max_gain,
+        ff_ps.max_gain,
+    )
 
 
 def test_pysim_finite_ground_returns_sane_values():
@@ -113,8 +130,10 @@ def test_compare_patterns_accepts_engine_instances(tmp_path):
     (so the caller picks ground / backend per item) should run to
     completion and produce a non-empty PNG."""
     import matplotlib
+
     matplotlib.use("Agg")
     import antenna_designer as ant
+
     b = Builder()
     out = tmp_path / "cmp.png"
     ant.compare_patterns(
@@ -129,8 +148,10 @@ def test_compare_patterns_backwards_compatible_with_bare_builders(tmp_path):
     """Passing AntennaBuilder instances (the historical API) must keep
     working — they get wrapped with the default Antenna alias."""
     import matplotlib
+
     matplotlib.use("Agg")
     import antenna_designer as ant
+
     out = tmp_path / "cmp.png"
     ant.compare_patterns([Builder(), Builder()], fn=str(out))
     assert out.exists() and out.stat().st_size > 0
@@ -141,9 +162,11 @@ def test_sweep_freq_accepts_engine_factory(tmp_path):
     SimulationEngine. functools.partial is the ergonomic way to bind
     construction kwargs like ground."""
     import matplotlib
+
     matplotlib.use("Agg")
     from functools import partial
     import antenna_designer as ant
+
     out = tmp_path / "sf.png"
     ant.sweep_freq(
         Builder(),
@@ -157,8 +180,10 @@ def test_sweep_freq_accepts_engine_factory(tmp_path):
 
 def test_sweep_accepts_engine_factory(tmp_path):
     import matplotlib
+
     matplotlib.use("Agg")
     import antenna_designer as ant
+
     out = tmp_path / "sw.png"
     ant.sweep(
         Builder(),
@@ -174,8 +199,10 @@ def test_sweep_accepts_engine_factory(tmp_path):
 
 def test_sweep_gain_accepts_engine_factory(tmp_path):
     import matplotlib
+
     matplotlib.use("Agg")
     import antenna_designer as ant
+
     out = tmp_path / "sg.png"
     ant.sweep_gain(
         Builder(),
@@ -195,9 +222,11 @@ def test_plot_patterns_pins_radial_floor(tmp_path):
     floor to the lowest tick label so the displayed radius reflects the
     actual dBi value."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import antenna_designer as ant
+
     b = Builder()
     out = tmp_path / "p.png"
     ant.compare_patterns(
@@ -215,6 +244,7 @@ def test_translator_handles_hentenna_tee_junctions():
     decompose into 3 polylines all running B→D, with one junction at
     each."""
     from antenna_designer.designs.freq_based.hentenna import Builder as H
+
     out = flat_wires_to_polylines(H().build_wires())
     assert len(out["polylines"]) == 3
     assert len(out["junctions"]) == 2
@@ -226,6 +256,7 @@ def test_translator_handles_fandipole_high_degree_junctions():
     """Fandipole has two degree-6 nodes (S, T): feed wire + 5 spokes
     on each side. 5 polylines per side + 1 feed = 11 polylines."""
     from antenna_designer.designs.fandipole import Builder as F
+
     out = flat_wires_to_polylines(F().build_wires())
     assert len(out["polylines"]) == 11
     assert len(out["junctions"]) == 2
@@ -245,6 +276,7 @@ def test_pysim_sinusoidal_hentenna_impedance_close_to_pynec():
     mapping is right."""
     from pysim import SinusoidalPySim
     from antenna_designer.designs.freq_based.hentenna import Builder as H
+
     b = H()
     z_nec = PyNECEngine(b, ground=None).impedance()[0]
     z_ps = PysimEngine(b, solver=SinusoidalPySim).impedance()[0]
@@ -261,6 +293,7 @@ def test_pysim_sinusoidal_fandipole_runs():
     to set a tight tolerance here."""
     from pysim import SinusoidalPySim
     from antenna_designer.designs.fandipole import Builder as F
+
     z = PysimEngine(F(), solver=SinusoidalPySim).impedance()[0]
     assert 20 < z.real < 200, z
     assert abs(z.imag) < 200, z
@@ -272,6 +305,7 @@ def test_translator_handles_bowtie_closed_cycle():
     the excited edge: feed becomes a 1-edge polyline, the rest becomes
     a 9-edge polyline running the long way back."""
     from antenna_designer.designs.bowtie import Builder as BT
+
     out = flat_wires_to_polylines(BT().build_wires())
     assert len(out["polylines"]) == 2
     # Both polylines share both endpoints (the cut points), so both
@@ -283,6 +317,7 @@ def test_translator_handles_bowtie_closed_cycle():
 
 def test_translator_handles_delta_loop_pure_cycle():
     from antenna_designer.designs.freq_based.delta_loop import Builder as DL
+
     out = flat_wires_to_polylines(DL().build_wires())
     assert len(out["polylines"]) == 2
     assert sorted(len(j) for j in out["junctions"]) == [2, 2]
@@ -296,6 +331,7 @@ def test_pysim_sinusoidal_delta_loop_close_to_pynec():
     because there are no tee junctions adding extra basis-family bias."""
     from pysim import SinusoidalPySim
     from antenna_designer.designs.freq_based.delta_loop import Builder as DL
+
     b = DL()
     z_nec = PyNECEngine(b, ground=None).impedance()[0]
     z_ps = PysimEngine(b, solver=SinusoidalPySim).impedance()[0]
@@ -308,6 +344,7 @@ def test_pysim_triangular_bowtie_runs():
     (interior tent basis available). Verifies the closed-loop path
     doesn't trip Triangular's feed-basis lookup."""
     from antenna_designer.designs.bowtie import Builder as BT
+
     z = PysimEngine(BT()).impedance()[0]
     assert 100 < z.real < 300, z
     assert abs(z.imag) < 100, z
@@ -317,6 +354,7 @@ def test_translator_emits_one_feed_per_excited_tuple():
     """Multi-feed builders (arrays) should produce one entry in `feeds`
     per excited wire tuple, with voltages from the builder phasors."""
     from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+
     b = B12()
     b.phase_lr = 90.0
     out = flat_wires_to_polylines(b.build_wires())
@@ -337,6 +375,7 @@ def test_pysim_multifeed_bowtie_1x2_matches_pynec():
     return ~equal Z by symmetry. 5% relative + 3 Ω absolute slack covers
     the basis-vs-NEC gap that pysim's own bowtie-1×2 parity test uses."""
     from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+
     b = B12()
     z_ps = PysimEngine(b).impedance()
     z_nec = PyNECEngine(b, ground=None).impedance()
@@ -351,6 +390,7 @@ def test_pysim_multifeed_bowtie_1x2_phased_matches_pynec():
     """90° phasing makes Z₀ ≠ Z₁ via mutual coupling. Catches feed-
     ordering / voltage-sign bugs that a symmetric drive would mask."""
     from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+
     b = B12()
     b.phase_lr = 90.0
     z_ps = PysimEngine(b).impedance()
@@ -372,11 +412,14 @@ def test_pysim_multifeed_far_field_matches_pynec():
     a different peak. 0.1 dBi headroom matches the single-feed dipole
     test; observed delta is ~0.02 dBi on both phasings."""
     from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+
     for phase_lr_deg in (0.0, 90.0):
         b = B12()
         b.phase_lr = phase_lr_deg
         ff_p = PysimEngine(b).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
-        ff_n = PyNECEngine(b, ground=None).far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+        ff_n = PyNECEngine(b, ground=None).far_field(
+            n_theta=90, n_phi=360, del_theta=1, del_phi=1
+        )
         assert abs(ff_p.max_gain - ff_n.max_gain) < 0.1, (
             f"phase={phase_lr_deg}: pysim={ff_p.max_gain}, pynec={ff_n.max_gain}"
         )
@@ -386,6 +429,7 @@ def test_pysim_multifeed_impedance_sweep_shape():
     """Multi-feed impedance_sweep must return (n_freqs, n_feeds) to
     match PyNECEngine's shape contract."""
     from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+
     freqs = np.linspace(28.0, 29.0, 4)
     zs = PysimEngine(B12()).impedance_sweep(freqs)
     assert zs.shape == (4, 2), zs.shape

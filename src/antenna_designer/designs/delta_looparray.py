@@ -3,46 +3,55 @@ from .freq_based import delta_loop
 
 from types import MappingProxyType
 
+
 class Builder(Array1x2Builder):
-  default_params = MappingProxyType({
-    'design_freq': 28.47,
-    'freq': 28.47,
-    'length_factor_top': 1.0664,
-    'angle_radians_top': 1.0688,
-    'base': 7,
-    'del_y': 4,
-    'del_z': 0,
-  })
+    default_params = MappingProxyType(
+        {
+            "design_freq": 28.47,
+            "freq": 28.47,
+            "length_factor_top": 1.0664,
+            "angle_radians_top": 1.0688,
+            "base": 7,
+            "del_y": 4,
+            "del_z": 0,
+        }
+    )
 
-  dy35_dz2_params = MappingProxyType({
-    'design_freq': 28.47,
-    'freq': 28.47,
-    'length_factor_top': 1.0843,
-    'angle_radians_top': 1.1352,
-    'base': 7,
-    'del_y': 3.5,
-    'del_z': 2,
-  })
+    dy35_dz2_params = MappingProxyType(
+        {
+            "design_freq": 28.47,
+            "freq": 28.47,
+            "length_factor_top": 1.0843,
+            "angle_radians_top": 1.1352,
+            "base": 7,
+            "del_y": 3.5,
+            "del_z": 2,
+        }
+    )
 
-  dy45_dz2_params = MappingProxyType({
-    'design_freq': 28.47,
-    'freq': 28.47,
-    'length_factor_top': 1.0801,
-    'angle_radians_top': 1.1041,
-    'base': 7,
-    'del_y': 4.5,
-    'del_z': 2,
-  })
+    dy45_dz2_params = MappingProxyType(
+        {
+            "design_freq": 28.47,
+            "freq": 28.47,
+            "length_factor_top": 1.0801,
+            "angle_radians_top": 1.1041,
+            "base": 7,
+            "del_y": 4.5,
+            "del_z": 2,
+        }
+    )
 
-  dy3_dz2_params = MappingProxyType({
-    'design_freq': 28.47,
-    'freq': 28.47,
-    'length_factor_top': 1.0801,
-    'angle_radians_top': 1.1041,
-    'base': 7,
-    'del_y': 3,
-    'del_z': 2,
-  })
+    dy3_dz2_params = MappingProxyType(
+        {
+            "design_freq": 28.47,
+            "freq": 28.47,
+            "length_factor_top": 1.0801,
+            "angle_radians_top": 1.1041,
+            "base": 7,
+            "del_y": 3,
+            "del_z": 2,
+        }
+    )
 
-  def __init__(self, params = None):
-    super().__init__(delta_loop.Builder, params)
+    def __init__(self, params=None):
+        super().__init__(delta_loop.Builder, params)

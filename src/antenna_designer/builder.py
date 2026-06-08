@@ -2,287 +2,332 @@ from .core import save_or_show
 import numpy as np
 
 import matplotlib.pyplot as plt
-#from matplotlib.collections import LineCollection
-#from mpl_toolkits.mplot3d import axes3d
+
+# from matplotlib.collections import LineCollection
+# from mpl_toolkits.mplot3d import axes3d
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
+
 class AntennaBuilder:
-  def __init__(self, params=None):
-    # write directly to __dict__ because otherwise __setattr__ goes into infinite loop
-    self.__dict__['_params'] = dict(
-      self.__class__.default_params if params is None else params
-    )
+    def __init__(self, params=None):
+        # write directly to __dict__ because otherwise __setattr__ goes into infinite loop
+        self.__dict__["_params"] = dict(
+            self.__class__.default_params if params is None else params
+        )
 
-    "Check that params key's are legal"
-    assert all(k in self.__class__.default_params for k in self._params.keys())
+        "Check that params key's are legal"
+        assert all(k in self.__class__.default_params for k in self._params.keys())
 
-  def __getattr__(self, nm):
-    if nm in self._params:
-      return self._params[nm]
-    else:
-      # raise AttributeError to get hasattr() to work correctly
-      classname = type(self).__name__
-      msg = f'{classname!r} object has no attribute {nm!r}'
-      raise AttributeError(msg)
+    def __getattr__(self, nm):
+        if nm in self._params:
+            return self._params[nm]
+        else:
+            # raise AttributeError to get hasattr() to work correctly
+            classname = type(self).__name__
+            msg = f"{classname!r} object has no attribute {nm!r}"
+            raise AttributeError(msg)
 
-  def __setattr__(self, nm, v):
-    self._params[nm] = v
+    def __setattr__(self, nm, v):
+        self._params[nm] = v
 
-  def __str__(self):
-    res = []
-    for k, v in self._params.items():
-      res.append(f"{k} = {v:.4f}")
-    return ', '.join(res)
+    def __str__(self):
+        res = []
+        for k, v in self._params.items():
+            res.append(f"{k} = {v:.4f}")
+        return ", ".join(res)
 
-  def build_tls(self):
-    return []
+    def build_tls(self):
+        return []
 
-  @staticmethod
-  def draw(tups, fn=None):
+    @staticmethod
+    def draw(tups, fn=None):
 
-    pairs = [(p0, p1) for p0, p1, _, _ in tups]
-    print(pairs)
+        pairs = [(p0, p1) for p0, p1, _, _ in tups]
+        print(pairs)
 
-    lc = Line3DCollection(pairs, colors=(1, 0, 0, 1), linewidths=1)
+        lc = Line3DCollection(pairs, colors=(1, 0, 0, 1), linewidths=1)
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.add_collection3d(lc)
-    ax.set_xlim(-5, 5)
-    ax.set_ylim(-5, 5)
-    ax.set_zlim(0, 10)
-    ax.set_aspect('equal')
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection="3d")
+        ax.add_collection3d(lc)
+        ax.set_xlim(-5, 5)
+        ax.set_ylim(-5, 5)
+        ax.set_zlim(0, 10)
+        ax.set_aspect("equal")
 
-    save_or_show(plt, fn)
+        save_or_show(plt, fn)
+
 
 class Array2x2Builder(AntennaBuilder):
-  def __init__(self, element_builder, params=None):
-    self.__dict__['element_builder'] = element_builder
-    super().__init__(params)
+    def __init__(self, element_builder, params=None):
+        self.__dict__["element_builder"] = element_builder
+        super().__init__(params)
 
-  def build_wires(self):
-    elem_params = self.element_builder.default_params
-    elem_params_keys = set(elem_params.keys())
+    def build_wires(self):
+        elem_params = self.element_builder.default_params
+        elem_params_keys = set(elem_params.keys())
 
-    changed_keys = set()
-    for k,v in self._params.items():
-      if k not in elem_params_keys:
-        if k.endswith('_top') or k.endswith('_bot'):
-          elem_key = k[:-4]
-          assert elem_key in elem_params_keys
-          changed_keys.add(elem_key)
+        changed_keys = set()
+        for k, v in self._params.items():
+            if k not in elem_params_keys:
+                if k.endswith("_top") or k.endswith("_bot"):
+                    elem_key = k[:-4]
+                    assert elem_key in elem_params_keys
+                    changed_keys.add(elem_key)
 
-    def build_element_wires(suffix):
-      local_element_params = dict(elem_params)
-      for k,v in self._params.items():    
-        if k in elem_params_keys and k not in changed_keys:
-          local_element_params[k] = v
+        def build_element_wires(suffix):
+            local_element_params = dict(elem_params)
+            for k, v in self._params.items():
+                if k in elem_params_keys and k not in changed_keys:
+                    local_element_params[k] = v
 
-      for k in changed_keys:
-        local_element_params[k] = self._params[k + suffix]
+            for k in changed_keys:
+                local_element_params[k] = self._params[k + suffix]
 
-      element_builder_local = self.element_builder(local_element_params)
+            element_builder_local = self.element_builder(local_element_params)
 
-      return element_builder_local.build_wires()
+            return element_builder_local.build_wires()
 
-    tups_top = build_element_wires('_top')
-    tups_bot = build_element_wires('_bot')
+        tups_top = build_element_wires("_top")
+        tups_bot = build_element_wires("_bot")
 
-    phasor_lr, phasor_tb = (
-      np.exp((0+1j)*np.pi*getattr(self, p)/180) if hasattr(self, p) else 1 for p in ('phase_lr', 'phase_tb')
-    )
+        phasor_lr, phasor_tb = (
+            np.exp((0 + 1j) * np.pi * getattr(self, p) / 180) if hasattr(self, p) else 1
+            for p in ("phase_lr", "phase_tb")
+        )
 
-    new_tups = []
-    for yoff, ph0 in ((-self.del_y, 1), (self.del_y, phasor_lr)):
-      for zoff, tups, ph1 in ((self.del_z, tups_top, 1), (-self.del_z, tups_bot, phasor_tb)):
-        for (x0, y0, z0), (x1, y1, z1), ns, ex in tups:
-          new_tups.extend([((x0, y0+yoff, z0+zoff), (x1, y1+yoff, z1+zoff), ns, ph0*ph1 if ex is not None else ex)])
+        new_tups = []
+        for yoff, ph0 in ((-self.del_y, 1), (self.del_y, phasor_lr)):
+            for zoff, tups, ph1 in (
+                (self.del_z, tups_top, 1),
+                (-self.del_z, tups_bot, phasor_tb),
+            ):
+                for (x0, y0, z0), (x1, y1, z1), ns, ex in tups:
+                    new_tups.extend(
+                        [
+                            (
+                                (x0, y0 + yoff, z0 + zoff),
+                                (x1, y1 + yoff, z1 + zoff),
+                                ns,
+                                ph0 * ph1 if ex is not None else ex,
+                            )
+                        ]
+                    )
 
-    return new_tups
+        return new_tups
+
 
 class Array2x4Builder(AntennaBuilder):
-  def __init__(self, element_builder, params=None):
-    self.__dict__['element_builder'] = element_builder
-    super().__init__(params)
+    def __init__(self, element_builder, params=None):
+        self.__dict__["element_builder"] = element_builder
+        super().__init__(params)
 
-  def build_wires(self):
-    elem_params = self.element_builder.default_params
-    elem_params_keys = set(elem_params.keys())
+    def build_wires(self):
+        elem_params = self.element_builder.default_params
+        elem_params_keys = set(elem_params.keys())
 
-    suffixes = ['_itop', '_ibot', '_otop', '_obot']
+        suffixes = ["_itop", "_ibot", "_otop", "_obot"]
 
-    changed_keys = set()
-    for k,v in self._params.items():
-      if k not in elem_params_keys:
-        if any(k.endswith(suffix) for suffix in suffixes):
-          elem_key = k[:-5]
-          assert elem_key in elem_params_keys
-          changed_keys.add(elem_key)
+        changed_keys = set()
+        for k, v in self._params.items():
+            if k not in elem_params_keys:
+                if any(k.endswith(suffix) for suffix in suffixes):
+                    elem_key = k[:-5]
+                    assert elem_key in elem_params_keys
+                    changed_keys.add(elem_key)
 
-    def build_element_wires(suffix):
-      local_element_params = dict(elem_params)
-      for k,v in self._params.items():    
-        if k in elem_params_keys and k not in changed_keys:
-          local_element_params[k] = v
+        def build_element_wires(suffix):
+            local_element_params = dict(elem_params)
+            for k, v in self._params.items():
+                if k in elem_params_keys and k not in changed_keys:
+                    local_element_params[k] = v
 
-      for k in changed_keys:
-        local_element_params[k] = self._params[k + suffix]
+            for k in changed_keys:
+                local_element_params[k] = self._params[k + suffix]
 
-      element_builder_local = self.element_builder(local_element_params)
+            element_builder_local = self.element_builder(local_element_params)
 
-      return element_builder_local.build_wires()
+            return element_builder_local.build_wires()
 
-    tups_itop = build_element_wires('_itop')
-    tups_otop = build_element_wires('_otop')
-    tups_ibot = build_element_wires('_ibot')
-    tups_obot = build_element_wires('_obot')
+        tups_itop = build_element_wires("_itop")
+        tups_otop = build_element_wires("_otop")
+        tups_ibot = build_element_wires("_ibot")
+        tups_obot = build_element_wires("_obot")
 
-    new_tups = []
-    for yoff, pairs in ((-3*self.del_y, ((self.del_z, tups_otop), (-self.del_z, tups_obot))),
-                        (-1*self.del_y, ((self.del_z, tups_itop), (-self.del_z, tups_ibot))), 
-                        ( 1*self.del_y, ((self.del_z, tups_itop), (-self.del_z, tups_ibot))),
-                        ( 3*self.del_y, ((self.del_z, tups_otop), (-self.del_z, tups_obot)))
-    ):
-      for zoff, tups in pairs:
-        new_tups.extend([((x0, y0+yoff, z0+zoff), (x1, y1+yoff, z1+zoff), ns, ex) for ((x0, y0, z0), (x1, y1, z1), ns, ex) in tups])
+        new_tups = []
+        for yoff, pairs in (
+            (-3 * self.del_y, ((self.del_z, tups_otop), (-self.del_z, tups_obot))),
+            (-1 * self.del_y, ((self.del_z, tups_itop), (-self.del_z, tups_ibot))),
+            (1 * self.del_y, ((self.del_z, tups_itop), (-self.del_z, tups_ibot))),
+            (3 * self.del_y, ((self.del_z, tups_otop), (-self.del_z, tups_obot))),
+        ):
+            for zoff, tups in pairs:
+                new_tups.extend(
+                    [
+                        ((x0, y0 + yoff, z0 + zoff), (x1, y1 + yoff, z1 + zoff), ns, ex)
+                        for ((x0, y0, z0), (x1, y1, z1), ns, ex) in tups
+                    ]
+                )
 
-    return new_tups
+        return new_tups
+
 
 class Array1x4Builder(AntennaBuilder):
-  def __init__(self, element_builder, params=None):
-    self.__dict__['element_builder'] = element_builder
-    super().__init__(params)
+    def __init__(self, element_builder, params=None):
+        self.__dict__["element_builder"] = element_builder
+        super().__init__(params)
 
-  def build_wires(self):
-    elem_params = self.element_builder.default_params
-    elem_params_keys = set(elem_params.keys())
+    def build_wires(self):
+        elem_params = self.element_builder.default_params
+        elem_params_keys = set(elem_params.keys())
 
-    suffixes = ['_itop', '_otop']
+        suffixes = ["_itop", "_otop"]
 
-    changed_keys = set()
-    for k,v in self._params.items():
-      if k not in elem_params_keys:
-        if any(k.endswith(suffix) for suffix in suffixes):
-          elem_key = k[:-5]
-          assert elem_key in elem_params_keys
-          changed_keys.add(elem_key)
+        changed_keys = set()
+        for k, v in self._params.items():
+            if k not in elem_params_keys:
+                if any(k.endswith(suffix) for suffix in suffixes):
+                    elem_key = k[:-5]
+                    assert elem_key in elem_params_keys
+                    changed_keys.add(elem_key)
 
-    def build_element_wires(suffix):
-      local_element_params = dict(elem_params)
-      for k,v in self._params.items():    
-        if k in elem_params_keys and k not in changed_keys:
-          local_element_params[k] = v
+        def build_element_wires(suffix):
+            local_element_params = dict(elem_params)
+            for k, v in self._params.items():
+                if k in elem_params_keys and k not in changed_keys:
+                    local_element_params[k] = v
 
-      for k in changed_keys:
-        local_element_params[k] = self._params[k + suffix]
+            for k in changed_keys:
+                local_element_params[k] = self._params[k + suffix]
 
-      element_builder_local = self.element_builder(local_element_params)
+            element_builder_local = self.element_builder(local_element_params)
 
-      return element_builder_local.build_wires()
+            return element_builder_local.build_wires()
 
-    tups_itop = build_element_wires('_itop')
-    tups_otop = build_element_wires('_otop')
+        tups_itop = build_element_wires("_itop")
+        tups_otop = build_element_wires("_otop")
 
-    new_tups = []
-    for yoff, pairs in ((-3*self.del_y, ((self.del_z, tups_otop),)),
-                        (-1*self.del_y, ((self.del_z, tups_itop),)), 
-                        ( 1*self.del_y, ((self.del_z, tups_itop),)),
-                        ( 3*self.del_y, ((self.del_z, tups_otop),)),
-    ):
-      for zoff, tups in pairs:
-        new_tups.extend([((x0, y0+yoff, z0+zoff), (x1, y1+yoff, z1+zoff), ns, ex) for ((x0, y0, z0), (x1, y1, z1), ns, ex) in tups])
+        new_tups = []
+        for yoff, pairs in (
+            (-3 * self.del_y, ((self.del_z, tups_otop),)),
+            (-1 * self.del_y, ((self.del_z, tups_itop),)),
+            (1 * self.del_y, ((self.del_z, tups_itop),)),
+            (3 * self.del_y, ((self.del_z, tups_otop),)),
+        ):
+            for zoff, tups in pairs:
+                new_tups.extend(
+                    [
+                        ((x0, y0 + yoff, z0 + zoff), (x1, y1 + yoff, z1 + zoff), ns, ex)
+                        for ((x0, y0, z0), (x1, y1, z1), ns, ex) in tups
+                    ]
+                )
 
-    return new_tups
+        return new_tups
+
 
 class Array1x4GroupedBuilder(AntennaBuilder):
-  def __init__(self, element_builder, params=None):
-    self.__dict__['element_builder'] = element_builder
-    super().__init__(params)
+    def __init__(self, element_builder, params=None):
+        self.__dict__["element_builder"] = element_builder
+        super().__init__(params)
 
-  def build_wires(self):
-    elem_params = self.element_builder.default_params
-    elem_params_keys = set(elem_params.keys())
+    def build_wires(self):
+        elem_params = self.element_builder.default_params
+        elem_params_keys = set(elem_params.keys())
 
-    suffixes = ['_itop', '_otop']
+        suffixes = ["_itop", "_otop"]
 
-    changed_keys = set()
-    for k,v in self._params.items():
-      if k not in elem_params_keys:
-        if any(k.endswith(suffix) for suffix in suffixes):
-          elem_key = k[:-5]
-          assert elem_key in elem_params_keys
-          changed_keys.add(elem_key)
+        changed_keys = set()
+        for k, v in self._params.items():
+            if k not in elem_params_keys:
+                if any(k.endswith(suffix) for suffix in suffixes):
+                    elem_key = k[:-5]
+                    assert elem_key in elem_params_keys
+                    changed_keys.add(elem_key)
 
-    def build_element_wires(suffix):
-      local_element_params = dict(elem_params)
-      for k,v in self._params.items():    
-        if k in elem_params_keys and k not in changed_keys:
-          local_element_params[k] = v
+        def build_element_wires(suffix):
+            local_element_params = dict(elem_params)
+            for k, v in self._params.items():
+                if k in elem_params_keys and k not in changed_keys:
+                    local_element_params[k] = v
 
-      for k in changed_keys:
-        local_element_params[k] = self._params[k + suffix]
+            for k in changed_keys:
+                local_element_params[k] = self._params[k + suffix]
 
-      element_builder_local = self.element_builder(local_element_params)
+            element_builder_local = self.element_builder(local_element_params)
 
-      return element_builder_local.build_wires()
+            return element_builder_local.build_wires()
 
-    tups_itop = build_element_wires('_itop')
-    tups_otop = build_element_wires('_otop')
+        tups_itop = build_element_wires("_itop")
+        tups_otop = build_element_wires("_otop")
 
-    new_tups = []
-    for yoff, pairs in ((-self.del_y0-self.del_y1, ((self.del_z, tups_otop),)),
-                        (-self.del_y0+self.del_y1, ((self.del_z, tups_itop),)), 
-                        ( self.del_y0-self.del_y1, ((self.del_z, tups_itop),)),
-                        ( self.del_y0+self.del_y1, ((self.del_z, tups_otop),)),
+        new_tups = []
+        for yoff, pairs in (
+            (-self.del_y0 - self.del_y1, ((self.del_z, tups_otop),)),
+            (-self.del_y0 + self.del_y1, ((self.del_z, tups_itop),)),
+            (self.del_y0 - self.del_y1, ((self.del_z, tups_itop),)),
+            (self.del_y0 + self.del_y1, ((self.del_z, tups_otop),)),
+        ):
+            for zoff, tups in pairs:
+                new_tups.extend(
+                    [
+                        ((x0, y0 + yoff, z0 + zoff), (x1, y1 + yoff, z1 + zoff), ns, ex)
+                        for ((x0, y0, z0), (x1, y1, z1), ns, ex) in tups
+                    ]
+                )
 
-    ):
-      for zoff, tups in pairs:
-        new_tups.extend([((x0, y0+yoff, z0+zoff), (x1, y1+yoff, z1+zoff), ns, ex) for ((x0, y0, z0), (x1, y1, z1), ns, ex) in tups])
+        return new_tups
 
-    return new_tups
 
 class Array1x2Builder(AntennaBuilder):
-  def __init__(self, element_builder, params=None):
-    self.__dict__['element_builder'] = element_builder
-    super().__init__(params)
+    def __init__(self, element_builder, params=None):
+        self.__dict__["element_builder"] = element_builder
+        super().__init__(params)
 
-  def build_wires(self):
-    elem_params = self.element_builder.default_params
-    elem_params_keys = set(elem_params.keys())
+    def build_wires(self):
+        elem_params = self.element_builder.default_params
+        elem_params_keys = set(elem_params.keys())
 
-    changed_keys = set()
-    for k,v in self._params.items():
-      if k not in elem_params_keys:
-        if k.endswith('_top'):
-          elem_key = k[:-4]
-          assert elem_key in elem_params_keys
-          changed_keys.add(elem_key)
+        changed_keys = set()
+        for k, v in self._params.items():
+            if k not in elem_params_keys:
+                if k.endswith("_top"):
+                    elem_key = k[:-4]
+                    assert elem_key in elem_params_keys
+                    changed_keys.add(elem_key)
 
-    def build_element_wires(suffix):
-      local_element_params = dict(elem_params)
-      for k,v in self._params.items():    
-        if k in elem_params_keys and k not in changed_keys:
-          local_element_params[k] = v
+        def build_element_wires(suffix):
+            local_element_params = dict(elem_params)
+            for k, v in self._params.items():
+                if k in elem_params_keys and k not in changed_keys:
+                    local_element_params[k] = v
 
-      for k in changed_keys:
-        local_element_params[k] = self._params[k + suffix]
+            for k in changed_keys:
+                local_element_params[k] = self._params[k + suffix]
 
-      element_builder_local = self.element_builder(local_element_params)
+            element_builder_local = self.element_builder(local_element_params)
 
-      return element_builder_local.build_wires()
+            return element_builder_local.build_wires()
 
-    tups_top = build_element_wires('_top')
+        tups_top = build_element_wires("_top")
 
-    phasor_lr, = (
-      np.exp((0+1j)*np.pi*getattr(self, p)/180) if hasattr(self, p) else 1 for p in ('phase_lr',)
-    )
+        (phasor_lr,) = (
+            np.exp((0 + 1j) * np.pi * getattr(self, p) / 180) if hasattr(self, p) else 1
+            for p in ("phase_lr",)
+        )
 
-    new_tups = []
-    for yoff, ph0 in ((-self.del_y, 1), (self.del_y, phasor_lr)):
-      for zoff, tups, ph1 in ((self.del_z, tups_top, 1),):
-        for (x0, y0, z0), (x1, y1, z1), ns, ex in tups:
-          new_tups.extend([((x0, y0+yoff, z0+zoff), (x1, y1+yoff, z1+zoff), ns, ph0*ph1 if ex is not None else ex)])
+        new_tups = []
+        for yoff, ph0 in ((-self.del_y, 1), (self.del_y, phasor_lr)):
+            for zoff, tups, ph1 in ((self.del_z, tups_top, 1),):
+                for (x0, y0, z0), (x1, y1, z1), ns, ex in tups:
+                    new_tups.extend(
+                        [
+                            (
+                                (x0, y0 + yoff, z0 + zoff),
+                                (x1, y1 + yoff, z1 + zoff),
+                                ns,
+                                ph0 * ph1 if ex is not None else ex,
+                            )
+                        ]
+                    )
 
-    return new_tups
-
-
+        return new_tups

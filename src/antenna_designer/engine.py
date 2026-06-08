@@ -21,8 +21,9 @@ class WireCurrents(NamedTuple):
     as an independent rendering primitive rather than assuming the lists
     are aligned across engines.
     """
+
     knot_positions: np.ndarray  # (M, 3) float
-    knot_currents: np.ndarray   # (M,)   complex
+    knot_currents: np.ndarray  # (M,)   complex
 
 
 class SimulationEngine(ABC):
@@ -32,12 +33,10 @@ class SimulationEngine(ABC):
         self.builder = builder
 
     @abstractmethod
-    def impedance(self):
-        ...
+    def impedance(self): ...
 
     @abstractmethod
-    def impedance_sweep(self, freqs):
-        ...
+    def impedance_sweep(self, freqs): ...
 
     def far_field(self, *, n_theta, n_phi, del_theta, del_phi):
         raise NotImplementedError(
@@ -46,6 +45,4 @@ class SimulationEngine(ABC):
 
     def current_distribution(self):
         """Return list[WireCurrents] at the builder's frequency."""
-        raise NotImplementedError(
-            f"{type(self).__name__} does not expose currents yet"
-        )
+        raise NotImplementedError(f"{type(self).__name__} does not expose currents yet")

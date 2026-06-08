@@ -4,6 +4,7 @@ We're sizing the headroom we have for an interactive web UI: if pure
 geometry construction stays well under a millisecond, the React frontend
 can recompute the wire mesh on every slider tick without juddering.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -13,7 +14,9 @@ import pathlib
 import time
 import traceback
 
-DESIGNS_DIR = pathlib.Path(__file__).resolve().parents[1] / "src" / "antenna_designer" / "designs"
+DESIGNS_DIR = (
+    pathlib.Path(__file__).resolve().parents[1] / "src" / "antenna_designer" / "designs"
+)
 
 
 def list_design_modules() -> list[str]:
@@ -67,7 +70,12 @@ def main() -> None:
         try:
             rows.append(bench_one(n))
         except Exception:
-            rows.append({"name": n, "status": "uncaught: " + traceback.format_exc().splitlines()[-1]})
+            rows.append(
+                {
+                    "name": n,
+                    "status": "uncaught: " + traceback.format_exc().splitlines()[-1],
+                }
+            )
 
     ok = [r for r in rows if r["status"] == "ok"]
     bad = [r for r in rows if r["status"] != "ok"]
@@ -75,7 +83,9 @@ def main() -> None:
     print(f"{'design':<32} {'n_wires':>8} {'n_segs':>8} {'us/call':>10}")
     print("-" * 62)
     for r in sorted(ok, key=lambda r: r["us_per_call"]):
-        print(f"{r['name']:<32} {r['n_wires']:>8} {r['n_segs_total']:>8} {r['us_per_call']:>10.2f}")
+        print(
+            f"{r['name']:<32} {r['n_wires']:>8} {r['n_segs_total']:>8} {r['us_per_call']:>10.2f}"
+        )
 
     if bad:
         print()
@@ -90,7 +100,9 @@ def main() -> None:
         median = sorted(r["us_per_call"] for r in ok)[len(ok) // 2]
         print()
         print(f"summary: {len(ok)} ok, {len(bad)} failed")
-        print(f"fastest: {fastest:.2f} us  median: {median:.2f} us  slowest: {slowest:.2f} us")
+        print(
+            f"fastest: {fastest:.2f} us  median: {median:.2f} us  slowest: {slowest:.2f} us"
+        )
 
 
 if __name__ == "__main__":
