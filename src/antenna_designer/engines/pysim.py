@@ -1,6 +1,7 @@
 """pysim-backed SimulationEngine. Impedance via TriangularPySim;
 far-field/directivity ported from pysim/web/server.py:_compute_directivity_norm.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -68,7 +69,9 @@ class PysimEngine(SimulationEngine):
         """
         super().__init__(builder)
         if builder.build_tls():
-            raise NotImplementedError("transmission-line cards not supported by PysimEngine yet")
+            raise NotImplementedError(
+                "transmission-line cards not supported by PysimEngine yet"
+            )
 
         tups = builder.build_wires()
         translated = flat_wires_to_polylines(tups)
@@ -128,10 +131,12 @@ class PysimEngine(SimulationEngine):
         out = []
         for w_idx, polyline in enumerate(self._polylines):
             knots = _polyline_knots(polyline, self._edge_segments[w_idx])
-            out.append(WireCurrents(
-                knot_positions=np.ascontiguousarray(knots),
-                knot_currents=np.ascontiguousarray(knot_currents[w_idx]),
-            ))
+            out.append(
+                WireCurrents(
+                    knot_positions=np.ascontiguousarray(knots),
+                    knot_currents=np.ascontiguousarray(knot_currents[w_idx]),
+                )
+            )
         return out
 
     def _segment_dipoles(self, sim, coeffs):
@@ -216,7 +221,9 @@ class PysimEngine(SimulationEngine):
         # Fresnel-vs-PEC ratio per polarisation:
         #     reflected_h = (−ρ_h) · M_img_h        # PEC was +1·M_img_h
         #     reflected_v = (+ρ_v) · M_img_v        # PEC was +1·M_img_v
-        M_refl = (rho_v * M_img_v)[..., None] * v_hat - (rho_h * M_img_h)[..., None] * h_hat
+        M_refl = (rho_v * M_img_v)[..., None] * v_hat - (rho_h * M_img_h)[
+            ..., None
+        ] * h_hat
         M_perp = M_perp + M_refl
         return np.sum(M_perp.real**2 + M_perp.imag**2, axis=-1)
 
@@ -258,7 +265,9 @@ class PysimEngine(SimulationEngine):
         theta_user = np.deg2rad(theta_deg)
         phi_user = np.deg2rad(phi_deg)
 
-        mag2_user = self._evaluate_M_perp(mid, dr, i_mid, k, theta_user, phi_user, freq_hz)
+        mag2_user = self._evaluate_M_perp(
+            mid, dr, i_mid, k, theta_user, phi_user, freq_hz
+        )
         D = directivity_norm * mag2_user
         # Floor before log so points where M_perp is exactly zero (poles,
         # nulls below quantisation) don't produce −inf.

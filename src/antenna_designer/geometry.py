@@ -17,6 +17,7 @@ Supported topologies:
   * One or more excited segments per geometry (each becomes a delta-gap
     feed in the returned `feeds` list).
 """
+
 from __future__ import annotations
 
 import numpy as np

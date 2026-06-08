@@ -91,19 +91,25 @@ def test_cli_compare_patterns_pysim_basis():
 
 def test_broadcast_equal_length():
     assert broadcast_pairs(["a", "b", "c"], ["x", "y", "z"]) == [
-        ("a", "x"), ("b", "y"), ("c", "z")
+        ("a", "x"),
+        ("b", "y"),
+        ("c", "z"),
     ]
 
 
 def test_broadcast_single_engine():
     assert broadcast_pairs(["a", "b", "c"], ["x"]) == [
-        ("a", "x"), ("b", "x"), ("c", "x")
+        ("a", "x"),
+        ("b", "x"),
+        ("c", "x"),
     ]
 
 
 def test_broadcast_single_builder():
     assert broadcast_pairs(["a"], ["x", "y", "z"]) == [
-        ("a", "x"), ("a", "y"), ("a", "z")
+        ("a", "x"),
+        ("a", "y"),
+        ("a", "z"),
     ]
 
 

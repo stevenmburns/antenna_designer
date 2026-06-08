@@ -40,13 +40,15 @@ class PyNECEngine(SimulationEngine):
 
         self.excitation_pairs = []
         for idx, (p0, p1, n_seg, ev) in enumerate(self.tups, start=1):
-            geo.wire(idx, n_seg, p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], 0.0005, 1.0, 1.0)
+            geo.wire(
+                idx, n_seg, p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], 0.0005, 1.0, 1.0
+            )
             if ev is not None:
                 self.excitation_pairs.append((idx, (n_seg + 1) // 2, ev))
 
         self.c.geometry_complete(0)
 
-        for (idx1, seg1, idx2, seg2, impedance, length) in self.tls:
+        for idx1, seg1, idx2, seg2, impedance, length in self.tls:
             self.c.tl_card(idx1, seg1, idx2, seg2, impedance, length, 0, 0, 0, 0)
 
         self.c.ld_card(5, 0, 0, 0, conductivity, 0.0, 0.0)
@@ -77,7 +79,9 @@ class PyNECEngine(SimulationEngine):
 
         indices = []
         for tag, tag_index, voltage in self.excitation_pairs:
-            matches = [(i, t) for (i, t) in enumerate(sc.get_current_segment_tag()) if t == tag]
+            matches = [
+                (i, t) for (i, t) in enumerate(sc.get_current_segment_tag()) if t == tag
+            ]
             index = matches[tag_index - 1][0]
             indices.append((index, voltage))
 
@@ -108,7 +112,12 @@ class PyNECEngine(SimulationEngine):
                 )
         self.c.fr_card(0, freqs.size, float(freqs[0]), del_freq)
         self.c.xq_card(0)
-        return np.array([self._impedances_at(i, sum_currents=sum_currents) for i in range(freqs.size)])
+        return np.array(
+            [
+                self._impedances_at(i, sum_currents=sum_currents)
+                for i in range(freqs.size)
+            ]
+        )
 
     def current_distribution(self):
         """Per-tuple knot positions + complex currents. Each build_wires()
@@ -132,27 +141,36 @@ class PyNECEngine(SimulationEngine):
             elif n_seg == 1:
                 # 1-segment wire: no interior knot, leave boundaries at 0.
                 pass
-            out.append(WireCurrents(
-                knot_positions=knots,
-                knot_currents=knot_cur,
-            ))
+            out.append(
+                WireCurrents(
+                    knot_positions=knots,
+                    knot_currents=knot_cur,
+                )
+            )
         return out
 
     def far_field(self, *, n_theta=90, n_phi=360, del_theta=1, del_phi=1):
         self._set_freq_and_execute()
-        return self._collect_pattern(n_theta=n_theta, n_phi=n_phi, del_theta=del_theta, del_phi=del_phi)
+        return self._collect_pattern(
+            n_theta=n_theta, n_phi=n_phi, del_theta=del_theta, del_phi=del_phi
+        )
 
     def _collect_pattern(self, *, n_theta, n_phi, del_theta, del_phi):
         assert 90 % n_theta == 0 and 90 == del_theta * n_theta
         assert 360 % n_phi == 0 and 360 == del_phi * n_phi
 
-        self.c.rp_card(0, n_theta, n_phi + 1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0)
+        self.c.rp_card(
+            0, n_theta, n_phi + 1, 0, 5, 0, 0, 0, 0, del_theta, del_phi, 0, 0
+        )
 
         thetas = np.linspace(0, 90 - del_theta, n_theta)
         phis = np.linspace(0, 360, n_phi + 1)
 
         rings = [
-            [self.c.get_gain(0, theta_index, phi_index) for phi_index, _ in enumerate(phis)]
+            [
+                self.c.get_gain(0, theta_index, phi_index)
+                for phi_index, _ in enumerate(phis)
+            ]
             for theta_index, _ in enumerate(thetas)
         ]
 
