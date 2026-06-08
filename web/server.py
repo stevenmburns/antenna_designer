@@ -429,14 +429,14 @@ def _polyline_knots(polyline: np.ndarray, npe_list: list[int]) -> np.ndarray:
 
 
 def solve(req: dict) -> dict:
-    geometry = req.get("geometry", "inverted_v")
+    geometry = req.get("geometry", next(iter(EXAMPLES)))
     use_pynec = req.get("solver") == "pynec" and pynec_backend.HAVE_PYNEC
     if use_pynec:
         out = pynec_backend.solve(req)
         _attach_derived_em_fields(out)
         _compute_directivity_norm(out)
         return out
-    ex = EXAMPLES.get(geometry) or EXAMPLES["inverted_v"]
+    ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
     out = ex.pysim_solve(req)
     out["solver"] = "pysim"
     _attach_derived_em_fields(out)
@@ -455,7 +455,7 @@ async def sweep_endpoint(req: dict, request: Request):
     the live /ws solves of CPU.
     """
     freqs = [float(f) for f in req.get("freqs_mhz", [])]
-    geometry = req.get("geometry", "inverted_v")
+    geometry = req.get("geometry", next(iter(EXAMPLES)))
     use_pynec = req.get("solver") == "pynec" and pynec_backend.HAVE_PYNEC
     solver_name = "pynec" if use_pynec else "pysim"
 
@@ -513,7 +513,7 @@ async def sweep_endpoint(req: dict, request: Request):
             # granularity is consistent across geometries. Start with an
             # 8-chunk heuristic, then after each chunk recompute the next
             # size from observed per-freq cost. Converges in ~1 iteration.
-            sweep_ex = EXAMPLES.get(geometry) or EXAMPLES["inverted_v"]
+            sweep_ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
             sweep_fn = sweep_ex.pysim_sweep
             chunk_size = max(1, len(freqs) // 8)
             start = 0
@@ -567,12 +567,12 @@ def _solve_z_only(req: dict) -> tuple[complex, list[complex] | None]:
     otherwise tack on — for the /converge sweep we only need Z(N), and
     at N ≳ 60 the directivity step adds non-negligible cost.
     """
-    geometry = req.get("geometry", "inverted_v")
+    geometry = req.get("geometry", next(iter(EXAMPLES)))
     use_pynec = req.get("solver") == "pynec" and pynec_backend.HAVE_PYNEC
     if use_pynec:
         res = pynec_backend.solve(req)
     else:
-        ex = EXAMPLES.get(geometry) or EXAMPLES["inverted_v"]
+        ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
         res = ex.pysim_solve(req)
     primary = complex(res["z_in_re"], res["z_in_im"])
     feeds_list = res.get("feeds")

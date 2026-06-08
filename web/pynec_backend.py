@@ -91,8 +91,8 @@ def _run_solve(
 
 
 def solve(req: dict) -> dict:
-    geometry = req.get("geometry", "inverted_v")
-    ex = EXAMPLES.get(geometry) or EXAMPLES["inverted_v"]
+    geometry = req.get("geometry", next(iter(EXAMPLES)))
+    ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
     if ex.pynec_solve is None:
         raise ValueError(f"PyNEC solve not implemented for geometry {ex.name!r}")
     return ex.pynec_solve(req)
@@ -111,8 +111,8 @@ def pattern(req: dict) -> dict:
     radiation matching what `solve()` reports in `feeds`. Single-feed
     examples fall back to one ex_card via `_run_solve()`.
     """
-    geometry = req.get("geometry", "inverted_v")
-    ex = EXAMPLES.get(geometry) or EXAMPLES["inverted_v"]
+    geometry = req.get("geometry", next(iter(EXAMPLES)))
+    ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
     if ex.pynec_build is None:
         raise ValueError(f"PyNEC pattern not implemented for geometry {ex.name!r}")
     b = ex.pynec_build(req)

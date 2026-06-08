@@ -24,23 +24,21 @@ defaults become float sliders with auto bounds (±50% around default);
 ints become int sliders; bools become checkboxes; complex defaults are
 skipped (no UI yet — the request can still override via re/im dict).
 """
+
 from __future__ import annotations
 
 import importlib
 import pathlib
 import time
-from types import MappingProxyType
 from typing import Any
 
 import numpy as np
 
-from antenna_designer.engines.pynec import PyNECEngine
 from antenna_designer.engines.pysim import PysimEngine
 from pysim import BSplinePySim, SinusoidalPySim, TriangularPySim
 
 from .examples import register
 from .examples._base import (
-    DEFAULT_HF_BANDS,
     DEFAULT_SWEEP_POLICY,
     AntennaExample,
     BandSpec,
@@ -52,10 +50,7 @@ C_LIGHT = 299_792_458.0
 
 DESIGNS_PKG = "antenna_designer.designs"
 DESIGNS_DIR = (
-    pathlib.Path(__file__).resolve().parents[1]
-    / "src"
-    / "antenna_designer"
-    / "designs"
+    pathlib.Path(__file__).resolve().parents[1] / "src" / "antenna_designer" / "designs"
 )
 
 _PYSIM_MODELS = {
@@ -92,8 +87,12 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
     if isinstance(default, bool):
         kind = override.pop("kind", "bool")
         return ParamSpec(
-            name=name, label=label, default=default, kind=kind,
-            unit=unit, precision=precision,
+            name=name,
+            label=label,
+            default=default,
+            kind=kind,
+            unit=unit,
+            precision=precision,
         )
 
     if isinstance(default, (int, float)) and not isinstance(default, bool):
@@ -114,7 +113,18 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
             hi = float(int(round(hi)))
             step = 1.0
             precision = 0
-        return ParamSpec(
+        # `freq` is the design frequency — wire it into the global
+        # designFreq state on the frontend so changing the slider
+        # actually retunes the geometry, and so the meas-freq slider
+        # follows when linkMeas is on. Without this the global state
+        # stays at the band-tab default (e.g. 14 MHz) while the antenna
+        # is being asked to operate elsewhere, producing huge
+        # reactances at apparent "default" settings. The unit default
+        # of "MHz" makes the readout self-describing.
+        if name == "freq":
+            unit = unit or "MHz"
+            override["linked_to_design_freq"] = True  # keep around
+        spec_kwargs = dict(
             name=name,
             label=label,
             default=int(d) if kind == "int" else d,
@@ -126,14 +136,24 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
             unit=unit,
             sweepable=sweepable,
         )
+        if "linked_to_design_freq" in override:
+            spec_kwargs["linked_to_design_freq"] = bool(
+                override.pop("linked_to_design_freq")
+            )
+        return ParamSpec(**spec_kwargs)
 
     if isinstance(default, str):
         opts = override.pop("enum_options", None)
         if opts is None:
             return None
         return ParamSpec(
-            name=name, label=label, default=default, kind="enum",
-            enum_options=tuple(opts), precision=precision, unit=unit,
+            name=name,
+            label=label,
+            default=default,
+            kind="enum",
+            enum_options=tuple(opts),
+            precision=precision,
+            unit=unit,
         )
 
     # complex, None, or anything exotic — skip the auto-UI; the request
@@ -175,13 +195,21 @@ def _rehydrate_param(default_value: Any, raw: Any) -> Any:
 
 
 def _build_builder(cls, req: dict):
+    """Construct a Builder from default_params overlaid with request fields.
+
+    The pysim frontend assembles its solve request by Object.assign'ing
+    every live slider value as a *top-level* key on the request dict
+    (App.tsx:buildRequest), so we read each Builder param off the request
+    directly. A nested `params` dict is also accepted as a fallback for
+    other clients.
+    """
     base = _strip_ui(dict(cls.default_params))
-    overrides = req.get("params") or {}
-    for k, v in overrides.items():
-        if k in base:
-            base[k] = _rehydrate_param(base[k], v)
-        # Unknown keys silently ignored — the frontend tracks the schema
-        # we served, but stale clients shouldn't error here.
+    nested = req.get("params") or {}
+    for k in list(base.keys()):
+        if k in req:
+            base[k] = _rehydrate_param(base[k], req[k])
+        elif k in nested:
+            base[k] = _rehydrate_param(base[k], nested[k])
     return cls(params=base)
 
 
@@ -215,7 +243,11 @@ def _make_pysim_engine(req: dict, builder):
 # ---------------------------------------------------------------------------
 
 
-_PEC_GROUND_EPS_R = 1.0
+# Frontend Fresnel reflection treats this as the real part of the
+# complex permittivity. For PEC the reflection coefficient ρ_h → −1 as
+# eps_r → ∞; 1e10 is large enough to be numerically indistinguishable
+# while staying away from float overflow. Matches pysim/web/server.py.
+_PEC_GROUND_EPS_R = 1.0e10
 _PEC_GROUND_SIGMA = 0.0
 
 
@@ -274,20 +306,30 @@ def _make_example(name: str, cls) -> AntennaExample:
     default_view = _ui_scalar(dp, "default_view", "xy")
     target_z0 = float(_ui_scalar(dp, "target_z0", 50.0))  # noqa: F841 — surfaced later
     multi_feed = bool(_ui_scalar(dp, "multi_feed", False))
-    meas_range = ui.get("meas_freq_range") if not isinstance(ui.get("meas_freq_range"), dict) else None
+    meas_range = (
+        ui.get("meas_freq_range")
+        if not isinstance(ui.get("meas_freq_range"), dict)
+        else None
+    )
     bands_override = ui.get("bands") if not isinstance(ui.get("bands"), dict) else None
     sweep_pol_raw = ui.get("sweep_policy")
     if isinstance(sweep_pol_raw, (tuple, list)) and len(sweep_pol_raw) == 3:
-        sweep_policy = SweepPolicy(anchor=str(sweep_pol_raw[0]),
-                                   lo_factor=float(sweep_pol_raw[1]),
-                                   hi_factor=float(sweep_pol_raw[2]))
+        sweep_policy = SweepPolicy(
+            anchor=str(sweep_pol_raw[0]),
+            lo_factor=float(sweep_pol_raw[1]),
+            hi_factor=float(sweep_pol_raw[2]),
+        )
     else:
         sweep_policy = DEFAULT_SWEEP_POLICY
 
+    # Suppress band tabs by default. The frontend snaps designFreq to
+    # bands[0].freq_mhz on example change, which clobbers the design's
+    # own `freq` default — and most antenna_designer designs aren't HF.
+    # A design that wants band tabs can re-enable them via ui_params.
     bands = (
         tuple(BandSpec(*b) for b in bands_override)
         if bands_override is not None
-        else DEFAULT_HF_BANDS
+        else ()
     )
 
     param_schema = _derive_schema(dp)
@@ -321,9 +363,7 @@ def _make_example(name: str, cls) -> AntennaExample:
             "ground_sigma": _PEC_GROUND_SIGMA,
         }
         if multi_feed and len(zs) > 1:
-            out["feeds"] = [
-                {"z_re": float(z.real), "z_im": float(z.imag)} for z in zs
-            ]
+            out["feeds"] = [{"z_re": float(z.real), "z_im": float(z.imag)} for z in zs]
         return out
 
     def pysim_sweep(req: dict, freqs_mhz: list[float]):
