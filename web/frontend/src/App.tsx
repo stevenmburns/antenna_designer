@@ -112,6 +112,14 @@ type ExampleDescriptor = {
    *  geometry (freq_based.* designs). When false, the design-freq
    *  band-tab row is hidden because dragging it would be a no-op. */
   has_design_freq: boolean;
+  /** Alternate seed dicts on the Builder, e.g. ["default", "opt"].
+   *  The bare name is what the frontend sends back in `variant`.
+   *  Single-entry lists ("default") hide the selector. */
+  variants: string[];
+  /** Per-variant param values, keyed by variant name. Lets the UI
+   *  reset the schema sliders + design freq when the user switches
+   *  variants. Complex-valued params arrive as {re, im}. */
+  variant_values: { [variant: string]: { [key: string]: unknown } };
   sweep_policy: SweepPolicy;
 };
 
@@ -629,6 +637,9 @@ function modelOptionsForRequest(
 
 type SolveRequest = {
   geometry: string;
+  /** Which `<name>_params` dict on the Builder to seed from. Omitted
+   *  → backend falls back to default_params. */
+  variant?: string;
   solver: "pysim" | "pynec";
   pysim_model?: "triangular" | "sinusoidal" | "bspline";
   model_options?: Record<string, unknown>;
@@ -839,6 +850,11 @@ export function App() {
   const [examples, setExamples] = useState<ExampleDescriptor[]>([]);
   const [examplesError, setExamplesError] = useState<string | null>(null);
   const [paramValues, setParamValues] = useState<Record<string, ParamValueBag>>({});
+  // Per-geometry variant selection (which `<name>_params` dict on the
+  // Builder to seed from). Falls back to the example's variants[0]
+  // when this map has no entry — `default` for designs that declare
+  // it, otherwise whatever the example shipped first.
+  const [variantByGeom, setVariantByGeom] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -879,6 +895,32 @@ export function App() {
 
   const currentExample = examples.find((e) => e.name === geometry);
   const currentValues = paramValues[geometry] ?? {};
+  const currentVariant =
+    variantByGeom[geometry] ?? currentExample?.variants?.[0] ?? "default";
+
+  // Switch to a different variant: overlay the variant's per-param
+  // values onto the existing slider state for this geometry (keeping
+  // schema-derived defaults for any key the variant doesn't supply),
+  // then snap designFreq / measFreq to the variant's `freq` so the
+  // band tabs follow too. Sweep / live solve will pick up `variant`
+  // via buildRequest on the next tick.
+  function selectVariant(nextVariant: string) {
+    if (!currentExample) return;
+    setVariantByGeom((prev) => ({ ...prev, [geometry]: nextVariant }));
+    const vv = currentExample.variant_values?.[nextVariant];
+    if (!vv) return;
+    setParamValues((prev) => {
+      const base = seedDefaults(currentExample.param_schema);
+      for (const k of Object.keys(base)) {
+        if (k in vv) base[k] = vv[k] as never;
+      }
+      return { ...prev, [geometry]: base };
+    });
+    if (typeof vv.freq === "number") {
+      setDesignFreq(vv.freq);
+      if (linkMeas) setMeasFreq(vv.freq);
+    }
+  }
   // Stable, primitive-only signature of the active antenna's params for
   // useEffect dependency arrays. Object identity isn't reliable because
   // setParamValues replaces the inner object on every onChange.
@@ -1112,6 +1154,7 @@ export function App() {
     const groundActive = groundEnabled && backendSupportsGround(backend);
     const base: SolveRequest = {
       geometry,
+      variant: currentVariant,
       solver: backend === "pynec" ? "pynec" : "pysim",
       n_per_wire: nPerWire,
       design_freq_mhz: designFreq,
@@ -1623,6 +1666,26 @@ export function App() {
         {examplesError && (
           <div className="examples-error">
             Failed to load /examples: {examplesError}
+          </div>
+        )}
+
+        {currentExample && currentExample.variants.length > 1 && (
+          <div className="field">
+            <label htmlFor="variant-select">
+              <span>variant</span>
+            </label>
+            <select
+              id="variant-select"
+              className="geometry-select"
+              value={currentVariant}
+              onChange={(e) => selectVariant(e.target.value)}
+            >
+              {currentExample.variants.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 

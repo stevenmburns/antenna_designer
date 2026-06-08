@@ -305,3 +305,18 @@ class AntennaExample:
     # designs (top-level designs/) ignore design_freq, so the row
     # would just be a noop slider for them.
     has_design_freq: bool = False
+    # Alternate seed dicts available on the Builder — class-level
+    # attributes named `<variant>_params` (e.g. `default`, `opt`,
+    # `original`, `z50`, `z100`). The bare name is what the frontend
+    # sends back in the `variant` field of solve / sweep requests.
+    # `default` is always first when present so the UI lists it as
+    # the canonical starting point. Single-variant Builders ship
+    # ('default',) — the frontend can suppress the selector then.
+    variants: tuple[str, ...] = ("default",)
+    # Per-variant param values, keyed by variant name → {param_name:
+    # value}. The frontend uses this to reset schema sliders + design
+    # freq when the user picks a different variant. Complex-valued
+    # params are encoded as {"re": ..., "im": ...}; ui_params is
+    # stripped. Single-variant designs ship {} since there's nothing
+    # to switch between.
+    variant_values: dict = field(default_factory=dict)
