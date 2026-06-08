@@ -10,13 +10,13 @@ class Builder(Array2x2Builder):
             "freq": 28.47,
             "slope_top": 0.658,
             "slope_bot": 0.512,
-            "base": 7,
+            "base": 7.0,
             "length_top": 5.79,
             "length_bot": 5.70,
-            "del_y": 4,
-            "del_z": 2,
-            "phase_lr": 0,
-            "phase_tb": 0,
+            "del_y": 4.0,
+            "del_z": 2.0,
+            "phase_lr": 0.0,
+            "phase_tb": 0.0,
         }
     )
 

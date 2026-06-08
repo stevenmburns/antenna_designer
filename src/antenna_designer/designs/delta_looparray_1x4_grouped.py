@@ -13,10 +13,10 @@ class Builder(Array1x4GroupedBuilder):
             "angle_radians_itop": 0.9110,
             "length_factor_otop": 1.0795,
             "angle_radians_otop": 0.8911,
-            "base": 7,
-            "del_y0": 6,
+            "base": 7.0,
+            "del_y0": 6.0,
             "del_y1": 2.5,
-            "del_z": 0,
+            "del_z": 0.0,
         }
     )
 

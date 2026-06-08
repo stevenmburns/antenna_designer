@@ -9,10 +9,10 @@ class Builder(Array1x2Builder):
         {
             "freq": 28.47,
             "slope_top": 0.580,
-            "base": 7,
+            "base": 7.0,
             "length_top": 5.53,
-            "del_y": 4,
-            "del_z": 2,
+            "del_y": 4.0,
+            "del_z": 2.0,
         }
     )
 

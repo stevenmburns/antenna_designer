@@ -9,7 +9,7 @@ class Builder(AntennaBuilder):
         {
             "freq": 28.47,
             "design_freq": 28.47,
-            "base": 7,
+            "base": 7.0,
             "length_factor": 0.93,
             "director_factor": 0.95,
             "reflector_factor": 1.05,

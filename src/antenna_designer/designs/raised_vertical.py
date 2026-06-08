@@ -10,8 +10,8 @@ class Builder(AntennaBuilder):
             "freq": 14.27,
             "length": 5.2245,
             "radial_factor": 0.9545,
-            "theta": 110,
-            "base": 3,
+            "theta": 110.0,
+            "base": 3.0,
         }
     )
 

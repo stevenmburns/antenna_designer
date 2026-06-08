@@ -8,7 +8,7 @@ class Builder(AntennaBuilder):
     default_params = MappingProxyType(
         {
             "freq": 28.57,
-            "base": 7,
+            "base": 7.0,
             "length": 13.125,
             "slope": 0.604,
         }

@@ -12,9 +12,9 @@ class Builder(Array1x2Builder):
             "height_factor_top": 0.7777,
             "width_factor_top": 0.7653,
             "waist_factor_top": 0.6071,
-            "base": 10,
-            "del_y": 4,
-            "del_z": 0,
+            "base": 10.0,
+            "del_y": 4.0,
+            "del_z": 0.0,
         }
     )
 

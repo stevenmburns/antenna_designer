@@ -11,9 +11,9 @@ class Builder(Array1x2Builder):
             "freq": 28.47,
             "length_factor_top": 1.0664,
             "angle_radians_top": 1.0688,
-            "base": 7,
-            "del_y": 4,
-            "del_z": 0,
+            "base": 7.0,
+            "del_y": 4.0,
+            "del_z": 0.0,
         }
     )
 
@@ -23,7 +23,7 @@ class Builder(Array1x2Builder):
             "freq": 28.47,
             "length_factor_top": 1.0843,
             "angle_radians_top": 1.1352,
-            "base": 7,
+            "base": 7.0,
             "del_y": 3.5,
             "del_z": 2,
         }
@@ -35,7 +35,7 @@ class Builder(Array1x2Builder):
             "freq": 28.47,
             "length_factor_top": 1.0801,
             "angle_radians_top": 1.1041,
-            "base": 7,
+            "base": 7.0,
             "del_y": 4.5,
             "del_z": 2,
         }
@@ -47,7 +47,7 @@ class Builder(Array1x2Builder):
             "freq": 28.47,
             "length_factor_top": 1.0801,
             "angle_radians_top": 1.1041,
-            "base": 7,
+            "base": 7.0,
             "del_y": 3,
             "del_z": 2,
         }
