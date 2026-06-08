@@ -19,6 +19,10 @@ class Builder(Array2x2Builder):
             "tipspacer_factor_bot": 0.07729647745945359,
             "t0_factor_top": 0.4078045966770739,
             "t0_factor_bot": 0.4078045966770739,
+            # Auto-view picks yz (y/z dominate from the 2x2 stacking),
+            # but moxon-family geometry reads in xy — keep the array
+            # consistent with the single moxon's view.
+            "ui_params": MappingProxyType({"default_view": "xy"}),
         }
     )
 
