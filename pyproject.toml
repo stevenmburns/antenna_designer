@@ -22,7 +22,9 @@ Homepage = "https://github.com/stevenmburns/antenna_designer"
 Issues = "https://github.com/stevenmburns/antenna_designer/issues"
 
 [tool.ruff]
-extend-exclude = ["python-necpp"]
+# pysim is a submodule with its own config; web_old is an archive of the
+# pre-rewrite UI kept as historical reference and shouldn't be reformatted.
+extend-exclude = ["python-necpp", "pysim", "web_old"]
 
 [tool.ruff.lint]
 ignore = ["E741"]
