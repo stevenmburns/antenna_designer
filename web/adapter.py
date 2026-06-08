@@ -174,7 +174,13 @@ def _derive_schema(default_params: dict) -> tuple[ParamSpec, ...]:
         # slider. The Builder's default_params['freq'] value is still
         # used as the initial measurement freq when the example loads;
         # the adapter just doesn't expose a redundant slider for it.
-        if key == "freq":
+        #
+        # `design_freq` is the geometry-sizing frequency for
+        # freq_based.* designs, driven by the "design freq" band-tab
+        # row + slider in the UI (which sends design_freq_mhz on the
+        # request). Skipping it here too prevents the auto-derived
+        # schema slider from duplicating that control.
+        if key in ("freq", "design_freq"):
             continue
         override = ui.get(key)
         if override is not None and not isinstance(override, dict):
@@ -373,12 +379,21 @@ def _make_example(name: str, cls) -> AntennaExample:
         bands = DEFAULT_HF_BANDS
 
     param_schema = _derive_schema(dp)
+    has_design_freq = "design_freq" in dp
 
     def pysim_solve(req: dict) -> dict:
         design_freq = float(req.get("design_freq_mhz", dp.get("freq", 14.0)))
         meas_freq = float(req.get("measurement_freq_mhz", design_freq))
         builder = _build_builder(cls, req)
         builder.freq = meas_freq
+        # For freq_based designs the geometry computes from
+        # design_freq via build_wires(); apply the request's
+        # design_freq_mhz so dragging the design-freq slider actually
+        # retunes the antenna. Top-level designs don't carry the
+        # parameter so the attribute write would be silently absorbed
+        # into _params and never read — guard on has_design_freq.
+        if has_design_freq:
+            builder.design_freq = design_freq
         eng = _make_pysim_engine(req, builder)
         t0 = time.perf_counter()
         zs = eng.impedance()
@@ -411,6 +426,13 @@ def _make_example(name: str, cls) -> AntennaExample:
         # PysimEngine reads builder.freq only for the initial wavelength
         # passed to _make_solver — impedance_sweep overrides k per point.
         builder.freq = float(freqs_mhz[0]) if freqs_mhz else float(builder.freq)
+        # Geometry is fixed across the sweep; honour the request's
+        # design_freq so the sweep sees the same antenna the live
+        # solve sees. See pysim_solve for the rationale.
+        if has_design_freq:
+            builder.design_freq = float(
+                req.get("design_freq_mhz", dp.get("freq", 14.0))
+            )
         eng = _make_pysim_engine(req, builder)
         zs = np.asarray(eng.impedance_sweep(list(freqs_mhz)))
         # PysimEngine.impedance_sweep returns (n_freqs, n_feeds).
@@ -435,6 +457,7 @@ def _make_example(name: str, cls) -> AntennaExample:
         sweep_policy=sweep_policy,
         default_view=default_view,
         default_freq_mhz=float(dp["freq"]) if "freq" in dp else None,
+        has_design_freq=has_design_freq,
     )
 
 

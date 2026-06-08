@@ -299,3 +299,9 @@ class AntennaExample:
     # None means "no preferred freq" — frontend falls back to bands[0]
     # or its built-in default.
     default_freq_mhz: Optional[float] = None
+    # True when the Builder has a `design_freq` parameter that scales
+    # geometry (freq_based.* designs). The frontend uses this to show
+    # or hide the design-freq band-tab row: hand-tuned absolute
+    # designs (top-level designs/) ignore design_freq, so the row
+    # would just be a noop slider for them.
+    has_design_freq: bool = False

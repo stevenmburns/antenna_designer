@@ -108,6 +108,10 @@ type ExampleDescriptor = {
   /** The freq this antenna is naturally designed for. Used by the
    *  band-snap-on-example-change effect; null = no preferred freq. */
   default_freq_mhz: number | null;
+  /** True when the Builder has a `design_freq` param that scales
+   *  geometry (freq_based.* designs). When false, the design-freq
+   *  band-tab row is hidden because dragging it would be a no-op. */
+  has_design_freq: boolean;
   sweep_policy: SweepPolicy;
 };
 
@@ -1630,11 +1634,14 @@ export function App() {
           />
         )}
 
-        {currentBands.length > 0 && (() => {
+        {currentBands.length > 0 && currentExample?.has_design_freq && (() => {
           // Highlight the band whose window contains the current
           // designFreq — same behaviour as the meas-freq row below.
           // The slider min/max also tracks that band, so sliding past
           // its edge auto-re-anchors to the neighbouring band.
+          // Gated on has_design_freq so the row is hidden for
+          // hand-tuned absolute designs where the slider would do
+          // nothing.
           const activeKey = bandContaining(designFreq);
           const active = currentBands.find((b) => b.key === activeKey) ?? currentBands[0];
           return (
