@@ -4,7 +4,7 @@
 
 | Name                                                     |    Stmts |     Miss |   Cover |   Missing |
 |--------------------------------------------------------- | -------: | -------: | ------: | --------: |
-| src/antenna\_designer/\_\_init\_\_.py                    |        8 |        0 |    100% |           |
+| src/antenna\_designer/\_\_init\_\_.py                    |       13 |        2 |     85% |     50-51 |
 | src/antenna\_designer/\_\_main\_\_.py                    |        0 |        0 |    100% |           |
 | src/antenna\_designer/builder.py                         |      195 |       56 |     71% |177-178, 181-225, 230-231, 234-278 |
 | src/antenna\_designer/cli.py                             |      201 |       13 |     94% |85, 99, 113, 127-135, 334 |
@@ -14,8 +14,8 @@
 | src/antenna\_designer/designs/bowtiearray2x4.py          |        7 |        0 |    100% |           |
 | src/antenna\_designer/designs/bowtiearray.py             |        7 |        0 |    100% |           |
 | src/antenna\_designer/designs/dipole.py                  |       17 |        0 |    100% |           |
-| src/antenna\_designer/designs/fandipole.py               |       59 |       13 |     78% |   120-139 |
-| src/antenna\_designer/designs/freq\_based/delta\_loop.py |       34 |        0 |    100% |           |
+| src/antenna\_designer/designs/fandipole.py               |       62 |       16 |     74% |65-67, 127-146 |
+| src/antenna\_designer/designs/freq\_based/delta\_loop.py |       36 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/hentenna.py    |       35 |        1 |     97% |        42 |
 | src/antenna\_designer/designs/freq\_based/invvee.py      |       27 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/yagi.py        |       38 |        0 |    100% |           |
@@ -24,7 +24,7 @@
 | src/antenna\_designer/designs/invveearray.py             |        8 |        0 |    100% |           |
 | src/antenna\_designer/designs/moxon.py                   |       33 |        0 |    100% |           |
 | src/antenna\_designer/designs/rawdipole.py               |       12 |        0 |    100% |           |
-| src/antenna\_designer/designs/twoband\_fan\_dipole.py    |       77 |       59 |     23% |204-310, 315-331 |
+| src/antenna\_designer/designs/twoband\_fan\_dipole.py    |       79 |       59 |     25% |207-317, 322-337 |
 | src/antenna\_designer/designs/vertical.py                |       24 |        0 |    100% |           |
 | src/antenna\_designer/engine.py                          |       13 |        2 |     85% |    42, 48 |
 | src/antenna\_designer/engines/\_\_init\_\_.py            |        3 |        0 |    100% |           |
@@ -37,7 +37,7 @@
 | src/antenna\_designer/sweep.py                           |      123 |        7 |     94% |   105-116 |
 | src/antenna\_designer/transform.py                       |       42 |        1 |     98% |        62 |
 | src/antenna\_designer/web\_schema.py                     |       94 |       94 |      0% |    13-199 |
-| **TOTAL**                                                | **1677** |  **263** | **84%** |           |
+| **TOTAL**                                                | **1689** |  **268** | **84%** |           |
 
 
 ## Setup coverage badge
