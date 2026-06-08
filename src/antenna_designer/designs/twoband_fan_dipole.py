@@ -1,8 +1,11 @@
-from antenna_designer import AntennaBuilder
+import logging
 import math
 from math import sqrt
 from types import MappingProxyType
-# from icecream import ic
+
+from antenna_designer import AntennaBuilder
+
+logger = logging.getLogger(__name__)
 
 
 class Builder(AntennaBuilder):
@@ -276,8 +279,12 @@ class Builder(AntennaBuilder):
         wire12 = dist(S, G) + dist(G, A)
         wire10 = dist(S, H) + dist(H, B)
 
-        print(
-            f"wire12: {wire12} {self.length_12 / 2} wire10: {wire10} {self.length_10 / 2} "
+        logger.debug(
+            "wire12: %s %s wire10: %s %s",
+            wire12,
+            self.length_12 / 2,
+            wire10,
+            self.length_10 / 2,
         )
 
         tups = []
@@ -326,7 +333,6 @@ if __name__ == "__main__":
     params = Builder.default_params
     print(f"Quarter wave element on 12m: {tofeet_inches(params['length_12'] / 2)}")
     print(f"Quarter wave element on 10m: {tofeet_inches(params['length_10'] / 2)}")
-
     print(f"Ratio of 12m element to single band invvee: {params['length_12'] / 5.8408}")
     print(
         f"Ratio of 12m element to 10m element: {params['length_12'] / params['length_10']}"

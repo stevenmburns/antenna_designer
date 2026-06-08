@@ -1,7 +1,10 @@
-from antenna_designer import AntennaBuilder
+import logging
 import math
 from types import MappingProxyType
-# from icecream import ic
+
+from antenna_designer import AntennaBuilder
+
+logger = logging.getLogger(__name__)
 
 
 class Builder(AntennaBuilder):
@@ -58,9 +61,10 @@ class Builder(AntennaBuilder):
         def dist(p0, p1):
             return math.sqrt(sum((x0 - x1) ** 2 for x0, x1 in zip(p0, p1)))
 
-        print(f"t0: {t0} dist: {dist(S, C)}")
-        print(f"t0: {t0} dists from C: {[dist(C, a) for a in A]}")
-        print(f"radius: {radius} dists from S: {[dist(S, a) for a in A]}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("t0: %s dist: %s", t0, dist(S, C))
+            logger.debug("t0: %s dists from C: %s", t0, [dist(C, a) for a in A])
+            logger.debug("radius: %s dists from S: %s", radius, [dist(S, a) for a in A])
 
         lengths = [
             self.length_10,
@@ -79,9 +83,12 @@ class Builder(AntennaBuilder):
 
         for i in range(n):
             wire_length = dist(S, A[i]) + dist(A[i], B[i])
-
-            print(
-                f"{i} length {wire_length} {lengths[i] / 2} {(wire_length - lengths[i] / 2) / lengths[i]}"
+            logger.debug(
+                "%d length %s %s %s",
+                i,
+                wire_length,
+                lengths[i] / 2,
+                (wire_length - lengths[i] / 2) / lengths[i],
             )
 
         n_seg0 = 21
