@@ -103,6 +103,7 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from starlette.websockets import WebSocketState
 
 from pysim.bspline import BSplinePySim
 from pysim.sinusoidal import SinusoidalPySim
@@ -773,6 +774,20 @@ async def ws_endpoint(ws: WebSocket):
             raw = await ws.receive_text()
             req = json.loads(raw)
             result = await run_in_threadpool(solve, req)
-            await ws.send_text(json.dumps(result))
+            # The client can disconnect *during* the solve (rapid
+            # slider drag tears down the React effect's WS and opens
+            # a fresh one before our threadpool finishes). When that
+            # happens send_text races with the closed socket and
+            # uvicorn logs a noisy "socket.send() raised exception"
+            # per dropped response. Skip the send when we've already
+            # been disconnected, and treat any error during send as a
+            # disconnect (the next receive_text will raise
+            # WebSocketDisconnect anyway).
+            if ws.client_state != WebSocketState.CONNECTED:
+                return
+            try:
+                await ws.send_text(json.dumps(result))
+            except (WebSocketDisconnect, RuntimeError):
+                return
     except WebSocketDisconnect:
         return
