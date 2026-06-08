@@ -219,7 +219,9 @@ def _build_builder(cls, req: dict):
     directly. A nested `params` dict is also accepted as a fallback for
     other clients.
     """
-    base = _strip_ui(dict(cls.default_params))
+    # Seed from the named variant (e.g. `opt_params`, `z50_params`).
+    # Unrecognised / absent → fall back to default_params.
+    base = _strip_ui(_variant_params(cls, req.get("variant")))
     nested = req.get("params") or {}
     for k in list(base.keys()):
         if k in req:
@@ -334,6 +336,63 @@ def _pynec_feed_indices(builder, currents) -> tuple[int, int]:
 # ---------------------------------------------------------------------------
 
 
+def _discover_variants(cls) -> tuple[str, ...]:
+    """Names of every class-level `<name>_params` attribute (the variant
+    convention used across the design library — e.g. `default_params`,
+    `opt_params`, `z50_params`, `current_physical_params`). The
+    returned list is suitable for a UI selector; the bare names (no
+    `_params` suffix) are what the frontend sends back in the request.
+
+    `default` is always first if present, so the UI lists it as the
+    canonical starting point regardless of class attribute order.
+    """
+    suffix = "_params"
+    found: list[str] = []
+    for attr in dir(cls):
+        if not attr.endswith(suffix) or attr.startswith("_"):
+            continue
+        v = getattr(cls, attr, None)
+        # MappingProxyType / dict only — skip e.g. a method that happens
+        # to end in _params.
+        if not hasattr(v, "keys"):
+            continue
+        name = attr[: -len(suffix)]
+        if name:
+            found.append(name)
+    # `default` first, rest in stable (alphabetical) order.
+    found.sort(key=lambda n: (n != "default", n))
+    return tuple(found)
+
+
+def _serialize_param_values(params: dict) -> dict:
+    """JSON-encode a params dict for shipping to the frontend.
+
+    Complex values become {"re": ..., "im": ...} (matches the same
+    shape `_rehydrate_param` accepts on the way back). Bool/int/float
+    pass through. Anything exotic (None, strings that aren't enum
+    options, etc.) passes through too — the frontend just ignores
+    keys it doesn't have sliders for.
+    """
+    out: dict = {}
+    for k, v in params.items():
+        if isinstance(v, complex):
+            out[k] = {"re": float(v.real), "im": float(v.imag)}
+        else:
+            out[k] = v
+    return out
+
+
+def _variant_params(cls, variant: str | None) -> dict:
+    """Return the seed params dict for the named variant. Falls back to
+    `default_params` when variant is None or doesn't resolve to an
+    attribute (stale frontend, unknown name)."""
+    if variant:
+        params = getattr(cls, f"{variant}_params", None)
+        if params is not None and hasattr(params, "keys"):
+            return dict(params)
+    return dict(cls.default_params)
+
+
 def _ui_scalar(default_params: dict, key: str, default):
     ui = default_params.get("ui_params") or {}
     if key in ui and not isinstance(ui[key], dict):
@@ -407,9 +466,18 @@ def _make_example(name: str, cls) -> AntennaExample:
 
     param_schema = _derive_schema(dp)
     has_design_freq = "design_freq" in dp
+    variants = _discover_variants(cls)
+
+    def _design_freq_default(req: dict) -> float:
+        # The active variant's `freq` is the right fallback when the
+        # request hasn't supplied design_freq_mhz yet — different
+        # variants of one design can target different bands (e.g.
+        # hexbeam's opt vs default).
+        vp = _variant_params(cls, req.get("variant"))
+        return float(vp.get("freq", 14.0))
 
     def pysim_solve(req: dict) -> dict:
-        design_freq = float(req.get("design_freq_mhz", dp.get("freq", 14.0)))
+        design_freq = float(req.get("design_freq_mhz", _design_freq_default(req)))
         meas_freq = float(req.get("measurement_freq_mhz", design_freq))
         builder = _build_builder(cls, req)
         builder.freq = meas_freq
@@ -468,7 +536,7 @@ def _make_example(name: str, cls) -> AntennaExample:
         #   _engine      — keep the PyNECEngine alive so the
         #                  underlying nec_context isn't released
         #                  before rp_card runs
-        design_freq = float(req.get("design_freq_mhz", dp.get("freq", 14.0)))
+        design_freq = float(req.get("design_freq_mhz", _design_freq_default(req)))
         meas_freq = float(req.get("measurement_freq_mhz", design_freq))
         builder = _build_builder(cls, req)
         builder.freq = meas_freq
@@ -504,7 +572,7 @@ def _make_example(name: str, cls) -> AntennaExample:
         # shape is identical so the frontend renders the result the
         # same way; the `solver` field gets stamped to "pynec" by
         # server.solve()'s outer wrapper.
-        design_freq = float(req.get("design_freq_mhz", dp.get("freq", 14.0)))
+        design_freq = float(req.get("design_freq_mhz", _design_freq_default(req)))
         meas_freq = float(req.get("measurement_freq_mhz", design_freq))
         builder = _build_builder(cls, req)
         builder.freq = meas_freq
@@ -547,7 +615,7 @@ def _make_example(name: str, cls) -> AntennaExample:
         # solve sees. See pysim_solve for the rationale.
         if has_design_freq:
             builder.design_freq = float(
-                req.get("design_freq_mhz", dp.get("freq", 14.0))
+                req.get("design_freq_mhz", _design_freq_default(req))
             )
         eng = _make_pysim_engine(req, builder)
         zs = np.asarray(eng.impedance_sweep(list(freqs_mhz)))
@@ -577,6 +645,11 @@ def _make_example(name: str, cls) -> AntennaExample:
         default_view=default_view,
         default_freq_mhz=float(dp["freq"]) if "freq" in dp else None,
         has_design_freq=has_design_freq,
+        variants=variants,
+        variant_values={
+            v: _serialize_param_values(_strip_ui(_variant_params(cls, v)))
+            for v in variants
+        },
     )
 
 

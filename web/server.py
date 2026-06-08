@@ -755,6 +755,8 @@ def examples_endpoint():
                 "default_view": ex.default_view,
                 "default_freq_mhz": ex.default_freq_mhz,
                 "has_design_freq": ex.has_design_freq,
+                "variants": list(ex.variants),
+                "variant_values": dict(ex.variant_values),
                 "sweep_policy": {
                     "anchor": ex.sweep_policy.anchor,
                     "lo_factor": ex.sweep_policy.lo_factor,
