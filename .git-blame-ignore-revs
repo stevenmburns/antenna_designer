@@ -1,0 +1,5 @@
+# Bulk ruff format of the whole repo (2-space → 4-space reindent + quote
+# normalisation). No behaviour changes; skip from `git blame` output by
+# default with `git blame --ignore-revs-file=.git-blame-ignore-revs` or
+# `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+c562c71
