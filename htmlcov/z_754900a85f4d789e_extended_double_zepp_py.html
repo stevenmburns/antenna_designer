@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/antenna_designer/designs/freq_based/invvee.py: 100%</title>
+    <title>Coverage for src/antenna_designer/designs/freq_based/extended_double_zepp.py: 100%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -11,7 +11,7 @@
 <header>
     <div class="content">
         <h1>
-            <span class="text">Coverage for </span><b>src<span class="sep">/</span>antenna_designer<span class="sep">/</span>designs<span class="sep">/</span>freq_based<span class="sep">/</span>invvee.py</b>:
+            <span class="text">Coverage for </span><b>src<span class="sep">/</span>antenna_designer<span class="sep">/</span>designs<span class="sep">/</span>freq_based<span class="sep">/</span>extended_double_zepp.py</b>:
             <span class="pc_cov">100%</span>
         </h1>
         <aside id="help_panel_wrapper">
@@ -60,9 +60,9 @@
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
-            <a id="prevFileLink" class="nav" href="z_754900a85f4d789e_inv_delta_loop_py.html">&#xab; prev</a> &nbsp; &nbsp;
+            <a id="prevFileLink" class="nav" href="z_754900a85f4d789e_dipole_turnstile_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
-            <a id="nextFileLink" class="nav" href="z_754900a85f4d789e_yagi_py.html">&#xbb; next</a>
+            <a id="nextFileLink" class="nav" href="z_754900a85f4d789e_fandipole_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.14.1">coverage.py v7.14.1</a>,
             created at 2026-06-09 16:09 +0000
@@ -92,9 +92,9 @@
     <p class="run run2"><span class="n"><a id="t10" href="#t10">10</a></span><span class="t">            <span class="str">"design_freq"</span><span class="op">:</span> <span class="num">28.47</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t11" href="#t11">11</a></span><span class="t">            <span class="str">"freq"</span><span class="op">:</span> <span class="num">28.47</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t12" href="#t12">12</a></span><span class="t">            <span class="str">"base"</span><span class="op">:</span> <span class="num">7.0</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t13" href="#t13">13</a></span><span class="t">            <span class="str">"length_factor"</span><span class="op">:</span> <span class="num">0.9719</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t14" href="#t14">14</a></span><span class="t">            <span class="com">#    'angle_radians': 0.0,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t">            <span class="str">"angle_radians"</span><span class="op">:</span> <span class="num">0.5530</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t13" href="#t13">13</a></span><span class="t">            <span class="str">"length_factor"</span><span class="op">:</span> <span class="num">0.7422</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t14" href="#t14">14</a></span><span class="t">            <span class="str">"angle_radians"</span><span class="op">:</span> <span class="num">0.0</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t">            <span class="com">#    'angle_radians': 0.5530,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t">        <span class="op">}</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t17" href="#t17">17</a></span><span class="t">    <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -104,7 +104,7 @@
     <p class="pln"><span class="n"><a id="t22" href="#t22">22</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t23" href="#t23">23</a></span><span class="t">        <span class="nam">wavelength</span> <span class="op">=</span> <span class="num">299.792458</span> <span class="op">/</span> <span class="nam">self</span><span class="op">.</span><span class="nam">design_freq</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t24" href="#t24">24</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t25" href="#t25">25</a></span><span class="t">        <span class="nam">driver_y</span> <span class="op">=</span> <span class="num">0.25</span> <span class="op">*</span> <span class="nam">wavelength</span> <span class="op">*</span> <span class="nam">self</span><span class="op">.</span><span class="nam">length_factor</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t25" href="#t25">25</a></span><span class="t">        <span class="nam">driver_y</span> <span class="op">=</span> <span class="nam">wavelength</span> <span class="op">*</span> <span class="nam">self</span><span class="op">.</span><span class="nam">length_factor</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t26" href="#t26">26</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t27" href="#t27">27</a></span><span class="t">        <span class="nam">z_sin</span> <span class="op">=</span> <span class="nam">math</span><span class="op">.</span><span class="nam">sin</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">angle_radians</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t28" href="#t28">28</a></span><span class="t">        <span class="nam">y_cos</span> <span class="op">=</span> <span class="nam">math</span><span class="op">.</span><span class="nam">cos</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">angle_radians</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -158,9 +158,9 @@
 <footer>
     <div class="content">
         <p>
-            <a class="nav" href="z_754900a85f4d789e_inv_delta_loop_py.html">&#xab; prev</a> &nbsp; &nbsp;
+            <a class="nav" href="z_754900a85f4d789e_dipole_turnstile_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
-            <a class="nav" href="z_754900a85f4d789e_yagi_py.html">&#xbb; next</a>
+            <a class="nav" href="z_754900a85f4d789e_fandipole_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.14.1">coverage.py v7.14.1</a>,
             created at 2026-06-09 16:09 +0000
