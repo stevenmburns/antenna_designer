@@ -29,18 +29,38 @@ class Builder(AntennaBuilder):
         }
     )
 
-    # Extended Double Zepp: same V-dipole geometry as the half-wave
-    # default, just tuned to a ~1.5λ element. length_factor parameterises
-    # driver_y as 0.25·λ·length_factor, so the EDZ's 0.7422·λ driver_y
-    # lands at length_factor = 0.7422 / 0.25 = 2.9688. angle_radians=0
-    # makes it a straight (flat) double Zepp; bend it down for an
-    # inverted-V Zepp by raising angle_radians.
-    edz_params = MappingProxyType(
+    # Three-halves dipole: 1.484λ-long flat dipole, tuned to a near-
+    # resonant length where Z_in collapses to ~95 Ω (real). Not the
+    # classic Extended Double Zepp — that's the variant below — but
+    # the value freq_based.extended_double_zepp.py defaulted to before
+    # being folded into this Builder. Useful as a low-Z drop-in for a
+    # 50–100 Ω feedline at 28.47 MHz without a tuner.
+    #
+    # length_factor parameterises driver_y as 0.25·λ·length_factor, so
+    # this 0.7422·λ driver_y lands at length_factor = 0.7422 / 0.25 =
+    # 2.9688 (giving 2 × 0.7422 = 1.4844λ total length).
+    three_halves_params = MappingProxyType(
         {
             "design_freq": 28.47,
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 2.9688,
+            "angle_radians": 0.0,
+        }
+    )
+
+    # Classic Extended Double Zepp: 1.28λ total length (driver_y =
+    # 0.64λ per leg → length_factor = 0.64 / 0.25 = 2.56). Tuned for
+    # maximum broadside gain before pattern lobing splits; sits well
+    # above ~1λ anti-resonance, so the input impedance is high and
+    # very reactive (≈ 100 − j600 Ω at the design freq) and a matching
+    # network is required.
+    classic_edz_params = MappingProxyType(
+        {
+            "design_freq": 28.47,
+            "freq": 28.47,
+            "base": 7.0,
+            "length_factor": 2.56,
             "angle_radians": 0.0,
         }
     )
