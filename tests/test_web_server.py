@@ -1,0 +1,341 @@
+"""Unit tests for web/server.py.
+
+Covers the pure helpers (no FastAPI), the JSON-shape contracts the
+frontend depends on (/healthz, /examples), and one end-to-end /solve
+through the lightest geometry (dipole) so the request → response
+pipeline is exercised without dragging in expensive sweeps.
+
+The expensive endpoints (/sweep, /converge, /pattern, /ws) are
+streaming/async and are deliberately *not* covered here — those are
+integration territory and want their own targeted tests.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+from fastapi.testclient import TestClient
+
+from web import server
+
+
+# ---------------------------------------------------------------------------
+# Test client — shared across the whole module so FastAPI's startup runs once.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def client() -> TestClient:
+    return TestClient(server.app)
+
+
+# ---------------------------------------------------------------------------
+# Pure helpers
+# ---------------------------------------------------------------------------
+
+
+def test_physical_cpu_count_is_positive():
+    assert server._physical_cpu_count() >= 1
+
+
+def test_read_ground_off_returns_zero_offset():
+    on, h, z = server._read_ground({})
+    assert on is False
+    assert h == 0.0
+    assert z == 0.0
+
+
+def test_read_ground_on_sets_z_offset_to_height():
+    on, h, z = server._read_ground({"ground": True, "height_m": 4.5})
+    assert on is True
+    assert h == 4.5
+    assert z == 4.5
+
+
+def test_read_ground_off_ignores_height():
+    # An explicit height with ground=False shouldn't displace the antenna —
+    # the geometry stays at its native z=0. The frontend toggles ground
+    # independently of the height slider.
+    _on, _h, z = server._read_ground({"ground": False, "height_m": 7.0})
+    assert z == 0.0
+
+
+def test_polyline_knots_dedup_shared_corners():
+    poly = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]])
+    knots = server._polyline_knots(poly, [2, 3])
+    # 2 + 3 segments with shared mid-corner → 2 + 3 + 1 = 6 knots, not 7.
+    assert knots.shape == (6, 3)
+    # First knot of segment 2 is the last knot of segment 1, not duplicated.
+    np.testing.assert_allclose(knots[2], poly[1])
+
+
+def test_sample_arc_for_wire_interleaves_knots_and_midpoints():
+    # Wire: three colinear knots at x = 0, 1, 3. h_seg = [1, 2].
+    # arc_at_knot = [0, 1, 3]; mid_arc = [0.5, 2.0]
+    # sample_arc = [0, 0.5, 1, 2.0, 3]
+    knots = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [3.0, 0.0, 0.0]])
+    arc = server._sample_arc_for_wire(knots)
+    np.testing.assert_allclose(arc, [0.0, 0.5, 1.0, 2.0, 3.0])
+
+
+def test_attach_derived_em_fields_computes_wavenumber():
+    # k = 2π f / c at the frontend's reference c (299_792_458 m/s).
+    f_mhz = 30.0
+    out = {"measurement_freq_mhz": f_mhz, "ground": False}
+    server._attach_derived_em_fields(out)
+    expected_k = 2 * np.pi * f_mhz * 1e6 / server.C_LIGHT
+    assert out["k_meas_m_inv"] == pytest.approx(expected_k, rel=1e-12)
+    # σ=0 → imaginary permittivity component is exactly zero.
+    assert out["ground_eps_im"] == 0.0
+
+
+def test_attach_derived_em_fields_ground_sigma_negates_into_eps_im():
+    # With σ > 0, ground_eps_im = -σ / (ω ε₀) < 0.
+    out = {
+        "measurement_freq_mhz": 14.0,
+        "ground": True,
+        "ground_sigma": 0.005,
+    }
+    server._attach_derived_em_fields(out)
+    assert out["ground_eps_im"] < 0.0
+
+
+# ---------------------------------------------------------------------------
+# _make_pysim_sim — model selection + per-model option allowlist
+# ---------------------------------------------------------------------------
+
+
+def test_pysim_model_keys_table_matches_models_table():
+    # Every model in _PYSIM_MODELS must declare its accepted option keys,
+    # or _make_pysim_sim will KeyError when that model is selected.
+    assert set(server._PYSIM_MODEL_KEYS) == set(server._PYSIM_MODELS)
+
+
+def test_pysim_models_with_ground_is_subset_of_models():
+    assert server._PYSIM_MODELS_WITH_GROUND.issubset(server._PYSIM_MODELS)
+
+
+# ---------------------------------------------------------------------------
+# /healthz — the smoke test the dev launcher polls
+# ---------------------------------------------------------------------------
+
+
+def test_healthz_returns_ok(client: TestClient):
+    r = client.get("/healthz")
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# /examples — schema serialization, used by the frontend on mount
+# ---------------------------------------------------------------------------
+
+
+def test_examples_endpoint_returns_every_registered_example(client: TestClient):
+    payload = client.get("/examples").json()
+    assert "examples" in payload
+    names = {e["name"] for e in payload["examples"]}
+    # Every registered geometry shows up.
+    assert names == set(server.EXAMPLES.keys())
+
+
+def test_examples_are_sorted_by_label(client: TestClient):
+    payload = client.get("/examples").json()
+    labels = [e["label"] for e in payload["examples"]]
+    assert labels == sorted(labels)
+
+
+def test_each_example_has_the_keys_the_frontend_reads(client: TestClient):
+    payload = client.get("/examples").json()
+    required = {
+        "name",
+        "label",
+        "multi_feed",
+        "param_schema",
+        "result_schema",
+        "bands",
+        "meas_freq_range_mhz",
+        "default_view",
+        "default_freq_mhz",
+        "has_design_freq",
+        "variants",
+        "variant_values",
+        "sweep_policy",
+    }
+    for ex in payload["examples"]:
+        missing = required - set(ex.keys())
+        assert not missing, f"{ex['name']}: missing keys {missing}"
+
+
+def test_examples_serialize_param_groups_with_kind_group(client: TestClient):
+    # fandipole is the canonical group-bearing geometry — its `bands`
+    # ParamGroupSpec must round-trip with kind="group" so the frontend's
+    # generic schema renderer knows to draw a repeating section.
+    payload = client.get("/examples").json()
+    fan = next(e for e in payload["examples"] if e["name"] == "freq_based.fandipole")
+    groups = [p for p in fan["param_schema"] if p.get("kind") == "group"]
+    assert groups, "fandipole bands group missing from serialized schema"
+    g = groups[0]
+    assert g["name"] == "bands"
+    assert g["repeat_count"] == "n_bands"
+    assert g["max_repeats"] == 5
+    # Inner params are serialized as a list of ParamSpec dicts.
+    assert {p["name"] for p in g["params"]} == {"freq", "length_factor"}
+
+
+def test_examples_carry_default_view_in_valid_set(client: TestClient):
+    payload = client.get("/examples").json()
+    for ex in payload["examples"]:
+        assert ex["default_view"] in {"xy", "yz", "xz"}
+
+
+def test_examples_carry_sweep_policy_keys(client: TestClient):
+    payload = client.get("/examples").json()
+    for ex in payload["examples"]:
+        sp = ex["sweep_policy"]
+        assert set(sp) == {"anchor", "lo_factor", "hi_factor", "band_locked"}
+        assert sp["anchor"] in {"design_freq", "meas_freq"}
+
+
+# ---------------------------------------------------------------------------
+# solve() dispatcher — exercise the pysim path end-to-end on the cheapest
+# geometry (dipole). This is the only place the test module calls a real
+# solver; everything else stays I/O-only.
+# ---------------------------------------------------------------------------
+
+
+def test_solve_dispatches_to_pysim_for_dipole():
+    out = server.solve(
+        {
+            "geometry": "dipole",
+            "measurement_freq_mhz": 14.0,
+            "design_freq_mhz": 14.0,
+            "pysim_model": "triangular",
+        }
+    )
+    assert out["solver"] == "pysim"
+    assert out["geometry"] == "dipole"
+    # _attach_derived_em_fields ran.
+    assert "k_meas_m_inv" in out
+    assert out["k_meas_m_inv"] > 0
+    # _compute_directivity_norm ran.
+    assert "directivity_norm" in out
+    assert out["directivity_norm"] > 0
+    # Real dipole has a real-part impedance roughly in the tens of ohms.
+    assert out["z_in_re"] > 0
+
+
+def test_solve_falls_back_when_geometry_unknown():
+    # An unknown geometry should silently fall back to the first registered
+    # example rather than 500 — the frontend can briefly send a stale name
+    # while it reloads /examples.
+    out = server.solve(
+        {
+            "geometry": "this_geometry_does_not_exist",
+            "measurement_freq_mhz": 14.0,
+        }
+    )
+    assert out["solver"] == "pysim"
+    assert "wires" in out
+
+
+# ---------------------------------------------------------------------------
+# _wire_record — packs one wire's knot/sample currents for the JSON response.
+# Pure data wrangling, no solver involvement.
+# ---------------------------------------------------------------------------
+
+
+def test_wire_record_packs_knot_data_without_samples():
+    knots = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    currents = np.array([0.5 + 0j, 1.0 + 0.2j, 0.0 + 0j])
+    out = server._wire_record(knots, currents, label="wire7")
+    assert out["label"] == "wire7"
+    assert out["knot_positions"] == knots.tolist()
+    assert out["knot_currents_re"] == [0.5, 1.0, 0.0]
+    assert out["knot_currents_im"] == [0.0, 0.2, 0.0]
+    # No sample keys when sample_currents is omitted.
+    assert "sample_positions" not in out
+
+
+def test_wire_record_packs_sample_data_when_provided():
+    knots = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    currents = np.array([0.0 + 0j, 1.0 + 0j, 0.0 + 0j])
+    # 2 segments → 2*2+1 = 5 sample currents required.
+    samples = np.array([0.0, 0.5, 1.0, 0.5, 0.0], dtype=complex)
+    out = server._wire_record(knots, currents, "w", sample_currents=samples)
+    # Interleaved positions: knot, midpoint, knot, midpoint, knot.
+    pos = np.asarray(out["sample_positions"])
+    assert pos.shape == (5, 3)
+    np.testing.assert_allclose(pos[0], knots[0])
+    np.testing.assert_allclose(pos[2], knots[1])
+    np.testing.assert_allclose(pos[4], knots[2])
+    np.testing.assert_allclose(pos[1], 0.5 * (knots[0] + knots[1]))
+    assert out["sample_currents_re"] == [0.0, 0.5, 1.0, 0.5, 0.0]
+
+
+def test_wire_record_rejects_currents_length_mismatch():
+    knots = np.zeros((3, 3))
+    currents = np.zeros(4, dtype=complex)  # one too many
+    with pytest.raises(ValueError, match="currents/knots length mismatch"):
+        server._wire_record(knots, currents, "w")
+
+
+def test_wire_record_rejects_sample_currents_length_mismatch():
+    knots = np.zeros((3, 3))
+    currents = np.zeros(3, dtype=complex)
+    bad_samples = np.zeros(4, dtype=complex)  # need 2*2+1 = 5
+    with pytest.raises(ValueError, match="sample_currents length"):
+        server._wire_record(knots, currents, "w", sample_currents=bad_samples)
+
+
+# ---------------------------------------------------------------------------
+# _compute_directivity_norm — pure-numpy integration over a synthetic
+# wire grid. Doesn't need a solver; we feed it a hand-built response dict.
+# ---------------------------------------------------------------------------
+
+
+def _hertzian_dipole_response(freq_mhz: float = 30.0):
+    """A 0.1 m centred-z wire with unit current — small enough that the
+    radiation integral degenerates to a Hertzian-dipole pattern, large
+    enough to keep the numerics well-conditioned.
+    """
+    knots = np.array(
+        [[0.0, 0.0, -0.05], [0.0, 0.0, 0.0], [0.0, 0.0, 0.05]], dtype=float
+    )
+    return {
+        "measurement_freq_mhz": freq_mhz,
+        "ground": False,
+        "wires": [
+            {
+                "knot_positions": knots.tolist(),
+                "knot_currents_re": [1.0, 1.0, 1.0],
+                "knot_currents_im": [0.0, 0.0, 0.0],
+            }
+        ],
+    }
+
+
+def test_compute_directivity_norm_positive_no_ground():
+    out = _hertzian_dipole_response()
+    server._attach_derived_em_fields(out)
+    server._compute_directivity_norm(out, n_theta=15, n_phi=30)
+    assert "directivity_norm" in out
+    # ∫|M_perp|² dΩ > 0 for a non-zero current, so the norm is finite +.
+    assert out["directivity_norm"] > 0
+    assert np.isfinite(out["directivity_norm"])
+
+
+def test_compute_directivity_norm_ground_on_stays_finite_and_positive():
+    # With ground=True the integration domain halves and a reflected
+    # image contribution is added; the resulting norm has to stay finite
+    # and positive. (The exact ground/no-ground ratio depends on source
+    # geometry and isn't a clean closed form.)
+    with_ground = _hertzian_dipole_response()
+    with_ground["ground"] = True
+    # PEC ground: real Fresnel code path takes complex eps_r + j*eps_im.
+    with_ground["ground_eps_r"] = 1.0e10
+    with_ground["ground_sigma"] = 0.0
+    server._attach_derived_em_fields(with_ground)
+    server._compute_directivity_norm(with_ground, n_theta=15, n_phi=30)
+    assert with_ground["directivity_norm"] > 0
+    assert np.isfinite(with_ground["directivity_norm"])
