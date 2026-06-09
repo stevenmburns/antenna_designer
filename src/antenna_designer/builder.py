@@ -33,7 +33,13 @@ class AntennaBuilder:
     def __str__(self):
         res = []
         for k, v in self._params.items():
-            res.append(f"{k} = {v:.4f}")
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                res.append(f"{k} = {v:.4f}")
+            else:
+                # Non-numeric values (ui_params dict, complex excitation,
+                # variant overrides) — fall back to repr so optimizer logs
+                # don't crash on them.
+                res.append(f"{k} = {v!r}")
         return ", ".join(res)
 
     def build_tls(self):

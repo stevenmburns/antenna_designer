@@ -92,7 +92,7 @@ def test_attach_derived_em_fields_computes_wavenumber():
 def test_attach_derived_em_fields_ground_sigma_negates_into_eps_im():
     # With σ > 0, ground_eps_im = -σ / (ω ε₀) < 0.
     out = {
-        "measurement_freq_mhz": 14.0,
+        "measurement_freq_mhz": 28.47,
         "ground": True,
         "ground_sigma": 0.005,
     }
@@ -192,14 +192,14 @@ def test_examples_carry_sweep_policy_keys(client: TestClient):
 def test_solve_dispatches_to_pysim_for_dipole():
     out = server.solve(
         {
-            "geometry": "dipole",
-            "measurement_freq_mhz": 14.0,
-            "design_freq_mhz": 14.0,
+            "geometry": "freq_based.invvee",
+            "measurement_freq_mhz": 28.47,
+            "design_freq_mhz": 28.47,
             "pysim_model": "triangular",
         }
     )
     assert out["solver"] == "pysim"
-    assert out["geometry"] == "dipole"
+    assert out["geometry"] == "freq_based.invvee"
     # _attach_derived_em_fields ran.
     assert "k_meas_m_inv" in out
     assert out["k_meas_m_inv"] > 0
@@ -217,7 +217,7 @@ def test_solve_falls_back_when_geometry_unknown():
     out = server.solve(
         {
             "geometry": "this_geometry_does_not_exist",
-            "measurement_freq_mhz": 14.0,
+            "measurement_freq_mhz": 28.47,
         }
     )
     assert out["solver"] == "pysim"
@@ -325,20 +325,20 @@ def _ndjson_records(response_text: str) -> list[dict]:
 
 
 def test_sweep_endpoint_empty_freqs_returns_only_done(client: TestClient):
-    r = client.post("/sweep", json={"geometry": "dipole", "freqs_mhz": []})
+    r = client.post("/sweep", json={"geometry": "freq_based.invvee", "freqs_mhz": []})
     assert r.status_code == 200
     recs = _ndjson_records(r.text)
     assert recs == [{"done": True, "solver": "pysim"}]
 
 
 def test_sweep_endpoint_streams_one_record_per_freq_then_done(client: TestClient):
-    freqs = [13.5, 14.0, 14.5]
+    freqs = [28.0, 28.47, 29.0]
     r = client.post(
         "/sweep",
         json={
-            "geometry": "dipole",
+            "geometry": "freq_based.invvee",
             "freqs_mhz": freqs,
-            "measurement_freq_mhz": 14.0,
+            "measurement_freq_mhz": 28.47,
             "pysim_model": "triangular",
         },
     )
@@ -360,7 +360,7 @@ def test_sweep_endpoint_streams_one_record_per_freq_then_done(client: TestClient
 
 
 def test_sweep_endpoint_returns_ndjson_content_type(client: TestClient):
-    r = client.post("/sweep", json={"geometry": "dipole", "freqs_mhz": []})
+    r = client.post("/sweep", json={"geometry": "freq_based.invvee", "freqs_mhz": []})
     assert r.headers["content-type"].startswith("application/x-ndjson")
 
 
@@ -369,9 +369,9 @@ def test_converge_endpoint_streams_one_record_per_n_then_done(client: TestClient
     r = client.post(
         "/converge",
         json={
-            "geometry": "dipole",
+            "geometry": "freq_based.invvee",
             "n_values": ns,
-            "measurement_freq_mhz": 14.0,
+            "measurement_freq_mhz": 28.47,
             "pysim_model": "triangular",
         },
     )
@@ -390,7 +390,7 @@ def test_converge_endpoint_streams_one_record_per_n_then_done(client: TestClient
 
 
 def test_converge_endpoint_empty_n_values_returns_only_done(client: TestClient):
-    r = client.post("/converge", json={"geometry": "dipole", "n_values": []})
+    r = client.post("/converge", json={"geometry": "freq_based.invvee", "n_values": []})
     recs = _ndjson_records(r.text)
     assert recs == [{"done": True, "solver": "pysim"}]
 
@@ -401,7 +401,7 @@ def test_pattern_endpoint_pysim_returns_unavailable(client: TestClient):
     # HAVE_PYNEC=False fallback shape.
     r = client.post(
         "/pattern",
-        json={"geometry": "dipole", "solver": "pysim", "measurement_freq_mhz": 14.0},
+        json={"geometry": "freq_based.invvee", "solver": "pysim", "measurement_freq_mhz": 28.47},
     )
     assert r.status_code == 200
     assert r.json() == {"available": False}
@@ -431,12 +431,12 @@ pynec_required = pytest.mark.skipif(
 def test_solve_dispatches_to_pynec_when_requested():
     out = server.solve(
         {
-            "geometry": "dipole",
+            "geometry": "freq_based.invvee",
             "solver": "pynec",
-            "measurement_freq_mhz": 14.0,
+            "measurement_freq_mhz": 28.47,
         }
     )
-    assert out["geometry"] == "dipole"
+    assert out["geometry"] == "freq_based.invvee"
     assert "wires" in out
     # _attach_derived_em_fields + _compute_directivity_norm wrap both
     # solver branches; their outputs must show up regardless of which
@@ -450,14 +450,14 @@ def test_solve_dispatches_to_pynec_when_requested():
 
 @pynec_required
 def test_sweep_endpoint_with_pynec_streams_per_point(client: TestClient):
-    freqs = [13.8, 14.0, 14.2]
+    freqs = [28.0, 28.47, 29.0]
     r = client.post(
         "/sweep",
         json={
-            "geometry": "dipole",
+            "geometry": "freq_based.invvee",
             "solver": "pynec",
             "freqs_mhz": freqs,
-            "measurement_freq_mhz": 14.0,
+            "measurement_freq_mhz": 28.47,
         },
     )
     assert r.status_code == 200
@@ -480,15 +480,15 @@ def test_pattern_endpoint_with_pynec_returns_full_grid(client: TestClient):
     r = client.post(
         "/pattern",
         json={
-            "geometry": "dipole",
+            "geometry": "freq_based.invvee",
             "solver": "pynec",
-            "measurement_freq_mhz": 14.0,
+            "measurement_freq_mhz": 28.47,
         },
     )
     assert r.status_code == 200
     payload = r.json()
     assert payload["available"] is True
-    assert payload["geometry"] == "dipole"
+    assert payload["geometry"] == "freq_based.invvee"
     assert len(payload["theta_deg"]) == 46
     assert len(payload["phi_deg"]) == 73
     assert len(payload["gain_dbi"]) == 46
@@ -508,7 +508,7 @@ def test_pattern_endpoint_with_pynec_returns_full_grid(client: TestClient):
 @pynec_required
 def test_sweep_endpoint_pynec_empty_freqs_returns_only_done(client: TestClient):
     r = client.post(
-        "/sweep", json={"geometry": "dipole", "solver": "pynec", "freqs_mhz": []}
+        "/sweep", json={"geometry": "freq_based.invvee", "solver": "pynec", "freqs_mhz": []}
     )
     recs = _ndjson_records(r.text)
     assert recs == [{"done": True, "solver": "pynec"}]
@@ -528,7 +528,7 @@ def test_multi_feed_flag_lights_up_for_array_designs():
     ex = server.EXAMPLES["bowtiearray1x2"]
     assert ex.multi_feed is True
     assert server.EXAMPLES["invveearray"].multi_feed is True
-    assert server.EXAMPLES["dipole"].multi_feed is False
+    assert server.EXAMPLES["freq_based.invvee"].multi_feed is False
 
 
 def test_solve_for_multi_feed_geometry_includes_feeds_array():
@@ -554,8 +554,8 @@ def test_solve_for_multi_feed_geometry_includes_feeds_array():
 def test_solve_for_single_feed_geometry_omits_feeds_array():
     out = server.solve(
         {
-            "geometry": "dipole",
-            "measurement_freq_mhz": 14.0,
+            "geometry": "freq_based.invvee",
+            "measurement_freq_mhz": 28.47,
             "pysim_model": "triangular",
         }
     )
@@ -565,7 +565,7 @@ def test_solve_for_single_feed_geometry_omits_feeds_array():
 @pytest.mark.parametrize(
     "design_module,expected_z0",
     [
-        ("dipole", 50.0),
+        ("freq_based.invvee", 50.0),
         ("freq_based.dipole_turnstile", 50.0),  # 2 feeds but not Array*
         ("bowtiearray1x2", 100.0),
         ("delta_looparray", 100.0),
@@ -693,15 +693,15 @@ def test_ws_endpoint_round_trips_a_solve(client: TestClient):
         ws.send_text(
             __import__("json").dumps(
                 {
-                    "geometry": "dipole",
-                    "measurement_freq_mhz": 14.0,
+                    "geometry": "freq_based.invvee",
+                    "measurement_freq_mhz": 28.47,
                     "pysim_model": "triangular",
                 }
             )
         )
         result = __import__("json").loads(ws.receive_text())
     assert result["solver"] == "pysim"
-    assert result["geometry"] == "dipole"
+    assert result["geometry"] == "freq_based.invvee"
     assert "wires" in result
     assert result["z_in_re"] > 0
 
@@ -712,8 +712,8 @@ def test_ws_endpoint_handles_multiple_requests_on_one_socket(client: TestClient)
     # for every slider drag.
     req = __import__("json").dumps(
         {
-            "geometry": "dipole",
-            "measurement_freq_mhz": 14.0,
+            "geometry": "freq_based.invvee",
+            "measurement_freq_mhz": 28.47,
             "pysim_model": "triangular",
         }
     )
@@ -722,8 +722,8 @@ def test_ws_endpoint_handles_multiple_requests_on_one_socket(client: TestClient)
         first = __import__("json").loads(ws.receive_text())
         ws.send_text(req)
         second = __import__("json").loads(ws.receive_text())
-    assert first["geometry"] == "dipole"
-    assert second["geometry"] == "dipole"
+    assert first["geometry"] == "freq_based.invvee"
+    assert second["geometry"] == "freq_based.invvee"
     # Same request → deterministic same z_in.
     assert first["z_in_re"] == pytest.approx(second["z_in_re"])
     assert first["z_in_im"] == pytest.approx(second["z_in_im"])
@@ -741,8 +741,8 @@ def test_ws_endpoint_returns_cleanly_on_client_disconnect(client: TestClient):
 def test_solve_z_only_returns_primary_z_and_no_feeds_for_dipole():
     z, feeds_z = server._solve_z_only(
         {
-            "geometry": "dipole",
-            "measurement_freq_mhz": 14.0,
+            "geometry": "freq_based.invvee",
+            "measurement_freq_mhz": 28.47,
             "pysim_model": "triangular",
         }
     )

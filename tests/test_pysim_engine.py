@@ -4,13 +4,13 @@ geometry translator it sits on top of."""
 import numpy as np
 import pytest
 
-from antenna_designer.designs.dipole import Builder
+from antenna_designer.designs.freq_based.invvee import Builder
 from antenna_designer.engines import PyNECEngine, PysimEngine
 from antenna_designer.geometry import flat_wires_to_polylines
 
 
 def test_translator_chains_dipole_into_single_polyline():
-    b = Builder()
+    b = Builder(Builder.dipole_params)  # straight half-wave dipole
     out = flat_wires_to_polylines(b.build_wires())
 
     assert len(out["polylines"]) == 1
@@ -19,10 +19,12 @@ def test_translator_chains_dipole_into_single_polyline():
     assert out["edge_segments"] == [[21, 3, 21]]
     assert out["feed_wire_index"] == 0
 
-    # Feed sits at the geometric centre of the dipole; the dipole spans
-    # -length/2 ... +length/2 about x=0, so arclength from the starting
-    # end to the feed midpoint is length/2.
-    assert out["feed_arclength"] == pytest.approx(b.length / 2.0, rel=1e-9)
+    # Feed sits at the geometric centre of the dipole; for the freq_based
+    # parameterisation the half-arm wire length is driver_y, so the polyline
+    # spans 2·driver_y end-to-end and the feed midpoint lands at driver_y.
+    wavelength = 299.792458 / b.design_freq
+    driver_y = 0.25 * wavelength * b.length_factor
+    assert out["feed_arclength"] == pytest.approx(driver_y, rel=1e-6)
     assert out["feed_voltage"] == 1 + 0j
 
 
@@ -187,8 +189,8 @@ def test_sweep_accepts_engine_factory(tmp_path):
     out = tmp_path / "sw.png"
     ant.sweep(
         Builder(),
-        "length",
-        center=5.032,
+        "length_factor",
+        center=0.97,
         fraction=1.05,
         npoints=3,
         fn=str(out),
@@ -206,8 +208,8 @@ def test_sweep_gain_accepts_engine_factory(tmp_path):
     out = tmp_path / "sg.png"
     ant.sweep_gain(
         Builder(),
-        "length",
-        center=5.032,
+        "length_factor",
+        center=0.97,
         fraction=1.05,
         npoints=3,
         fn=str(out),

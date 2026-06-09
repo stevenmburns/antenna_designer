@@ -211,14 +211,14 @@ def cli(arguments=None):
                 "--builders",
                 type=str,
                 nargs="+",
-                default=["dipole", "invvee"],
+                default=["freq_based.invvee:dipole", "freq_based.invvee"],
                 help="Use this list of antenna builders.",
             )
         else:
             p.add_argument(
                 "--builder",
                 type=str,
-                default="dipole",
+                default="freq_based.invvee:dipole",
                 help="Use this antenna builder.",
             )
 

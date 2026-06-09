@@ -76,16 +76,16 @@ O = " --fn /dev/null"
 
 
 def test_cli_compare_patterns_multi_engine():
-    ant.cli(f"compare_patterns --builders dipole --engines pynec pysim{O}".split())
+    ant.cli(f"compare_patterns --builders freq_based.invvee:dipole --engines pynec pysim{O}".split())
 
 
 def test_cli_compare_patterns_single_engine_still_works():
-    ant.cli(f"compare_patterns --builders dipole invvee --engines pynec{O}".split())
+    ant.cli(f"compare_patterns --builders freq_based.invvee:dipole freq_based.invvee --engines pynec{O}".split())
 
 
 def test_cli_compare_patterns_pysim_basis():
     ant.cli(
-        f"compare_patterns --builders dipole --engines pysim:triangular pysim:sinusoidal{O}".split()
+        f"compare_patterns --builders freq_based.invvee:dipole --engines pysim:triangular pysim:sinusoidal{O}".split()
     )
 
 
@@ -120,23 +120,23 @@ def test_broadcast_mismatch_raises():
 
 def test_cli_compare_patterns_three_by_three_paired():
     ant.cli(
-        f"compare_patterns --builders dipole invvee bowtie "
+        f"compare_patterns --builders freq_based.invvee:dipole freq_based.invvee bowtie "
         f"--engines pynec pysim:triangular pysim:sinusoidal{O}".split()
     )
 
 
 def test_cli_compare_patterns_three_builders_one_engine():
     ant.cli(
-        f"compare_patterns --builders dipole invvee bowtie --engines pysim{O}".split()
+        f"compare_patterns --builders freq_based.invvee:dipole freq_based.invvee bowtie --engines pysim{O}".split()
     )
 
 
 def test_cli_compare_patterns_mismatch_rejected():
     with pytest.raises(argparse.ArgumentTypeError):
         ant.cli(
-            f"compare_patterns --builders dipole invvee --engines pynec pysim:triangular pysim:sinusoidal{O}".split()
+            f"compare_patterns --builders freq_based.invvee:dipole freq_based.invvee --engines pynec pysim:triangular pysim:sinusoidal{O}".split()
         )
 
 
 def test_cli_pattern_with_basis_spec():
-    ant.cli(f"pattern --builder dipole --engine pysim:sinusoidal{O}".split())
+    ant.cli(f"pattern --builder freq_based.invvee:dipole --engine pysim:sinusoidal{O}".split())

@@ -1,5 +1,5 @@
 import antenna_designer as ant
-from antenna_designer.designs.dipole import Builder
+from antenna_designer.designs.freq_based.invvee import Builder
 
 
 def test_fandipole_sweep_freq():

@@ -1,5 +1,5 @@
 from antenna_designer import Antenna
-from antenna_designer.designs.dipole import Builder
+from antenna_designer.designs.freq_based.invvee import Builder
 
 from unittest.mock import patch
 

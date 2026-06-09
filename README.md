@@ -19,19 +19,19 @@ python -m antenna_designer compare_patterns --builders moxon hexbeam
 ```
 # More Advanced Usage
 
-Optimize the `length` and `slope` of an inverted vee dipole antenna as the height (`base`) is swept across several different values and then show the far-field plots for the different builds:
+Optimize the `length_factor` and `angle_radians` of an inverted-V dipole antenna as the height (`base`) is swept across several different values and then show the far-field plots for the different builds:
 ```python3
 import antenna_designer as ant
-from antenna_designer.designs.invvee import Builder
+from antenna_designer.designs.freq_based.invvee import Builder
 
-p = Builder.default_params
-bounds = ((p['length']*.8, p['length']*1.25),(0,1))
+p = dict(Builder.default_params)
+bounds = ((p['length_factor']*.8, p['length_factor']*1.25), (0, 1))
 
 builders = (
   ant.optimize(
     Builder(dict(p, **{'base': base})),
-    ['length','slope'], z0=50, bounds=bounds
-  ) for base in [5,6,7,8]
+    ['length_factor', 'angle_radians'], z0=50, bounds=bounds
+  ) for base in [5, 6, 7, 8]
 )
 
 ant.compare_patterns(builders)
