@@ -44,6 +44,7 @@ from .examples._base import (
     DEFAULT_SWEEP_POLICY,
     AntennaExample,
     BandSpec,
+    ParamGroupSpec,
     ParamSpec,
     SweepPolicy,
 )
@@ -168,7 +169,70 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
     return None
 
 
-def _derive_schema(default_params: dict) -> tuple[ParamSpec, ...]:
+def _group_spec_from_default(
+    name: str,
+    default_value: tuple | list,
+    ui_override: dict,
+    all_default_params: dict,
+) -> ParamGroupSpec | None:
+    """Build a ParamGroupSpec from a tuple/list-of-dicts default value.
+
+    The default value's length seeds default_overrides for the group's
+    instances; the inner ParamSpecs come from auto-deriving each key of
+    the first instance dict (with optional per-leaf overrides supplied
+    under the same ui_override dict, keyed by leaf name).
+
+    `ui_override` is the dict stored under `ui_params[<group_name>]`.
+    Recognised keys: label_template, repeat_count, max_repeats,
+    link_meas_freq_to_param, plus any leaf-name → override-dict pairs.
+    Falls back to sensible defaults when missing.
+    """
+    if not default_value or not all(isinstance(d, dict) for d in default_value):
+        return None
+    template = default_value[0]
+    if not template:
+        return None
+
+    repeat_count = ui_override.get("repeat_count")
+    if repeat_count is None:
+        # Heuristic: prefer n_<name> (n_bands for bands), then n_<singular>.
+        for cand in (f"n_{name}", f"n_{name.rstrip('s')}"):
+            if cand in all_default_params:
+                repeat_count = cand
+                break
+    if not isinstance(repeat_count, str):
+        # No count param → can't render a repeating group.
+        return None
+
+    max_repeats = int(ui_override.get("max_repeats", len(default_value)))
+    label_template = str(ui_override.get("label_template", f"{name} {{i}}"))
+    link = ui_override.get("link_meas_freq_to_param")
+
+    inner_params: list[ParamSpec] = []
+    for leaf_name, leaf_default in template.items():
+        leaf_override = ui_override.get(leaf_name)
+        if leaf_override is None or not isinstance(leaf_override, dict):
+            leaf_override = {}
+        spec = _auto_paramspec(leaf_name, leaf_default, dict(leaf_override))
+        if spec is not None:
+            inner_params.append(spec)
+    if not inner_params:
+        return None
+
+    default_overrides = tuple(dict(d) for d in default_value)
+
+    return ParamGroupSpec(
+        name=name,
+        label_template=label_template,
+        repeat_count=repeat_count,
+        max_repeats=max_repeats,
+        params=tuple(inner_params),
+        default_overrides=default_overrides,
+        link_meas_freq_to_param=str(link) if isinstance(link, str) else None,
+    )
+
+
+def _derive_schema(default_params: dict) -> tuple:
     ui = dict(default_params.get("ui_params") or {})
     specs: list[ParamSpec] = []
     for key, default in default_params.items():
@@ -186,6 +250,24 @@ def _derive_schema(default_params: dict) -> tuple[ParamSpec, ...]:
         # request). Skipping it here too prevents the auto-derived
         # schema slider from duplicating that control.
         if key in ("freq", "design_freq"):
+            continue
+        # Repeating-group default: tuple/list of dicts → ParamGroupSpec.
+        # The ui_params override (if any) carries the group-level
+        # config (label_template, repeat_count, max_repeats,
+        # link_meas_freq_to_param) plus per-leaf override dicts.
+        if (
+            isinstance(default, (tuple, list))
+            and default
+            and all(isinstance(x, dict) for x in default)
+        ):
+            group_override = ui.get(key)
+            if not isinstance(group_override, dict):
+                group_override = {}
+            group_spec = _group_spec_from_default(
+                key, default, group_override, default_params
+            )
+            if group_spec is not None:
+                specs.append(group_spec)
             continue
         override = ui.get(key)
         if override is not None and not isinstance(override, dict):
