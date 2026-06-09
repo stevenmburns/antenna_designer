@@ -413,6 +413,108 @@ def test_pattern_endpoint_pysim_returns_unavailable(client: TestClient):
 
 
 # ---------------------------------------------------------------------------
+# PyNEC paths — same endpoints, solver="pynec" branch. Each test runs one
+# real NEC solve on dipole; sub-second on the CI box.
+# ---------------------------------------------------------------------------
+
+
+# Skip the whole PyNEC-path section when PyNEC didn't build (it's a hard
+# dep on CI, but local devs without swig+gfortran shouldn't see a hard
+# failure). pynec_backend.HAVE_PYNEC is the same flag the dispatcher uses.
+pynec_required = pytest.mark.skipif(
+    not __import__("web.pynec_backend", fromlist=["HAVE_PYNEC"]).HAVE_PYNEC,
+    reason="PyNEC not built in this environment",
+)
+
+
+@pynec_required
+def test_solve_dispatches_to_pynec_when_requested():
+    out = server.solve(
+        {
+            "geometry": "dipole",
+            "solver": "pynec",
+            "measurement_freq_mhz": 14.0,
+        }
+    )
+    assert out["geometry"] == "dipole"
+    assert "wires" in out
+    # _attach_derived_em_fields + _compute_directivity_norm wrap both
+    # solver branches; their outputs must show up regardless of which
+    # backend ran.
+    assert out["k_meas_m_inv"] > 0
+    assert out["directivity_norm"] > 0
+    # Real dipole at 14 MHz: real Z roughly order 73 Ω; very loose bound
+    # so a future PyNEC version bump doesn't trip the test.
+    assert 10 < out["z_in_re"] < 500
+
+
+@pynec_required
+def test_sweep_endpoint_with_pynec_streams_per_point(client: TestClient):
+    freqs = [13.8, 14.0, 14.2]
+    r = client.post(
+        "/sweep",
+        json={
+            "geometry": "dipole",
+            "solver": "pynec",
+            "freqs_mhz": freqs,
+            "measurement_freq_mhz": 14.0,
+        },
+    )
+    assert r.status_code == 200
+    recs = _ndjson_records(r.text)
+    assert len(recs) == len(freqs) + 1
+    *points, terminator = recs
+    assert terminator == {"done": True, "solver": "pynec"}
+    for f, rec in zip(freqs, points):
+        assert rec["freq_mhz"] == f
+        assert rec["solver"] == "pynec"
+        assert isinstance(rec["z_re"], float) and isinstance(rec["z_im"], float)
+
+
+@pynec_required
+def test_pattern_endpoint_with_pynec_returns_full_grid(client: TestClient):
+    # /pattern routes through pynec_backend.pattern → rp_card → gain
+    # extraction. Asserts the grid shape the frontend reads (46 thetas
+    # × 73 phis) is what comes back, and that all gains are finite
+    # (NaN/Inf would imply a botched ex_card or fr_card sequence).
+    r = client.post(
+        "/pattern",
+        json={
+            "geometry": "dipole",
+            "solver": "pynec",
+            "measurement_freq_mhz": 14.0,
+        },
+    )
+    assert r.status_code == 200
+    payload = r.json()
+    assert payload["available"] is True
+    assert payload["geometry"] == "dipole"
+    assert len(payload["theta_deg"]) == 46
+    assert len(payload["phi_deg"]) == 73
+    assert len(payload["gain_dbi"]) == 46
+    assert len(payload["gain_dbi"][0]) == 73
+    # NEC reports -999.99 dBi at radiation nulls as a sentinel — filter
+    # those before bounds-checking. Anything outside (-200, 30) on the
+    # non-null cells implies a malformed solve, not a real antenna.
+    flat = [g for row in payload["gain_dbi"] for g in row]
+    real_gains = [g for g in flat if g > -900]
+    assert real_gains, "NEC returned no non-null gain cells"
+    assert all(-200 < g < 30 for g in real_gains)
+    # Peak gain for a half-wave dipole is ~2.15 dBi (in free space).
+    # Loose ceiling guards against accidental dBW vs dBi mixups.
+    assert max(real_gains) < 10
+
+
+@pynec_required
+def test_sweep_endpoint_pynec_empty_freqs_returns_only_done(client: TestClient):
+    r = client.post(
+        "/sweep", json={"geometry": "dipole", "solver": "pynec", "freqs_mhz": []}
+    )
+    recs = _ndjson_records(r.text)
+    assert recs == [{"done": True, "solver": "pynec"}]
+
+
+# ---------------------------------------------------------------------------
 # /ws — websocket endpoint. TestClient.websocket_connect gives a synchronous
 # context manager around the live route.
 # ---------------------------------------------------------------------------
