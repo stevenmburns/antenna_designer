@@ -15,6 +15,8 @@ class Builder(Array2x2Builder):
             "slope_bot": 0.604,
             "del_y": 4.0,
             "del_z": 2,
+            "phase_lr": 0.0,
+            "phase_tb": 0.0,
         }
     )
 
@@ -28,6 +30,8 @@ class Builder(Array2x2Builder):
             "slope_bot": 0.8398,
             "del_y": 4.0,
             "del_z": 2.0,
+            "phase_lr": 0.0,
+            "phase_tb": 0.0,
         }
     )
 

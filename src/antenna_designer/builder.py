@@ -154,17 +154,39 @@ class Array2x4Builder(AntennaBuilder):
         tups_ibot = build_element_wires("_ibot")
         tups_obot = build_element_wires("_obot")
 
+        phasor_lr, phasor_tb = (
+            np.exp((0 + 1j) * np.pi * getattr(self, p) / 180) if hasattr(self, p) else 1
+            for p in ("phase_lr", "phase_tb")
+        )
+
         new_tups = []
-        for yoff, pairs in (
-            (-3 * self.del_y, ((self.del_z, tups_otop), (-self.del_z, tups_obot))),
-            (-1 * self.del_y, ((self.del_z, tups_itop), (-self.del_z, tups_ibot))),
-            (1 * self.del_y, ((self.del_z, tups_itop), (-self.del_z, tups_ibot))),
-            (3 * self.del_y, ((self.del_z, tups_otop), (-self.del_z, tups_obot))),
+        # ph_lr is applied to the right-half (yoff > 0) columns and
+        # ph_tb to the bottom-half (negative zoff) rows — same
+        # left/right + top/bottom split convention as Array2x2Builder.
+        for yoff, ph_lr, pairs in (
+            (-3 * self.del_y, 1, ((self.del_z, tups_otop), (-self.del_z, tups_obot))),
+            (-1 * self.del_y, 1, ((self.del_z, tups_itop), (-self.del_z, tups_ibot))),
+            (
+                1 * self.del_y,
+                phasor_lr,
+                ((self.del_z, tups_itop), (-self.del_z, tups_ibot)),
+            ),
+            (
+                3 * self.del_y,
+                phasor_lr,
+                ((self.del_z, tups_otop), (-self.del_z, tups_obot)),
+            ),
         ):
             for zoff, tups in pairs:
+                ph_tb = 1 if zoff > 0 else phasor_tb
                 new_tups.extend(
                     [
-                        ((x0, y0 + yoff, z0 + zoff), (x1, y1 + yoff, z1 + zoff), ns, ex)
+                        (
+                            (x0, y0 + yoff, z0 + zoff),
+                            (x1, y1 + yoff, z1 + zoff),
+                            ns,
+                            ph_lr * ph_tb * ex if ex is not None else ex,
+                        )
                         for ((x0, y0, z0), (x1, y1, z1), ns, ex) in tups
                     ]
                 )
@@ -207,17 +229,30 @@ class Array1x4Builder(AntennaBuilder):
         tups_itop = build_element_wires("_itop")
         tups_otop = build_element_wires("_otop")
 
+        (phasor_lr,) = (
+            np.exp((0 + 1j) * np.pi * getattr(self, p) / 180) if hasattr(self, p) else 1
+            for p in ("phase_lr",)
+        )
+
         new_tups = []
-        for yoff, pairs in (
-            (-3 * self.del_y, ((self.del_z, tups_otop),)),
-            (-1 * self.del_y, ((self.del_z, tups_itop),)),
-            (1 * self.del_y, ((self.del_z, tups_itop),)),
-            (3 * self.del_y, ((self.del_z, tups_otop),)),
+        # phase_lr is applied to the right half (yoff > 0); left half
+        # (yoff < 0) stays at ph=1. Matches the Array1x2Builder split
+        # convention extended to 4 elements.
+        for yoff, ph_lr, pairs in (
+            (-3 * self.del_y, 1, ((self.del_z, tups_otop),)),
+            (-1 * self.del_y, 1, ((self.del_z, tups_itop),)),
+            (1 * self.del_y, phasor_lr, ((self.del_z, tups_itop),)),
+            (3 * self.del_y, phasor_lr, ((self.del_z, tups_otop),)),
         ):
             for zoff, tups in pairs:
                 new_tups.extend(
                     [
-                        ((x0, y0 + yoff, z0 + zoff), (x1, y1 + yoff, z1 + zoff), ns, ex)
+                        (
+                            (x0, y0 + yoff, z0 + zoff),
+                            (x1, y1 + yoff, z1 + zoff),
+                            ns,
+                            ph_lr * ex if ex is not None else ex,
+                        )
                         for ((x0, y0, z0), (x1, y1, z1), ns, ex) in tups
                     ]
                 )
@@ -260,17 +295,30 @@ class Array1x4GroupedBuilder(AntennaBuilder):
         tups_itop = build_element_wires("_itop")
         tups_otop = build_element_wires("_otop")
 
+        (phasor_lr,) = (
+            np.exp((0 + 1j) * np.pi * getattr(self, p) / 180) if hasattr(self, p) else 1
+            for p in ("phase_lr",)
+        )
+
         new_tups = []
-        for yoff, pairs in (
-            (-self.del_y0 - self.del_y1, ((self.del_z, tups_otop),)),
-            (-self.del_y0 + self.del_y1, ((self.del_z, tups_itop),)),
-            (self.del_y0 - self.del_y1, ((self.del_z, tups_itop),)),
-            (self.del_y0 + self.del_y1, ((self.del_z, tups_otop),)),
+        # phase_lr applied to the right half (yoff > 0). The grouped
+        # variant uses del_y0 ± del_y1 spacings but the left/right split
+        # is the same as Array1x4Builder.
+        for yoff, ph_lr, pairs in (
+            (-self.del_y0 - self.del_y1, 1, ((self.del_z, tups_otop),)),
+            (-self.del_y0 + self.del_y1, 1, ((self.del_z, tups_itop),)),
+            (self.del_y0 - self.del_y1, phasor_lr, ((self.del_z, tups_itop),)),
+            (self.del_y0 + self.del_y1, phasor_lr, ((self.del_z, tups_otop),)),
         ):
             for zoff, tups in pairs:
                 new_tups.extend(
                     [
-                        ((x0, y0 + yoff, z0 + zoff), (x1, y1 + yoff, z1 + zoff), ns, ex)
+                        (
+                            (x0, y0 + yoff, z0 + zoff),
+                            (x1, y1 + yoff, z1 + zoff),
+                            ns,
+                            ph_lr * ex if ex is not None else ex,
+                        )
                         for ((x0, y0, z0), (x1, y1, z1), ns, ex) in tups
                     ]
                 )

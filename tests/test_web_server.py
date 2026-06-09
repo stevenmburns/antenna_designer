@@ -562,6 +562,60 @@ def test_solve_for_single_feed_geometry_omits_feeds_array():
     assert "feeds" not in out
 
 
+def test_phase_param_slider_range_spans_full_unit_circle():
+    # phase_lr / phase_tb default to 0.0; without the adapter's
+    # phase_*-name special case the auto-derive falls back to (-1, 1)
+    # for default=0, which is a useless 2° span. Confirm the unit-circle
+    # default kicks in instead.
+    import importlib
+
+    schema = importlib.import_module(
+        "antenna_designer.designs.bowtiearray"
+    ).Builder.default_params
+    assert "phase_lr" in schema and "phase_tb" in schema
+    from web.examples import REGISTRY
+
+    by_name = {s.name: s for s in REGISTRY["bowtiearray"].param_schema}
+    lr = by_name["phase_lr"]
+    assert (lr.min, lr.max, lr.step) == (-180.0, 180.0, 1.0)
+    assert lr.unit == "°"
+    assert lr.precision == 0
+
+
+def test_phase_lr_drives_per_feed_voltage_phasor():
+    # bowtiearray1x2 already tests this through flat_wires_to_polylines;
+    # this is the end-to-end check that /solve's feeds[i].v_re/v_im
+    # actually reflect the phase_lr setting.
+    out_zero = server.solve(
+        {
+            "geometry": "bowtiearray1x2",
+            "measurement_freq_mhz": 28.5,
+            "pysim_model": "triangular",
+            "phase_lr": 0.0,
+        }
+    )
+    out_quad = server.solve(
+        {
+            "geometry": "bowtiearray1x2",
+            "measurement_freq_mhz": 28.5,
+            "pysim_model": "triangular",
+            "phase_lr": 90.0,
+        }
+    )
+    # phase_lr=0: both feed voltages are real (V0 = V1 = 1+0j).
+    f0_zero, f1_zero = out_zero["feeds"]
+    assert f0_zero["v_re"] == pytest.approx(1.0)
+    assert f0_zero["v_im"] == pytest.approx(0.0)
+    assert f1_zero["v_re"] == pytest.approx(1.0)
+    assert f1_zero["v_im"] == pytest.approx(0.0)
+    # phase_lr=90: V0 = 1+0j, V1 = j (0 + 1j).
+    f0_q, f1_q = out_quad["feeds"]
+    assert f0_q["v_re"] == pytest.approx(1.0)
+    assert f0_q["v_im"] == pytest.approx(0.0)
+    assert f1_q["v_re"] == pytest.approx(0.0, abs=1e-10)
+    assert f1_q["v_im"] == pytest.approx(1.0)
+
+
 def test_sweep_endpoint_streams_feeds_z_for_multi_feed_geometry(client: TestClient):
     r = client.post(
         "/sweep",

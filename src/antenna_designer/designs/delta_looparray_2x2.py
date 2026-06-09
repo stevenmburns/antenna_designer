@@ -16,6 +16,8 @@ class Builder(Array2x2Builder):
             "base": 15.0,
             "del_y": 4.0,
             "del_z": 2.0,
+            "phase_lr": 0.0,
+            "phase_tb": 0.0,
         }
     )
 
