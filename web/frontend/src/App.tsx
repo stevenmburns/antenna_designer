@@ -1229,7 +1229,10 @@ export function App() {
       if (band !== "") setBand("");
       return;
     }
-    if (currentBands.some((b) => b.key === band)) return;
+    // Always re-snap on geometry switch — every HF example shares the
+    // DEFAULT_HF_BANDS list, so a sticky band key (e.g. "10m" from the
+    // previous 28 MHz design) would otherwise survive a switch into a
+    // 14 MHz design and keep the slider parked on the wrong band.
     const designFreqDefault = currentExample.default_freq_mhz;
     const containing =
       designFreqDefault !== null
