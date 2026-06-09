@@ -58,8 +58,7 @@
 | src/antenna\_designer/sim.py                                             |        2 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                                           |      123 |        7 |     94% |   105-116 |
 | src/antenna\_designer/transform.py                                       |       42 |        1 |     98% |        62 |
-| src/antenna\_designer/web\_schema.py                                     |       94 |       94 |      0% |    13-199 |
-| **TOTAL**                                                                | **2200** |  **157** | **93%** |           |
+| **TOTAL**                                                                | **2106** |   **63** | **97%** |           |
 
 
 ## Setup coverage badge
