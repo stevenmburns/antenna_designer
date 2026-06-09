@@ -83,6 +83,7 @@ type SweepPolicy = {
   anchor: "design_freq" | "meas_freq";
   lo_factor: number;
   hi_factor: number;
+  band_locked?: boolean;
 };
 
 type BandSpec = {
@@ -1402,8 +1403,25 @@ export function App() {
     const N = slowGround ? 21 : 41;
     const policy = currentExample?.sweep_policy;
     const sweepAnchor = policy?.anchor === "meas_freq" ? measFreq : designFreq;
-    const fLo = Math.max(0.5, sweepAnchor * (policy?.lo_factor ?? 0.8));
-    const fHi = Math.min(60, sweepAnchor * (policy?.hi_factor ?? 1.25));
+    // Band-locked sweep: when the active band contains the anchor,
+    // snap the sweep range to that band's [min_mhz, max_mhz] so the
+    // trace stays inside the band the user is tuning instead of
+    // bleeding into adjacent ones. Falls through to the multiplicative
+    // window if the anchor sits outside every band.
+    let fLo: number;
+    let fHi: number;
+    const bandLocked = policy?.band_locked
+      ? currentBands.find(
+          (b) => sweepAnchor >= b.min_mhz && sweepAnchor <= b.max_mhz,
+        )
+      : undefined;
+    if (bandLocked) {
+      fLo = bandLocked.min_mhz;
+      fHi = bandLocked.max_mhz;
+    } else {
+      fLo = Math.max(0.5, sweepAnchor * (policy?.lo_factor ?? 0.8));
+      fHi = Math.min(60, sweepAnchor * (policy?.hi_factor ?? 1.25));
+    }
     const freqs = Array.from({ length: N }, (_, i) =>
       Math.exp(Math.log(fLo) + (i / (N - 1)) * (Math.log(fHi) - Math.log(fLo))),
     );

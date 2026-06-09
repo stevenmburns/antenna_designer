@@ -762,6 +762,7 @@ def examples_endpoint():
                     "anchor": ex.sweep_policy.anchor,
                     "lo_factor": ex.sweep_policy.lo_factor,
                     "hi_factor": ex.sweep_policy.hi_factor,
+                    "band_locked": ex.sweep_policy.band_locked,
                 },
             }
         )

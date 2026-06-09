@@ -203,6 +203,14 @@ class SweepPolicy:
     anchor: str = "design_freq"  # "design_freq" | "meas_freq"
     lo_factor: float = 0.8
     hi_factor: float = 1.25
+    # When True, the frontend snaps the sweep range to the [min_mhz,
+    # max_mhz] of the band whose range contains the current anchor
+    # frequency (typically measFreq for multi-band antennas). Falls
+    # back to lo_factor/hi_factor multiplicatively if the anchor sits
+    # outside every band. Used by fandipole so the sweep trace stays
+    # inside the amateur band the user is currently tuning instead of
+    # bleeding into the adjacent bands.
+    band_locked: bool = False
 
 
 DEFAULT_SWEEP_POLICY = SweepPolicy()

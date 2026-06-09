@@ -30,6 +30,14 @@ class Builder(AntennaBuilder):
             # linkMeas toggle.
             "ui_params": MappingProxyType(
                 {
+                    # Anchor the sweep on measFreq and lock it to the
+                    # amateur band containing the anchor — for fandipole
+                    # the user wants the sweep to span exactly the band
+                    # they're currently tuning, not a wide ±5% window.
+                    "sweep_policy": {
+                        "anchor": "meas_freq",
+                        "band_locked": True,
+                    },
                     "length_20": {"link_meas_freq_to_param": "freq_20"},
                     "length_17": {"link_meas_freq_to_param": "freq_17"},
                     "length_15": {"link_meas_freq_to_param": "freq_15"},
