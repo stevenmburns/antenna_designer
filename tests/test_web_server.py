@@ -310,6 +310,121 @@ def test_compute_directivity_norm_positive_no_ground():
     assert np.isfinite(out["directivity_norm"])
 
 
+# ---------------------------------------------------------------------------
+# Streaming endpoints + /pattern dispatcher — TestClient drives the routes
+# against the lightest geometry (dipole) so each call stays sub-second.
+# ---------------------------------------------------------------------------
+
+
+def _ndjson_records(response_text: str) -> list[dict]:
+    return [
+        __import__("json").loads(line)
+        for line in response_text.splitlines()
+        if line.strip()
+    ]
+
+
+def test_sweep_endpoint_empty_freqs_returns_only_done(client: TestClient):
+    r = client.post("/sweep", json={"geometry": "dipole", "freqs_mhz": []})
+    assert r.status_code == 200
+    recs = _ndjson_records(r.text)
+    assert recs == [{"done": True, "solver": "pysim"}]
+
+
+def test_sweep_endpoint_streams_one_record_per_freq_then_done(client: TestClient):
+    freqs = [13.5, 14.0, 14.5]
+    r = client.post(
+        "/sweep",
+        json={
+            "geometry": "dipole",
+            "freqs_mhz": freqs,
+            "measurement_freq_mhz": 14.0,
+            "pysim_model": "triangular",
+        },
+    )
+    assert r.status_code == 200
+    recs = _ndjson_records(r.text)
+    assert len(recs) == len(freqs) + 1
+    *points, terminator = recs
+    assert terminator == {"done": True, "solver": "pysim"}
+    for f, rec in zip(freqs, points):
+        assert rec["freq_mhz"] == f
+        assert rec["solver"] == "pysim"
+        assert isinstance(rec["z_re"], float)
+        assert isinstance(rec["z_im"], float)
+        # Real dipole impedance never goes pathologically far from order
+        # ~50 Ω over a ±10% sweep — guards against a future signed-units
+        # regression that produced -j×j-style mixups.
+        assert abs(rec["z_re"]) < 1e4
+        assert abs(rec["z_im"]) < 1e4
+
+
+def test_sweep_endpoint_returns_ndjson_content_type(client: TestClient):
+    r = client.post("/sweep", json={"geometry": "dipole", "freqs_mhz": []})
+    assert r.headers["content-type"].startswith("application/x-ndjson")
+
+
+def test_converge_endpoint_streams_one_record_per_n_then_done(client: TestClient):
+    ns = [3, 5]
+    r = client.post(
+        "/converge",
+        json={
+            "geometry": "dipole",
+            "n_values": ns,
+            "measurement_freq_mhz": 14.0,
+            "pysim_model": "triangular",
+        },
+    )
+    assert r.status_code == 200
+    recs = _ndjson_records(r.text)
+    assert len(recs) == len(ns) + 1
+    *points, terminator = recs
+    assert terminator == {"done": True, "solver": "pysim"}
+    for n, rec in zip(ns, points):
+        assert rec["n_per_wire"] == n
+        assert rec["solver"] == "pysim"
+        # Convergence trace should always carry real impedance fields —
+        # the error-path branch yields an `error` key instead, which
+        # would mean dipole crapped out at this N (it shouldn't).
+        assert "z_re" in rec and "z_im" in rec
+
+
+def test_converge_endpoint_empty_n_values_returns_only_done(client: TestClient):
+    r = client.post("/converge", json={"geometry": "dipole", "n_values": []})
+    recs = _ndjson_records(r.text)
+    assert recs == [{"done": True, "solver": "pysim"}]
+
+
+def test_pattern_endpoint_pysim_returns_unavailable(client: TestClient):
+    # /pattern is PyNEC-only; pysim solvers get the {"available": False}
+    # short-circuit. Tests both the solver-flag path and the
+    # HAVE_PYNEC=False fallback shape.
+    r = client.post(
+        "/pattern",
+        json={"geometry": "dipole", "solver": "pysim", "measurement_freq_mhz": 14.0},
+    )
+    assert r.status_code == 200
+    assert r.json() == {"available": False}
+
+
+# ---------------------------------------------------------------------------
+# _solve_z_only — pure helper inlined from converge's per-point loop.
+# ---------------------------------------------------------------------------
+
+
+def test_solve_z_only_returns_primary_z_and_no_feeds_for_dipole():
+    z, feeds_z = server._solve_z_only(
+        {
+            "geometry": "dipole",
+            "measurement_freq_mhz": 14.0,
+            "pysim_model": "triangular",
+        }
+    )
+    assert isinstance(z, complex)
+    assert z.real > 0  # real-input dipole has positive real Z
+    assert feeds_z is None  # single-feed
+
+
 def test_compute_directivity_norm_ground_on_stays_finite_and_positive():
     # With ground=True the integration domain halves and a reflected
     # image contribution is added; the resulting norm has to stay finite
