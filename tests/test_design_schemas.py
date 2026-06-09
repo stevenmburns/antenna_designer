@@ -19,7 +19,7 @@ import importlib
 import pytest
 
 import web.examples  # noqa: F401 — primes the adapter
-from web.adapter import _derive_schema, _make_example
+from web.adapter import _make_example
 from web.examples import REGISTRY
 from web.examples._base import (
     DEFAULT_HF_BANDS,
