@@ -455,6 +455,17 @@ def _make_example(name: str, cls) -> AntennaExample:
             lo_factor=float(sweep_pol_raw[1]),
             hi_factor=float(sweep_pol_raw[2]),
         )
+    elif isinstance(sweep_pol_raw, dict):
+        # Dict form lets ui_params opt into named fields (band_locked,
+        # ...) without having to supply every positional. Anchor +
+        # factors fall back to the dataclass defaults when absent.
+        defaults = DEFAULT_SWEEP_POLICY
+        sweep_policy = SweepPolicy(
+            anchor=str(sweep_pol_raw.get("anchor", defaults.anchor)),
+            lo_factor=float(sweep_pol_raw.get("lo_factor", defaults.lo_factor)),
+            hi_factor=float(sweep_pol_raw.get("hi_factor", defaults.hi_factor)),
+            band_locked=bool(sweep_pol_raw.get("band_locked", defaults.band_locked)),
+        )
     else:
         sweep_policy = DEFAULT_SWEEP_POLICY
 
