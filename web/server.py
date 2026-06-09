@@ -398,6 +398,7 @@ async def sweep_endpoint(req: dict, request: Request):
     """
     freqs = [float(f) for f in req.get("freqs_mhz", [])]
     geometry = req.get("geometry", next(iter(EXAMPLES)))
+    sweep_ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
     use_pynec = req.get("solver") == "pynec" and pynec_backend.HAVE_PYNEC
     solver_name = "pynec" if use_pynec else "pysim"
 
@@ -409,9 +410,9 @@ async def sweep_endpoint(req: dict, request: Request):
         if use_pynec:
             # Per-point loop with disconnect check; lets us bail before the
             # next ~100 ms PyNEC ground solve when the user moves a slider.
-            # Multi-feed geometries (bowtie) take the multifeed sweep so
-            # per-feed Z streams alongside the primary z_re / z_im.
-            is_multifeed = geometry == "bowtie"
+            # Multi-feed geometries take the multifeed sweep so per-feed Z
+            # streams alongside the primary z_re / z_im.
+            is_multifeed = sweep_ex.multi_feed
             for f in freqs:
                 if await request.is_disconnected():
                     return
@@ -455,7 +456,6 @@ async def sweep_endpoint(req: dict, request: Request):
             # granularity is consistent across geometries. Start with an
             # 8-chunk heuristic, then after each chunk recompute the next
             # size from observed per-freq cost. Converges in ~1 iteration.
-            sweep_ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
             sweep_fn = sweep_ex.pysim_sweep
             chunk_size = max(1, len(freqs) // 8)
             start = 0
