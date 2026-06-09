@@ -143,6 +143,10 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
             spec_kwargs["linked_to_design_freq"] = bool(
                 override.pop("linked_to_design_freq")
             )
+        if "link_meas_freq_to_param" in override:
+            spec_kwargs["link_meas_freq_to_param"] = str(
+                override.pop("link_meas_freq_to_param")
+            )
         return ParamSpec(**spec_kwargs)
 
     if isinstance(default, str):

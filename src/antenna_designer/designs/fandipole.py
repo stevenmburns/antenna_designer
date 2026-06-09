@@ -23,6 +23,25 @@ class Builder(AntennaBuilder):
             "freq_12": 24.97,
             "freq_10": 28.47,
             "slope": 0.5,
+            # Touching length_NN signals the user is tuning the NN-m
+            # band, so jump the measurement-frequency slider to that
+            # band's freq_NN. The freq_NN sliders self-link so dragging
+            # one updates measFreq in lockstep. Gated by the frontend's
+            # linkMeas toggle.
+            "ui_params": MappingProxyType(
+                {
+                    "length_20": {"link_meas_freq_to_param": "freq_20"},
+                    "length_17": {"link_meas_freq_to_param": "freq_17"},
+                    "length_15": {"link_meas_freq_to_param": "freq_15"},
+                    "length_12": {"link_meas_freq_to_param": "freq_12"},
+                    "length_10": {"link_meas_freq_to_param": "freq_10"},
+                    "freq_20": {"link_meas_freq_to_param": "freq_20"},
+                    "freq_17": {"link_meas_freq_to_param": "freq_17"},
+                    "freq_15": {"link_meas_freq_to_param": "freq_15"},
+                    "freq_12": {"link_meas_freq_to_param": "freq_12"},
+                    "freq_10": {"link_meas_freq_to_param": "freq_10"},
+                }
+            ),
         }
     )
 

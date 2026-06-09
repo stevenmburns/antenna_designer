@@ -701,6 +701,7 @@ def examples_endpoint():
             "range_from_enum_option": item.range_from_enum_option,
             "on_change_set": item.on_change_set,
             "linked_to_design_freq": item.linked_to_design_freq,
+            "link_meas_freq_to_param": item.link_meas_freq_to_param,
         }
 
     out = []

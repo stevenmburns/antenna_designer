@@ -37,6 +37,11 @@ type SchemaParamSpec = {
   range_from_enum_option?: { param: string; min_key: string; max_key: string } | null;
   on_change_set?: { set: string; from_enum_key: string } | null;
   linked_to_design_freq?: boolean;
+  // Flat-schema sibling of the group-level link: when this scalar
+  // changes, push the current value of the named sibling param into
+  // measFreq. Self-reference is allowed (and used by freq_NN params
+  // in multi-band antennas).
+  link_meas_freq_to_param?: string | null;
 };
 
 type SchemaParamGroupSpec = {
@@ -948,28 +953,51 @@ export function App() {
       obj[head] = setIn(obj[head], rest);
       return obj;
     };
-    let newRoot: ParamValueBag | null = null;
-    setParamValues((prev) => {
-      newRoot = setIn(prev[geometry] ?? {}, path) as ParamValueBag;
-      return { ...prev, [geometry]: newRoot };
-    });
+    // Compute the new geometry bag eagerly (outside the setter) so the
+    // meas-freq follow logic below can read newRoot reliably. React's
+    // useState eager-bailout optimization runs the updater synchronously
+    // only when no updates are queued; rapid slider drags batch
+    // multiple updates, so a `newRoot` captured inside the updater
+    // closure is null on the fast path — which manifests as the linked
+    // measFreq snap working on slow drags but not on fast ones.
+    const newRoot = setIn(paramValues[geometry] ?? {}, path) as ParamValueBag;
+    setParamValues((prev) => ({
+      ...prev,
+      [geometry]: setIn(prev[geometry] ?? {}, path) as ParamValueBag,
+    }));
 
-    // Schema-driven meas-freq follow: if the change touched a leaf
-    // inside a group instance, and that group declares
-    // `link_meas_freq_to_param`, push the instance's value of that
-    // sibling param into measFreq. Lets multi-band antennas track
-    // whichever band the user is currently tuning when linkMeas is on.
-    if (!linkMeas || newRoot == null || path.length < 3) return;
+    // Schema-driven meas-freq follow. Two variants:
+    //   * group leaf: `path = [groupName, instanceIdx, leafName]` and
+    //     the group declares `link_meas_freq_to_param` — push that
+    //     instance's value of the named sibling into measFreq.
+    //   * flat scalar: `path = [paramName]` and the ParamSpec declares
+    //     `link_meas_freq_to_param` — push the current value of the
+    //     named sibling (possibly itself) into measFreq. Used by
+    //     multi-band antennas with parallel length_NN / freq_NN flat
+    //     sliders (antenna_designer's fandipole).
+    if (!linkMeas) return;
+    const ex = currentExample;
+    if (!ex) return;
+    if (path.length === 1 && typeof path[0] === "string") {
+      const paramName = path[0];
+      const spec = ex.param_schema.find(
+        (s) => !isGroup(s) && s.name === paramName,
+      ) as SchemaParamSpec | undefined;
+      const linked = spec?.link_meas_freq_to_param;
+      if (!linked) return;
+      const freqValue = newRoot[linked];
+      if (typeof freqValue === "number") setMeasFreq(freqValue);
+      return;
+    }
+    if (path.length < 3) return;
     const groupName = path[0];
     const instanceIdx = path[1];
     if (typeof groupName !== "string" || typeof instanceIdx !== "number") return;
-    const ex = currentExample;
-    if (!ex) return;
     const group = ex.param_schema.find(
       (s) => isGroup(s) && s.name === groupName,
     ) as SchemaParamGroupSpec | undefined;
     if (!group || !group.link_meas_freq_to_param) return;
-    const instances = (newRoot as ParamValueBag)[groupName];
+    const instances = newRoot[groupName];
     if (!Array.isArray(instances)) return;
     const inst = instances[instanceIdx];
     if (!inst) return;
