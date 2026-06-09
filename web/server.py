@@ -105,67 +105,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from starlette.websockets import WebSocketState
 
-from pysim.bspline import BSplinePySim
-from pysim.sinusoidal import SinusoidalPySim
-from pysim.triangular import TriangularPySim
-
 from . import pynec_backend
 from .examples import REGISTRY as EXAMPLES
-
-
-# Per-model option allowlist. Frontend sends `pysim_model` + `model_options`
-# (a flat dict); we forward only the kwargs each class accepts, so an
-# unrecognised option from a stale client never raises. Defaults match the
-# class signatures so unset options behave identically to the old code.
-_PYSIM_MODEL_KEYS = {
-    "triangular": ("n_qp_reg", "n_qp_off"),
-    "sinusoidal": ("n_qp_const",),
-    "bspline": (
-        "degree",
-        "n_qp_pair",
-        "n_qp_source",
-        "feed_smoothing_factor",
-        "use_singular_enrichment",
-        "n_qp_sing",
-        "enrichment_min_k",
-        "enrichment_variant",
-        "tikhonov_lambda",
-        "auto_tap_ratio_threshold",
-    ),
-}
-_PYSIM_MODELS = {
-    "triangular": TriangularPySim,
-    "sinusoidal": SinusoidalPySim,
-    "bspline": BSplinePySim,
-}
-
-
-_PYSIM_MODELS_WITH_GROUND = {"triangular", "bspline", "sinusoidal"}
-
-
-def _make_pysim_sim(req: dict, **base_kwargs):
-    """Instantiate the PySim model the request selected.
-
-    base_kwargs are the geometry-derived constructor kwargs every model
-    accepts (wires, n_per_edge_per_wire, feed_*, wavelength, halfdriver_factor,
-    nsegs, junctions). All three pysim models now accept ground_z; the set
-    is kept as an allowlist so future models that don't support it can be
-    excluded by name. model_options entries are filtered through the
-    per-model allowlist.
-    """
-    model = req.get("pysim_model", "triangular")
-    if model not in _PYSIM_MODELS:
-        model = "triangular"
-    cls = _PYSIM_MODELS[model]
-    allowed = _PYSIM_MODEL_KEYS[model]
-
-    opts = req.get("model_options") or {}
-    extra = {k: opts[k] for k in allowed if k in opts}
-
-    if model not in _PYSIM_MODELS_WITH_GROUND:
-        base_kwargs.pop("ground_z", None)
-
-    return cls(**base_kwargs, **extra)
 
 
 # Target per-chunk wall time for the adaptive pysim /sweep chunking. The

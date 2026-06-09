@@ -101,21 +101,6 @@ def test_attach_derived_em_fields_ground_sigma_negates_into_eps_im():
 
 
 # ---------------------------------------------------------------------------
-# _make_pysim_sim — model selection + per-model option allowlist
-# ---------------------------------------------------------------------------
-
-
-def test_pysim_model_keys_table_matches_models_table():
-    # Every model in _PYSIM_MODELS must declare its accepted option keys,
-    # or _make_pysim_sim will KeyError when that model is selected.
-    assert set(server._PYSIM_MODEL_KEYS) == set(server._PYSIM_MODELS)
-
-
-def test_pysim_models_with_ground_is_subset_of_models():
-    assert server._PYSIM_MODELS_WITH_GROUND.issubset(server._PYSIM_MODELS)
-
-
-# ---------------------------------------------------------------------------
 # /healthz — the smoke test the dev launcher polls
 # ---------------------------------------------------------------------------
 
