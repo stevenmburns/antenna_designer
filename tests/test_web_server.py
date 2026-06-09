@@ -562,6 +562,50 @@ def test_solve_for_single_feed_geometry_omits_feeds_array():
     assert "feeds" not in out
 
 
+@pytest.mark.parametrize(
+    "design_module,expected_z0",
+    [
+        ("dipole", 50.0),
+        ("freq_based.dipole_turnstile", 50.0),  # 2 feeds but not Array*
+        ("bowtiearray1x2", 100.0),
+        ("delta_looparray", 100.0),
+        ("hentenna_array", 100.0),
+        ("hourglass_array", 100.0),
+        ("bowtiearray", 200.0),
+        ("invveearray", 200.0),
+        ("delta_looparray_2x2", 200.0),
+        ("moxonarray", 200.0),
+        ("yagiarray", 200.0),
+        ("delta_looparray_1x4", 200.0),
+        ("delta_looparray_1x4_grouped", 200.0),
+        ("bowtiearray2x4", 400.0),
+    ],
+)
+def test_auto_target_z0_scales_by_array_class(design_module, expected_z0):
+    # Auto-detect: Array1x2 → 100, Array2x2 → 200, Array2x4 → 400,
+    # Array1x4 → 200. Non-array designs (dipole, turnstiles) stay at
+    # 50. Pure-function check on _auto_target_z0 — no solver needed.
+    import importlib
+
+    from web.adapter import _auto_target_z0
+
+    cls = importlib.import_module(f"antenna_designer.designs.{design_module}").Builder
+    assert _auto_target_z0(cls) == expected_z0
+
+
+def test_solve_response_carries_z0_ohms_for_array_design():
+    # End-to-end: the auto-derived target_z0 actually surfaces on the
+    # solve response (where the frontend's SWR readout picks it up).
+    out = server.solve(
+        {
+            "geometry": "bowtiearray1x2",
+            "measurement_freq_mhz": 28.5,
+            "pysim_model": "triangular",
+        }
+    )
+    assert out["z0_ohms"] == 100.0
+
+
 def test_phase_param_slider_range_spans_full_unit_circle():
     # phase_lr / phase_tb default to 0.0; without the adapter's
     # phase_*-name special case the auto-derive falls back to (-1, 1)
