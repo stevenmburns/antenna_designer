@@ -515,6 +515,76 @@ def test_sweep_endpoint_pynec_empty_freqs_returns_only_done(client: TestClient):
 
 
 # ---------------------------------------------------------------------------
+# Multi-feed dispatch — adapter._auto_multi_feed sets multi_feed=True
+# whenever a design's build_wires() declares >1 excitation. /solve and
+# /sweep both light up the per-feed response shape for those designs.
+# ---------------------------------------------------------------------------
+
+
+def test_multi_feed_flag_lights_up_for_array_designs():
+    # 16 designs in the registry have >1 feed wire; all should be flagged
+    # after the auto-detect lands. Pin a few canonical names so a future
+    # refactor that drops the auto-detect path gets caught.
+    ex = server.EXAMPLES["bowtiearray1x2"]
+    assert ex.multi_feed is True
+    assert server.EXAMPLES["invveearray"].multi_feed is True
+    assert server.EXAMPLES["dipole"].multi_feed is False
+
+
+def test_solve_for_multi_feed_geometry_includes_feeds_array():
+    out = server.solve(
+        {
+            "geometry": "bowtiearray1x2",
+            "measurement_freq_mhz": 28.5,
+            "pysim_model": "triangular",
+        }
+    )
+    assert "feeds" in out
+    assert len(out["feeds"]) == 2  # bowtiearray1x2 has two driven elements
+    for f in out["feeds"]:
+        assert set(f) == {"z_re", "z_im", "v_re", "v_im"}
+        assert isinstance(f["z_re"], float)
+        assert isinstance(f["v_re"], float)
+    # Primary z_in_re must match feeds[0].z_re — the primary impedance
+    # field has always been a duplicate of the first feed.
+    assert out["z_in_re"] == pytest.approx(out["feeds"][0]["z_re"])
+    assert out["z_in_im"] == pytest.approx(out["feeds"][0]["z_im"])
+
+
+def test_solve_for_single_feed_geometry_omits_feeds_array():
+    out = server.solve(
+        {
+            "geometry": "dipole",
+            "measurement_freq_mhz": 14.0,
+            "pysim_model": "triangular",
+        }
+    )
+    assert "feeds" not in out
+
+
+def test_sweep_endpoint_streams_feeds_z_for_multi_feed_geometry(client: TestClient):
+    r = client.post(
+        "/sweep",
+        json={
+            "geometry": "bowtiearray1x2",
+            "freqs_mhz": [28.4, 28.5],
+            "pysim_model": "triangular",
+        },
+    )
+    assert r.status_code == 200
+    recs = _ndjson_records(r.text)
+    *points, terminator = recs
+    assert terminator == {"done": True, "solver": "pysim"}
+    for rec in points:
+        assert "feeds_z_re" in rec
+        assert "feeds_z_im" in rec
+        assert len(rec["feeds_z_re"]) == 2
+        assert len(rec["feeds_z_im"]) == 2
+        # Primary z must mirror feed 0 — same invariant as /solve.
+        assert rec["z_re"] == pytest.approx(rec["feeds_z_re"][0])
+
+
+# ---------------------------------------------------------------------------
 # /ws — websocket endpoint. TestClient.websocket_connect gives a synchronous
 # context manager around the live route.
 # ---------------------------------------------------------------------------

@@ -486,6 +486,26 @@ def _ui_scalar(default_params: dict, key: str, default):
     return default
 
 
+def _auto_multi_feed(cls) -> bool:
+    """Detect whether the design has more than one excited wire.
+
+    Builders that drive >1 feed wire in `build_wires()` get multi_feed=True
+    by default — the response shape switches to include a `feeds` array
+    (per-port Z + V) and the frontend renders the per-feed table.
+
+    Designs can still force the flag via `ui_params["multi_feed"]` — set
+    False to suppress the per-feed table even when multiple excitations
+    exist (e.g. mirror-symmetric arrays where the per-port Z is identical
+    by construction and the extra column adds no information).
+    """
+    try:
+        b = cls()
+        n_feeds = sum(1 for *_, ev in b.build_wires() if ev is not None)
+    except Exception:
+        return False
+    return n_feeds > 1
+
+
 def _auto_default_view(cls) -> str:
     """Pick a 2D projection from the spans of the antenna's wires.
 
@@ -523,7 +543,7 @@ def _make_example(name: str, cls) -> AntennaExample:
 
     default_view = _ui_scalar(dp, "default_view", _auto_default_view(cls))
     target_z0 = float(_ui_scalar(dp, "target_z0", 50.0))  # noqa: F841 — surfaced later
-    multi_feed = bool(_ui_scalar(dp, "multi_feed", False))
+    multi_feed = bool(_ui_scalar(dp, "multi_feed", _auto_multi_feed(cls)))
     meas_range = (
         ui.get("meas_freq_range")
         if not isinstance(ui.get("meas_freq_range"), dict)
@@ -610,7 +630,21 @@ def _make_example(name: str, cls) -> AntennaExample:
             "ground_sigma": _PEC_GROUND_SIGMA,
         }
         if multi_feed and len(zs) > 1:
-            out["feeds"] = [{"z_re": float(z.real), "z_im": float(z.imag)} for z in zs]
+            # Pull per-feed drive voltages off the engine so the frontend
+            # can render each feed's phase indicator. PysimEngine stores
+            # _feeds = [(polyline_idx, arclength, voltage)]; fall back to
+            # 1+0j (the canonical unit drive) when missing.
+            voltages = [f[2] for f in (getattr(eng, "_feeds", None) or [])]
+            voltages += [complex(1.0, 0.0)] * (len(zs) - len(voltages))
+            out["feeds"] = [
+                {
+                    "z_re": float(z.real),
+                    "z_im": float(z.imag),
+                    "v_re": float(v.real),
+                    "v_im": float(v.imag),
+                }
+                for z, v in zip(zs, voltages)
+            ]
         return out
 
     def pynec_build(req: dict) -> dict:
@@ -699,7 +733,19 @@ def _make_example(name: str, cls) -> AntennaExample:
             "ground_sigma": _PEC_GROUND_SIGMA,
         }
         if multi_feed and len(zs) > 1:
-            out["feeds"] = [{"z_re": float(z.real), "z_im": float(z.imag)} for z in zs]
+            # PyNECEngine.excitation_pairs is [(tag, sub_seg, voltage)];
+            # pull the voltage off each so per-feed phase comes through.
+            voltages = [v for _t, _s, v in (eng.excitation_pairs or [])]
+            voltages += [complex(1.0, 0.0)] * (len(zs) - len(voltages))
+            out["feeds"] = [
+                {
+                    "z_re": float(z.real),
+                    "z_im": float(z.imag),
+                    "v_re": float(v.real),
+                    "v_im": float(v.imag),
+                }
+                for z, v in zip(zs, voltages)
+            ]
         return out
 
     def pysim_sweep(req: dict, freqs_mhz: list[float]):
