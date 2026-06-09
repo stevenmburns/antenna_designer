@@ -29,6 +29,22 @@ class Builder(AntennaBuilder):
         }
     )
 
+    # Straight half-wave dipole: same V-dipole geometry as the default
+    # invvee but with angle_radians=0, so the arms run flat (no droop).
+    # length_factor=0.967 puts a free-space dipole at 28.47 MHz near
+    # resonance (Z ≈ 66 + j1 Ω). Equivalent to the old top-level
+    # dipole.py geometry, now reachable as the "dipole" variant on
+    # freq_based.invvee.
+    dipole_params = MappingProxyType(
+        {
+            "design_freq": 28.47,
+            "freq": 28.47,
+            "base": 7.0,
+            "length_factor": 0.967,
+            "angle_radians": 0.0,
+        }
+    )
+
     # Three-halves dipole: 1.484λ-long flat dipole, tuned to a near-
     # resonant length where Z_in collapses to ~95 Ω (real). Not the
     # classic Extended Double Zepp — that's the variant below — but
