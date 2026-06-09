@@ -25,7 +25,10 @@ def test_fandipole_sweep_length_20():
     params = dict(Builder.default_params)
     params["freq"] = 14.3
     ant.sweep(
-        Builder(params), "length_factor_20", rng=(10.5, 12), fn="fandipole_sweep_length_20.pdf"
+        Builder(params),
+        "length_factor_20",
+        rng=(10.5, 12),
+        fn="fandipole_sweep_length_20.pdf",
     )
 
 
@@ -70,7 +73,10 @@ def test_fandipole_sweep_length_12():
 
     params["freq"] = 24.97
     ant.sweep(
-        Builder(params), "length_factor_12", rng=(3, 6), fn="fandipole_sweep_length_12.pdf"
+        Builder(params),
+        "length_factor_12",
+        rng=(3, 6),
+        fn="fandipole_sweep_length_12.pdf",
     )
 
 
@@ -91,7 +97,10 @@ def test_fandipole_sweep_length_10():
 
     params["freq"] = 28.57
     ant.sweep(
-        Builder(params), "length_factor_10", rng=(3, 6), fn="fandipole_sweep_length_10.pdf"
+        Builder(params),
+        "length_factor_10",
+        rng=(3, 6),
+        fn="fandipole_sweep_length_10.pdf",
     )
 
 
@@ -107,7 +116,9 @@ def test_fandipole_pattern3d():
 
 @pytest.mark.skip(reason="Takes too long has unstable params")
 def test_fandipole_optimize():
-    params = ant.optimize(Builder(), ["length_factor_10", "length_factor_12"], z0=50, resonance=True)
+    params = ant.optimize(
+        Builder(), ["length_factor_10", "length_factor_12"], z0=50, resonance=True
+    )
     ic(params)
 
     assert all(abs(params[k] - v) < 0.01 for k, v in Builder.default_params.items())

@@ -9,49 +9,106 @@ logger = logging.getLogger(__name__)
 
 C_LIGHT_MHZ_M = 299.792458
 
+# Max bands the cone geometry supports — fixes the spoke layout so
+# variants with fewer active bands can still share a single bands tuple
+# of this length (cleaner variant overlay on the frontend).
+_MAX_BANDS = 5
+
+
+# Canonical per-band defaults. Variants pick a subset (n_bands of these
+# slots become the active bands) but always carry a length-5 tuple so
+# selectVariant's wholesale overlay of `bands` keeps the frontend's
+# preallocated group instances aligned with max_repeats.
+_BAND_20M = {"freq": 14.300, "length_factor": 0.4892}
+_BAND_17M = {"freq": 18.1575, "length_factor": 0.4994}
+_BAND_15M = {"freq": 21.383, "length_factor": 0.4984}
+_BAND_12M = {"freq": 24.97, "length_factor": 0.4971}
+_BAND_10M = {"freq": 28.47, "length_factor": 0.5004}
+
 
 class Builder(AntennaBuilder):
     # Each band's element is a half-wave dipole sized to its own band
-    # frequency: half_length = length_factor_NN × (c / freq_NN). The
-    # factor ≈ 0.5 (slight end-effect shortening on the higher bands).
-    # design_freq is here to satisfy the freq_based.* convention — the
-    # adapter wires it into the design-freq UI control — but the
-    # geometry pulls each arm's length from its own freq_NN so the
-    # cone-shared feed remains tuneable per band.
+    # frequency: half_length = length_factor × (c / freq). The factor
+    # ≈ 0.5 (slight end-effect shortening on the higher bands). The
+    # cone-spoke layout is fixed at _MAX_BANDS spokes; n_bands controls
+    # how many of `bands` get realised, so the same Builder backs the
+    # 5-band, 17/15 pair, and 12/10 pair variants.
     default_params = MappingProxyType(
         {
             "design_freq": 14.300,
             "freq": 28.57,
             "base": 7.0,
-            "length_factor_20": 0.4892,
-            "length_factor_17": 0.4994,
-            "length_factor_15": 0.4984,
-            "length_factor_12": 0.4971,
-            "length_factor_10": 0.5004,
-            "freq_20": 14.300,
-            "freq_17": 18.1575,
-            "freq_15": 21.383,
-            "freq_12": 24.97,
-            "freq_10": 28.47,
             "slope": 0.5,
+            "n_bands": _MAX_BANDS,
+            "bands": (_BAND_20M, _BAND_17M, _BAND_15M, _BAND_12M, _BAND_10M),
             "ui_params": MappingProxyType(
                 {
                     "sweep_policy": {
                         "anchor": "meas_freq",
                         "band_locked": True,
                     },
-                    "length_factor_20": {"link_meas_freq_to_param": "freq_20"},
-                    "length_factor_17": {"link_meas_freq_to_param": "freq_17"},
-                    "length_factor_15": {"link_meas_freq_to_param": "freq_15"},
-                    "length_factor_12": {"link_meas_freq_to_param": "freq_12"},
-                    "length_factor_10": {"link_meas_freq_to_param": "freq_10"},
-                    "freq_20": {"link_meas_freq_to_param": "freq_20"},
-                    "freq_17": {"link_meas_freq_to_param": "freq_17"},
-                    "freq_15": {"link_meas_freq_to_param": "freq_15"},
-                    "freq_12": {"link_meas_freq_to_param": "freq_12"},
-                    "freq_10": {"link_meas_freq_to_param": "freq_10"},
+                    # Group config: tuple-of-dicts in default_params
+                    # becomes a ParamGroupSpec in the schema. The dict
+                    # under the same key gives the adapter the group's
+                    # label_template, repeat_count name, max_repeats,
+                    # link_meas_freq_to_param, plus per-leaf override
+                    # hints (precision, range, step).
+                    "bands": {
+                        "label_template": "band {i}",
+                        "repeat_count": "n_bands",
+                        "max_repeats": _MAX_BANDS,
+                        "link_meas_freq_to_param": "freq",
+                        "freq": {
+                            "min": 13.5,
+                            "max": 30.2,
+                            "step": 0.001,
+                            "precision": 3,
+                            "unit": " MHz",
+                        },
+                        "length_factor": {
+                            "min": 0.40,
+                            "max": 0.55,
+                            "step": 0.0005,
+                            "precision": 4,
+                        },
+                    },
+                    "n_bands": {
+                        "min": 1,
+                        "max": _MAX_BANDS,
+                        "step": 1,
+                    },
                 }
             ),
+        }
+    )
+
+    # Explicit alias so the variant selector lists the 5-band
+    # configuration even if the user is already on a pair variant.
+    five_band_params = default_params
+
+    # 17m/15m pair — the two active bands first, remaining slots padded
+    # with the other bands so bumping n_bands back up reveals a sensible
+    # 5-band fall-back instead of empty placeholders.
+    pair_17_15_params = MappingProxyType(
+        {
+            "design_freq": 18.1575,
+            "freq": 21.383,
+            "base": 7.0,
+            "slope": 0.5,
+            "n_bands": 2,
+            "bands": (_BAND_17M, _BAND_15M, _BAND_20M, _BAND_12M, _BAND_10M),
+        }
+    )
+
+    # 12m/10m pair.
+    pair_12_10_params = MappingProxyType(
+        {
+            "design_freq": 24.97,
+            "freq": 28.47,
+            "base": 7.0,
+            "slope": 0.5,
+            "n_bands": 2,
+            "bands": (_BAND_12M, _BAND_10M, _BAND_20M, _BAND_17M, _BAND_15M),
         }
     )
 
@@ -61,12 +118,20 @@ class Builder(AntennaBuilder):
         radius = 0.12
         t0 = radius * math.sqrt(2)
 
-        n = 5
+        n_bands = int(self.n_bands)
+        if not 1 <= n_bands <= _MAX_BANDS:
+            raise ValueError(f"n_bands must be in [1, {_MAX_BANDS}], got {n_bands}")
+        active_bands = tuple(self.bands)[:n_bands]
 
+        # Spoke layout uses the geometric max so individual spokes
+        # always sit at the same azimuth across variants. (Re-laying
+        # out per-n_bands would rotate the antenna under the user
+        # whenever they toggled n_bands.)
+        n = _MAX_BANDS
         lst = [
             (math.cos(math.pi * i / 180), math.sin(math.pi * i / 180))
             for i in range(360 // (2 * n), 360, 360 // n)
-        ]
+        ][:n_bands]
 
         def build_path(lst, ns, ex):
             return ((a, b, ns, ex) for a, b in zip(lst[:-1], lst[1:]))
@@ -95,17 +160,11 @@ class Builder(AntennaBuilder):
             logger.debug("t0: %s dists from C: %s", t0, [dist(C, a) for a in A])
             logger.debug("radius: %s dists from S: %s", radius, [dist(S, a) for a in A])
 
-        # Per-band physical length = length_factor_NN × λ_NN, where
-        # λ_NN = c / freq_NN. Ordered low-to-high freq (20m → 10m) to
-        # match the spoke ordering in `lst`.
-        band_specs = [
-            (self.length_factor_10, self.freq_10),
-            (self.length_factor_12, self.freq_12),
-            (self.length_factor_15, self.freq_15),
-            (self.length_factor_17, self.freq_17),
-            (self.length_factor_20, self.freq_20),
+        # Per-band physical length = length_factor × (c / freq).
+        lengths = [
+            float(b["length_factor"]) * (C_LIGHT_MHZ_M / float(b["freq"]))
+            for b in active_bands
         ]
-        lengths = [factor * (C_LIGHT_MHZ_M / freq) for factor, freq in band_specs]
 
         ls = [(q / 2 - dist(S, a)) for (q, a) in zip(lengths, A)]
 
@@ -114,7 +173,7 @@ class Builder(AntennaBuilder):
         Ay = [ry(p) for p in A]
         By = [ry(p) for p in B]
 
-        for i in range(n):
+        for i in range(n_bands):
             wire_length = dist(S, A[i]) + dist(A[i], B[i])
             logger.debug(
                 "%d length %s %s %s",
@@ -133,7 +192,7 @@ class Builder(AntennaBuilder):
         n_seg1 = 3
 
         tups = []
-        for i in range(n):
+        for i in range(n_bands):
             tups.extend(build_path([S, A[i], B[i]], n_seg0, None))
             tups.extend(build_path([T, Ay[i], By[i]], n_seg0, None))
         tups.append((T, S, n_seg1, 1 + 0j))
