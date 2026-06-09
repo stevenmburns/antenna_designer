@@ -1,6 +1,6 @@
 import pytest
 import antenna_designer as ant
-from antenna_designer.designs.fandipole import Builder
+from antenna_designer.designs.freq_based.fandipole import Builder
 from icecream import ic
 
 
@@ -25,7 +25,7 @@ def test_fandipole_sweep_length_20():
     params = dict(Builder.default_params)
     params["freq"] = 14.3
     ant.sweep(
-        Builder(params), "length_20", rng=(10.5, 12), fn="fandipole_sweep_length_20.pdf"
+        Builder(params), "length_factor_20", rng=(10.5, 12), fn="fandipole_sweep_length_20.pdf"
     )
 
 
@@ -35,7 +35,7 @@ def test_fandipole_sweep_length17():
     params["freq"] = 18.1575
     ant.sweep(
         Builder(params),
-        "length_17",
+        "length_factor_17",
         rng=(11.3 * 17 / 20 - 1, 11.3 * 17 / 20 + 1),
         fn="fandipole_sweep_length_17.pdf",
     )
@@ -47,7 +47,7 @@ def test_fandipole_sweep_length_15():
     params["freq"] = 21.383
     ant.sweep(
         Builder(params),
-        "length_15",
+        "length_factor_15",
         rng=(11.3 * 15 / 20 - 1, 11.3 * 15 / 20 + 1),
         fn="fandipole_sweep_length_15.pdf",
     )
@@ -60,17 +60,17 @@ def test_fandipole_sweep_length_12():
     params = {
         "base": 7,
         "freq": 28.57,
-        "length_10": 3.550404757728437,
-        "length_12": 4.165365028613822,
-        "length_15": 6.687555534770612,
-        "length_17": 7.875750399295038,
-        "length_20": 10,
+        "length_factor_10": 3.550404757728437,
+        "length_factor_12": 4.165365028613822,
+        "length_factor_15": 6.687555534770612,
+        "length_factor_17": 7.875750399295038,
+        "length_factor_20": 10,
         "slope": 0.604,
     }
 
     params["freq"] = 24.97
     ant.sweep(
-        Builder(params), "length_12", rng=(3, 6), fn="fandipole_sweep_length_12.pdf"
+        Builder(params), "length_factor_12", rng=(3, 6), fn="fandipole_sweep_length_12.pdf"
     )
 
 
@@ -81,17 +81,17 @@ def test_fandipole_sweep_length_10():
     params = {
         "base": 7,
         "freq": 28.57,
-        "length_10": 3.550404757728437,
-        "length_12": 4.165365028613822,
-        "length_15": 6.687555534770612,
-        "length_17": 7.875750399295038,
-        "length_20": 10,
+        "length_factor_10": 3.550404757728437,
+        "length_factor_12": 4.165365028613822,
+        "length_factor_15": 6.687555534770612,
+        "length_factor_17": 7.875750399295038,
+        "length_factor_20": 10,
         "slope": 0.604,
     }
 
     params["freq"] = 28.57
     ant.sweep(
-        Builder(params), "length_10", rng=(3, 6), fn="fandipole_sweep_length_10.pdf"
+        Builder(params), "length_factor_10", rng=(3, 6), fn="fandipole_sweep_length_10.pdf"
     )
 
 
@@ -107,7 +107,7 @@ def test_fandipole_pattern3d():
 
 @pytest.mark.skip(reason="Takes too long has unstable params")
 def test_fandipole_optimize():
-    params = ant.optimize(Builder(), ["length_10", "length_12"], z0=50, resonance=True)
+    params = ant.optimize(Builder(), ["length_factor_10", "length_factor_12"], z0=50, resonance=True)
     ic(params)
 
     assert all(abs(params[k] - v) < 0.01 for k, v in Builder.default_params.items())
@@ -121,11 +121,11 @@ def test_fandipole_seq_optimize():
     gold_params = {
         "base": 7,
         "freq": 28.57,
-        "length_10": 3.550404757728437,
-        "length_12": 4.165365028613822,
-        "length_15": 6.687555534770612,
-        "length_17": 7.875750399295038,
-        "length_20": 10,
+        "length_factor_10": 3.550404757728437,
+        "length_factor_12": 4.165365028613822,
+        "length_factor_15": 6.687555534770612,
+        "length_factor_17": 7.875750399295038,
+        "length_factor_20": 10,
         "slope": 0.604,
     }
 
@@ -136,8 +136,8 @@ def test_fandipole_seq_optimize():
             freq,
             nm,
         ) in (  # (14.3, 'length_20'), (18.1575, 'length_17'), (21.383, 'length_15'),
-            (24.97, "length_12"),
-            (28.57, "length_10"),
+            (24.97, "length_factor_12"),
+            (28.57, "length_factor_10"),
         ):
             params["freq"] = freq
             params = ant.optimize(Builder(params), [nm], z0=50, resonance=False)

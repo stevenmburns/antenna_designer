@@ -2,47 +2,49 @@ import logging
 import math
 from types import MappingProxyType
 
-from antenna_designer import AntennaBuilder
+from ... import AntennaBuilder
 
 logger = logging.getLogger(__name__)
 
 
+C_LIGHT_MHZ_M = 299.792458
+
+
 class Builder(AntennaBuilder):
+    # Each band's element is a half-wave dipole sized to its own band
+    # frequency: half_length = length_factor_NN × (c / freq_NN). The
+    # factor ≈ 0.5 (slight end-effect shortening on the higher bands).
+    # design_freq is here to satisfy the freq_based.* convention — the
+    # adapter wires it into the design-freq UI control — but the
+    # geometry pulls each arm's length from its own freq_NN so the
+    # cone-shared feed remains tuneable per band.
     default_params = MappingProxyType(
         {
+            "design_freq": 14.300,
             "freq": 28.57,
             "base": 7.0,
-            "length_20": 10.2551,
-            "length_17": 8.2461,
-            "length_15": 6.9880,
-            "length_12": 5.9681,
-            "length_10": 5.2691,
+            "length_factor_20": 0.4892,
+            "length_factor_17": 0.4994,
+            "length_factor_15": 0.4984,
+            "length_factor_12": 0.4971,
+            "length_factor_10": 0.5004,
             "freq_20": 14.300,
             "freq_17": 18.1575,
             "freq_15": 21.383,
             "freq_12": 24.97,
             "freq_10": 28.47,
             "slope": 0.5,
-            # Touching length_NN signals the user is tuning the NN-m
-            # band, so jump the measurement-frequency slider to that
-            # band's freq_NN. The freq_NN sliders self-link so dragging
-            # one updates measFreq in lockstep. Gated by the frontend's
-            # linkMeas toggle.
             "ui_params": MappingProxyType(
                 {
-                    # Anchor the sweep on measFreq and lock it to the
-                    # amateur band containing the anchor — for fandipole
-                    # the user wants the sweep to span exactly the band
-                    # they're currently tuning, not a wide ±5% window.
                     "sweep_policy": {
                         "anchor": "meas_freq",
                         "band_locked": True,
                     },
-                    "length_20": {"link_meas_freq_to_param": "freq_20"},
-                    "length_17": {"link_meas_freq_to_param": "freq_17"},
-                    "length_15": {"link_meas_freq_to_param": "freq_15"},
-                    "length_12": {"link_meas_freq_to_param": "freq_12"},
-                    "length_10": {"link_meas_freq_to_param": "freq_10"},
+                    "length_factor_20": {"link_meas_freq_to_param": "freq_20"},
+                    "length_factor_17": {"link_meas_freq_to_param": "freq_17"},
+                    "length_factor_15": {"link_meas_freq_to_param": "freq_15"},
+                    "length_factor_12": {"link_meas_freq_to_param": "freq_12"},
+                    "length_factor_10": {"link_meas_freq_to_param": "freq_10"},
                     "freq_20": {"link_meas_freq_to_param": "freq_20"},
                     "freq_17": {"link_meas_freq_to_param": "freq_17"},
                     "freq_15": {"link_meas_freq_to_param": "freq_15"},
@@ -93,13 +95,17 @@ class Builder(AntennaBuilder):
             logger.debug("t0: %s dists from C: %s", t0, [dist(C, a) for a in A])
             logger.debug("radius: %s dists from S: %s", radius, [dist(S, a) for a in A])
 
-        lengths = [
-            self.length_10,
-            self.length_12,
-            self.length_15,
-            self.length_17,
-            self.length_20,
+        # Per-band physical length = length_factor_NN × λ_NN, where
+        # λ_NN = c / freq_NN. Ordered low-to-high freq (20m → 10m) to
+        # match the spoke ordering in `lst`.
+        band_specs = [
+            (self.length_factor_10, self.freq_10),
+            (self.length_factor_12, self.freq_12),
+            (self.length_factor_15, self.freq_15),
+            (self.length_factor_17, self.freq_17),
+            (self.length_factor_20, self.freq_20),
         ]
+        lengths = [factor * (C_LIGHT_MHZ_M / freq) for factor, freq in band_specs]
 
         ls = [(q / 2 - dist(S, a)) for (q, a) in zip(lengths, A)]
 
@@ -147,27 +153,3 @@ class Builder(AntennaBuilder):
             )
 
         return new_tups
-
-
-if __name__ == "__main__":
-
-    def tofeet_inches(m):
-        f, i = divmod(m / 0.0254, 12)
-
-        ii, frac16 = divmod(i * 16, 16)
-
-        frac16 = int(frac16 + 0.5)
-
-        g = math.gcd(frac16, 16)
-        factor = 1 / 1.05
-
-        return f"{m * 100:.1f} ({m * 100 * factor + 1:.1f}) ({489.3 + 90 - (m * 100 * factor + 1):.1f}) cm {f:.0f} ft {i:.3f} in ({ii:.0f} {frac16 // g}/{16 // g} in)"
-
-    params = Builder.default_params
-
-    bands = [20, 17, 15, 12, 10]
-    lengths = [f"length_{b}" for b in bands]
-
-    for b in bands:
-        length = f"length_{b}"
-        print(f"Quarter wave element on {b}m: {tofeet_inches(params[length] / 2)}")

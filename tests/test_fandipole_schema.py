@@ -1,23 +1,23 @@
 """Schema-level checks for fandipole's ui_params.
 
 Covers the wiring between Builder.default_params['ui_params'] and the
-web adapter's derived ParamSpec / SweepPolicy: the length_NN sliders
-must carry a link_meas_freq_to_param pointing at the matching freq_NN,
-the freq_NN sliders must self-link, and the sweep policy must come
-through anchored on measFreq with band_locked=True.
+web adapter's derived ParamSpec / SweepPolicy: the length_factor_NN
+sliders must carry a link_meas_freq_to_param pointing at the matching
+freq_NN, the freq_NN sliders must self-link, and the sweep policy must
+come through anchored on measFreq with band_locked=True.
 """
 
 import web.examples  # noqa: F401  — registers examples; primes the adapter
-from antenna_designer.designs.fandipole import Builder
+from antenna_designer.designs.freq_based.fandipole import Builder
 from web.adapter import _derive_schema, _make_example
 
 
 _BAND_PAIRS = [
-    ("length_20", "freq_20"),
-    ("length_17", "freq_17"),
-    ("length_15", "freq_15"),
-    ("length_12", "freq_12"),
-    ("length_10", "freq_10"),
+    ("length_factor_20", "freq_20"),
+    ("length_factor_17", "freq_17"),
+    ("length_factor_15", "freq_15"),
+    ("length_factor_12", "freq_12"),
+    ("length_factor_10", "freq_10"),
 ]
 
 

@@ -16,7 +16,7 @@ def test_cli_draw():
         "rawdipole",
         "freq_based.yagi",
         "freq_based.invvee",
-        "fandipole",
+        "freq_based.fandipole",
     ]:
         ant.cli(f"draw --builder {design}{o}".split())
 
