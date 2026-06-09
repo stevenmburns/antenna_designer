@@ -7,8 +7,11 @@ from types import MappingProxyType
 class Builder(AntennaBuilder):
     default_params = MappingProxyType(
         {
-            "freq": 14.27,
-            "length": 5.2245,
+            "freq": 28.47,
+            # λ/4 at 28.47 MHz is 2.633 m; slightly shorter for
+            # in-band resonance with the drooping radials. Z ≈ 43 Ω
+            # at the design freq.
+            "length": 2.62,
             "radial_factor": 0.9545,
             "theta": 110.0,
             "base": 3.0,
