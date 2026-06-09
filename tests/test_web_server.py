@@ -401,7 +401,11 @@ def test_pattern_endpoint_pysim_returns_unavailable(client: TestClient):
     # HAVE_PYNEC=False fallback shape.
     r = client.post(
         "/pattern",
-        json={"geometry": "freq_based.invvee", "solver": "pysim", "measurement_freq_mhz": 28.47},
+        json={
+            "geometry": "freq_based.invvee",
+            "solver": "pysim",
+            "measurement_freq_mhz": 28.47,
+        },
     )
     assert r.status_code == 200
     assert r.json() == {"available": False}
@@ -508,7 +512,8 @@ def test_pattern_endpoint_with_pynec_returns_full_grid(client: TestClient):
 @pynec_required
 def test_sweep_endpoint_pynec_empty_freqs_returns_only_done(client: TestClient):
     r = client.post(
-        "/sweep", json={"geometry": "freq_based.invvee", "solver": "pynec", "freqs_mhz": []}
+        "/sweep",
+        json={"geometry": "freq_based.invvee", "solver": "pynec", "freqs_mhz": []},
     )
     recs = _ndjson_records(r.text)
     assert recs == [{"done": True, "solver": "pynec"}]

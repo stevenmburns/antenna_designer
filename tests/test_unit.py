@@ -31,7 +31,13 @@ def test_resolve_class():
 
 def test_unit_params():
     dp = Builder(
-        {"freq": 1, "design_freq": 14, "base": 7, "length_factor": 0.9, "angle_radians": 0.5}
+        {
+            "freq": 1,
+            "design_freq": 14,
+            "base": 7,
+            "length_factor": 0.9,
+            "angle_radians": 0.5,
+        }
     )
     assert dp.freq == 1
     assert dp.base == 7

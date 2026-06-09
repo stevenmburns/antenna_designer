@@ -76,11 +76,15 @@ O = " --fn /dev/null"
 
 
 def test_cli_compare_patterns_multi_engine():
-    ant.cli(f"compare_patterns --builders freq_based.invvee:dipole --engines pynec pysim{O}".split())
+    ant.cli(
+        f"compare_patterns --builders freq_based.invvee:dipole --engines pynec pysim{O}".split()
+    )
 
 
 def test_cli_compare_patterns_single_engine_still_works():
-    ant.cli(f"compare_patterns --builders freq_based.invvee:dipole freq_based.invvee --engines pynec{O}".split())
+    ant.cli(
+        f"compare_patterns --builders freq_based.invvee:dipole freq_based.invvee --engines pynec{O}".split()
+    )
 
 
 def test_cli_compare_patterns_pysim_basis():
@@ -139,4 +143,6 @@ def test_cli_compare_patterns_mismatch_rejected():
 
 
 def test_cli_pattern_with_basis_spec():
-    ant.cli(f"pattern --builder freq_based.invvee:dipole --engine pysim:sinusoidal{O}".split())
+    ant.cli(
+        f"pattern --builder freq_based.invvee:dipole --engine pysim:sinusoidal{O}".split()
+    )
