@@ -82,6 +82,16 @@ class ParamSpec:
     global designFreq state on the frontend. Fan_dipole uses it on
     `bands[0].freq` so the first band's frequency stays the antenna's
     design frequency without a separate global slider.
+
+    `link_meas_freq_to_param` is the flat-schema sibling of
+    ParamGroupSpec.link_meas_freq_to_param: when this scalar slider
+    moves, push the current value of the named sibling param into the
+    global measFreq state (gated by the frontend's linkMeas toggle).
+    Used by multi-band antennas with parallel `length_NN` / `freq_NN`
+    params so dragging length_20 jumps the measurement-freq slider to
+    the 20m band's freq. A self-reference (param links to itself, e.g.
+    freq_20 → freq_20) is the natural way to mark "this slider's own
+    value is a measurement-frequency anchor".
     """
 
     name: str
@@ -98,6 +108,7 @@ class ParamSpec:
     range_from_enum_option: Optional[dict] = None
     on_change_set: Optional[dict] = None
     linked_to_design_freq: bool = False
+    link_meas_freq_to_param: Optional[str] = None
     sweepable: bool = False
 
 
