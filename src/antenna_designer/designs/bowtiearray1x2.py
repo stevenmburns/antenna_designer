@@ -13,6 +13,7 @@ class Builder(Array1x2Builder):
             "length_top": 5.53,
             "del_y": 4.0,
             "del_z": 2.0,
+            "phase_lr": 0.0,
         }
     )
 

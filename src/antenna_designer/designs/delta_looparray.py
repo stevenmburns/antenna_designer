@@ -14,6 +14,7 @@ class Builder(Array1x2Builder):
             "base": 7.0,
             "del_y": 4.0,
             "del_z": 0.0,
+            "phase_lr": 0.0,
         }
     )
 
@@ -26,6 +27,7 @@ class Builder(Array1x2Builder):
             "base": 7.0,
             "del_y": 3.5,
             "del_z": 2,
+            "phase_lr": 0.0,
         }
     )
 
@@ -38,6 +40,7 @@ class Builder(Array1x2Builder):
             "base": 7.0,
             "del_y": 4.5,
             "del_z": 2,
+            "phase_lr": 0.0,
         }
     )
 
@@ -50,6 +53,7 @@ class Builder(Array1x2Builder):
             "base": 7.0,
             "del_y": 3,
             "del_z": 2,
+            "phase_lr": 0.0,
         }
     )
 

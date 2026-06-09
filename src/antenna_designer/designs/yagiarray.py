@@ -17,6 +17,8 @@ class Builder(Array2x2Builder):
             "angle_radians_bot": 0.43,
             "del_y": 4.0,
             "del_z": 2.0,
+            "phase_lr": 0.0,
+            "phase_tb": 0.0,
             "reflector_factor": 1.05,
             "boom_factor": 0.2,
             "n_directors": 2,

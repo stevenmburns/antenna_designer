@@ -116,6 +116,16 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
             hi = float(int(round(hi)))
             step = 1.0
             precision = 0
+        # Phase params (phase_lr, phase_tb, ...) are degrees, converted
+        # to a phasor by the array builders via exp(j π · phase / 180).
+        # ±180° covers the full unit circle; signed range puts the
+        # zero-phase reference at slider centre with positive = lead,
+        # negative = lag. The auto-derived (-1, 1) fallback for
+        # default=0 would otherwise give a useless 2° span.
+        if name.startswith("phase_"):
+            lo, hi, step = -180.0, 180.0, 1.0
+            unit = unit or "°"
+            precision = 0
         # `design_freq` is the geometry-sizing frequency for
         # freq_based.* designs (wavelength = c / design_freq, then
         # dimensions are wavelength × factors). Wire it into the

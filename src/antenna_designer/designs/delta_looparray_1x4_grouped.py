@@ -17,6 +17,7 @@ class Builder(Array1x4GroupedBuilder):
             "del_y0": 6.0,
             "del_y1": 2.5,
             "del_z": 0.0,
+            "phase_lr": 0.0,
         }
     )
 

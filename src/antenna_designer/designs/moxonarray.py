@@ -11,6 +11,8 @@ class Builder(Array2x2Builder):
             "base": 7.0,
             "del_y": 4.0,
             "del_z": 2.0,
+            "phase_lr": 0.0,
+            "phase_tb": 0.0,
             "halfdriver_top": 2.4515,
             "halfdriver_bot": 2.4487,
             "aspect_ratio_top": 0.3646010186757216,
