@@ -3564,8 +3564,13 @@ function CurrentCanvas({
       // the ground-adjusted antenna span so high antennas zoom out enough
       // to fit the ground line.
       const vSpanEff = Math.max(vEffMax - vEffMin, 0.5 * lambdaDesign);
+      // Horizontal span: same floor-with-actual-extent pattern as vertical.
+      // The 0.6λ floor covers the typical V / Yagi worst case; wider
+      // antennas (EDZ at ~1.5λ, fan-dipole 5-band, ...) grow the span
+      // from their actual hMax-hMin so they fit on canvas.
+      const hSpanEff = Math.max(hMax - hMin, 0.6 * lambdaDesign);
       const scale = FILL * Math.min(
-        (w - 2 * pad) / (0.6 * lambdaDesign),
+        (w - 2 * pad) / hSpanEff,
         (h - pad - barReserveBottom) / vSpanEff,
       );
 
