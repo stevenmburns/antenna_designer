@@ -255,7 +255,7 @@ def test_translator_handles_hentenna_tee_junctions():
 def test_translator_handles_fandipole_high_degree_junctions():
     """Fandipole has two degree-6 nodes (S, T): feed wire + 5 spokes
     on each side. 5 polylines per side + 1 feed = 11 polylines."""
-    from antenna_designer.designs.fandipole import Builder as F
+    from antenna_designer.designs.freq_based.fandipole import Builder as F
 
     out = flat_wires_to_polylines(F().build_wires())
     assert len(out["polylines"]) == 11
@@ -292,7 +292,7 @@ def test_pysim_sinusoidal_fandipole_runs():
     a plausible value, the multi-wire geometry has too many freedoms
     to set a tight tolerance here."""
     from pysim import SinusoidalPySim
-    from antenna_designer.designs.fandipole import Builder as F
+    from antenna_designer.designs.freq_based.fandipole import Builder as F
 
     z = PysimEngine(F(), solver=SinusoidalPySim).impedance()[0]
     assert 20 < z.real < 200, z
