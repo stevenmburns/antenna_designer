@@ -412,6 +412,62 @@ def test_pattern_endpoint_pysim_returns_unavailable(client: TestClient):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# /ws — websocket endpoint. TestClient.websocket_connect gives a synchronous
+# context manager around the live route.
+# ---------------------------------------------------------------------------
+
+
+def test_ws_endpoint_round_trips_a_solve(client: TestClient):
+    with client.websocket_connect("/ws") as ws:
+        ws.send_text(
+            __import__("json").dumps(
+                {
+                    "geometry": "dipole",
+                    "measurement_freq_mhz": 14.0,
+                    "pysim_model": "triangular",
+                }
+            )
+        )
+        result = __import__("json").loads(ws.receive_text())
+    assert result["solver"] == "pysim"
+    assert result["geometry"] == "dipole"
+    assert "wires" in result
+    assert result["z_in_re"] > 0
+
+
+def test_ws_endpoint_handles_multiple_requests_on_one_socket(client: TestClient):
+    # The endpoint's outer `while True` loop must keep serving once the
+    # first solve returns; the React frontend reuses the same socket
+    # for every slider drag.
+    req = __import__("json").dumps(
+        {
+            "geometry": "dipole",
+            "measurement_freq_mhz": 14.0,
+            "pysim_model": "triangular",
+        }
+    )
+    with client.websocket_connect("/ws") as ws:
+        ws.send_text(req)
+        first = __import__("json").loads(ws.receive_text())
+        ws.send_text(req)
+        second = __import__("json").loads(ws.receive_text())
+    assert first["geometry"] == "dipole"
+    assert second["geometry"] == "dipole"
+    # Same request → deterministic same z_in.
+    assert first["z_in_re"] == pytest.approx(second["z_in_re"])
+    assert first["z_in_im"] == pytest.approx(second["z_in_im"])
+
+
+def test_ws_endpoint_returns_cleanly_on_client_disconnect(client: TestClient):
+    # Opening + closing the socket without sending anything has to hit
+    # the outer WebSocketDisconnect path (receive_text raises). The
+    # endpoint must catch it cleanly — no exception leaking out of the
+    # context manager.
+    with client.websocket_connect("/ws"):
+        pass  # context exit closes the socket
+
+
 def test_solve_z_only_returns_primary_z_and_no_feeds_for_dipole():
     z, feeds_z = server._solve_z_only(
         {
