@@ -34,6 +34,13 @@ from typing import Any
 
 import numpy as np
 
+from antenna_designer.builder import (
+    Array1x2Builder,
+    Array1x4Builder,
+    Array1x4GroupedBuilder,
+    Array2x2Builder,
+    Array2x4Builder,
+)
 from antenna_designer.engines.pynec import PyNECEngine
 from antenna_designer.engines.pysim import PysimEngine
 from pysim import BSplinePySim, SinusoidalPySim, TriangularPySim
@@ -496,6 +503,37 @@ def _ui_scalar(default_params: dict, key: str, default):
     return default
 
 
+_ARRAY_BASES = (
+    Array1x2Builder,
+    Array2x2Builder,
+    Array1x4Builder,
+    Array1x4GroupedBuilder,
+    Array2x4Builder,
+)
+
+
+def _auto_target_z0(cls) -> float:
+    """Default reference impedance for the SWR readout.
+
+    Array designs scale 50 Ω by the element count (1×2 → 100, 2×2 → 200,
+    2×4 → 400, ...) — the convention that each branch in the splitter
+    sees 50 Ω after the chain of impedance transformers, so the
+    combined driving point lands at N × 50.
+
+    Everything else defaults to 50 Ω. Designs that violate either
+    convention (turnstiles with per-port 50 Ω matching, designs tuned
+    to 75 Ω, etc.) override via `ui_params["target_z0"]`.
+    """
+    if not issubclass(cls, _ARRAY_BASES):
+        return 50.0
+    try:
+        b = cls()
+        n_feeds = sum(1 for *_, ev in b.build_wires() if ev is not None)
+    except Exception:
+        return 50.0
+    return 50.0 * max(1, n_feeds)
+
+
 def _auto_multi_feed(cls) -> bool:
     """Detect whether the design has more than one excited wire.
 
@@ -552,7 +590,7 @@ def _make_example(name: str, cls) -> AntennaExample:
     ui = dict(dp.get("ui_params") or {})
 
     default_view = _ui_scalar(dp, "default_view", _auto_default_view(cls))
-    target_z0 = float(_ui_scalar(dp, "target_z0", 50.0))  # noqa: F841 — surfaced later
+    target_z0 = float(_ui_scalar(dp, "target_z0", _auto_target_z0(cls)))
     multi_feed = bool(_ui_scalar(dp, "multi_feed", _auto_multi_feed(cls)))
     meas_range = (
         ui.get("meas_freq_range")
@@ -638,6 +676,7 @@ def _make_example(name: str, cls) -> AntennaExample:
             "height_m": 0.0,
             "ground_eps_r": _PEC_GROUND_EPS_R,
             "ground_sigma": _PEC_GROUND_SIGMA,
+            "z0_ohms": target_z0,
         }
         if multi_feed and len(zs) > 1:
             # Pull per-feed drive voltages off the engine so the frontend
@@ -741,6 +780,7 @@ def _make_example(name: str, cls) -> AntennaExample:
             "height_m": 0.0,
             "ground_eps_r": _PEC_GROUND_EPS_R,
             "ground_sigma": _PEC_GROUND_SIGMA,
+            "z0_ohms": target_z0,
         }
         if multi_feed and len(zs) > 1:
             # PyNECEngine.excitation_pairs is [(tag, sub_seg, voltage)];
