@@ -116,6 +116,44 @@ def _band_anchors(halfdriver, tipspacer_factor, t0_factor):
     }
 
 
+# Per-band shape factors after a sequential single-band tune against
+# Z = 50 + 0j on PyNEC (free space, no ground). One band at a time with
+# n_bands=1 — scripts/tune_hexbeam_5band_band.py. Inter-band coupling
+# wasn't modelled in this pass; expect Z to drift a few ohms when all
+# five bands coexist. Use as a starting point for full 5-band joint
+# tuning.
+_BAND_20M_OPT = {
+    "freq": 14.300,
+    "halfdriver_factor": 1.0533,
+    "tipspacer_factor": 0.1312,
+    "t0_factor": 0.1448,
+}
+_BAND_17M_OPT = {
+    "freq": 18.1575,
+    "halfdriver_factor": 1.0556,
+    "tipspacer_factor": 0.1312,
+    "t0_factor": 0.1431,
+}
+_BAND_15M_OPT = {
+    "freq": 21.383,
+    "halfdriver_factor": 1.0572,
+    "tipspacer_factor": 0.1312,
+    "t0_factor": 0.1417,
+}
+_BAND_12M_OPT = {
+    "freq": 24.97,
+    "halfdriver_factor": 1.0590,
+    "tipspacer_factor": 0.1312,
+    "t0_factor": 0.1403,
+}
+_BAND_10M_OPT = {
+    "freq": 28.47,
+    "halfdriver_factor": 1.0582,
+    "tipspacer_factor": 0.1312,
+    "t0_factor": 0.1379,
+}
+
+
 class Builder(AntennaBuilder):
     default_params = MappingProxyType(
         {
@@ -179,6 +217,26 @@ class Builder(AntennaBuilder):
                         "label": "Daisy-chain feed (PyNEC only)",
                     },
                 }
+            ),
+        }
+    )
+
+    # Sequential single-band tune against Z = 50 + 0j on PyNEC.
+    # See _BAND_*_OPT comment and scripts/tune_hexbeam_5band_band.py.
+    opt_params = MappingProxyType(
+        {
+            "design_freq": 14.300,
+            "freq": 14.300,
+            "base": 7.0,
+            "z_spacing": 0.2,
+            "daisy_chain": False,
+            "n_bands": _MAX_BANDS,
+            "bands": (
+                _BAND_20M_OPT,
+                _BAND_17M_OPT,
+                _BAND_15M_OPT,
+                _BAND_12M_OPT,
+                _BAND_10M_OPT,
             ),
         }
     )
