@@ -10,6 +10,24 @@ from pysim import TriangularPySim
 from ..engine import FarField, SimulationEngine, WireCurrents
 from ..geometry import flat_wires_to_polylines
 
+
+def _parity_for_solver(solver, solver_kwargs):
+    """The basis types have fixed parity expectations:
+      - TriangularPySim (tent / linear B-spline) → even (feed straddles 2 segs)
+      - BSplinePySim degree=1 → same as triangular → even
+      - BSplinePySim degree=2 → quadratic → odd
+      - SinusoidalPySim → odd
+    Anything else falls through as "any" (no coercion)."""
+    name = getattr(solver, "__name__", "")
+    if name == "TriangularPySim":
+        return "even"
+    if name == "SinusoidalPySim":
+        return "odd"
+    if name == "BSplinePySim":
+        degree = (solver_kwargs or {}).get("degree", 2)
+        return "even" if int(degree) == 1 else "odd"
+    return "any"
+
 C_LIGHT = 299_792_458.0
 EPS0 = 8.854_187_817e-12
 
@@ -73,15 +91,19 @@ class PysimEngine(SimulationEngine):
                 "transmission-line cards not supported by PysimEngine yet"
             )
 
-        tups = builder.build_wires()
+        self._solver = solver
+        self._solver_kwargs = dict(solver_kwargs) if solver_kwargs else {}
+        # Per-instance parity: triangular wants even, sinusoidal odd,
+        # bspline depends on degree. Set before _coerce_wire_tuples runs.
+        self.segment_parity = _parity_for_solver(self._solver, self._solver_kwargs)
+
+        tups = self._coerce_wire_tuples(builder.build_wires())
         translated = flat_wires_to_polylines(tups)
         self._polylines = translated["polylines"]
         self._edge_segments = translated["edge_segments"]
         self._feeds = translated["feeds"]
         self._junctions = translated["junctions"]
-        self._solver = solver
         self._wire_radius = wire_radius
-        self._solver_kwargs = dict(solver_kwargs) if solver_kwargs else {}
         self._ground = _normalise_ground(ground)
         self._ground_z = ground_z if self._ground is not None else None
 
