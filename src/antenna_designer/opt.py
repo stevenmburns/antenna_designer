@@ -7,6 +7,81 @@ import numpy as np
 from scipy.optimize import minimize
 
 
+def _parse_path(name: str):
+    """`bands.0.halfdriver_factor` → ['bands', 0, 'halfdriver_factor'].
+    Integer-looking segments become ints so they index tuples/lists; the
+    rest stay strings for attr or dict access."""
+    parts = []
+    for p in name.split("."):
+        if p.lstrip("-").isdigit():
+            parts.append(int(p))
+        else:
+            parts.append(p)
+    return parts
+
+
+def _get_path(obj, name):
+    """Walk a dotted path. Tries dict-key, sequence-index, then attribute
+    at each step — so it works against Builder attrs, the bands tuple,
+    and per-band dicts in one expression."""
+    for p in _parse_path(name):
+        if isinstance(obj, dict):
+            obj = obj[p]
+        elif isinstance(obj, (list, tuple)):
+            obj = obj[int(p)]
+        else:
+            obj = getattr(obj, p)
+    return obj
+
+
+def _set_path(obj, name, value):
+    """Functional update: dicts and tuples are rebuilt on the way back
+    up so the original `bands` tuple in the class's default_params (a
+    shared MappingProxyType reference) never gets mutated under one
+    Builder instance.
+
+    The outermost call writes back to the Builder via setattr — which
+    AntennaBuilder routes into _params — leaving class-level defaults
+    untouched."""
+    path = _parse_path(name)
+
+    def _recur(cur, idx):
+        if idx == len(path) - 1:
+            leaf = path[idx]
+            if isinstance(cur, dict):
+                return {**cur, leaf: value}
+            if isinstance(cur, tuple):
+                i = int(leaf)
+                return tuple(value if k == i else v for k, v in enumerate(cur))
+            if isinstance(cur, list):
+                i = int(leaf)
+                new = list(cur)
+                new[i] = value
+                return new
+            setattr(cur, leaf, value)
+            return cur
+        head = path[idx]
+        if isinstance(cur, dict):
+            new_child = _recur(cur[head], idx + 1)
+            return {**cur, head: new_child}
+        if isinstance(cur, tuple):
+            i = int(head)
+            new_child = _recur(cur[i], idx + 1)
+            return tuple(new_child if k == i else v for k, v in enumerate(cur))
+        if isinstance(cur, list):
+            i = int(head)
+            new_child = _recur(cur[i], idx + 1)
+            new = list(cur)
+            new[i] = new_child
+            return new
+        child = getattr(cur, head)
+        new_child = _recur(child, idx + 1)
+        setattr(cur, head, new_child)
+        return cur
+
+    _recur(obj, 0)
+
+
 def optimize(
     antenna_builder,
     independent_variable_names,
@@ -22,7 +97,7 @@ def optimize(
     def objective(independent_variables):
 
         for v, nm in zip(independent_variables, independent_variable_names):
-            setattr(antenna_builder, nm, v)
+            _set_path(antenna_builder, nm, v)
 
         a = engine(antenna_builder)
         zs = a.impedance()
@@ -60,7 +135,7 @@ def optimize(
     #'Nelder-Mead', tol=0.001
     #'Powell', options={'maxiter':100, 'disp': True, 'xtol': 0.0001}
 
-    x0 = tuple(getattr(antenna_builder, nm) for nm in independent_variable_names)
+    x0 = tuple(_get_path(antenna_builder, nm) for nm in independent_variable_names)
     if bounds is None:
         if fractions is None or len(fractions) != len(x0):
             frac = 5 / 3 if fractions is None else fractions[0]
@@ -80,7 +155,7 @@ def optimize(
     print(result)
 
     for x, nm in zip(result.x, independent_variable_names):
-        setattr(antenna_builder, nm, x)
+        _set_path(antenna_builder, nm, x)
 
     print(objective(result.x))
 
