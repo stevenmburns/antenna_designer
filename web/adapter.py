@@ -331,7 +331,15 @@ def _build_builder(cls, req: dict):
             base[k] = _rehydrate_param(base[k], req[k])
         elif k in nested:
             base[k] = _rehydrate_param(base[k], nested[k])
-    return cls(params=base)
+    builder = cls(params=base)
+    # n_per_wire drives the per-Builder nominal_nsegs (the convergence
+    # sweep at /converge overrides this value per N). Each generator
+    # decides which per-edge segment counts scale with it and which stay
+    # fixed (feed gaps). See AntennaBuilder.FRAMEWORK_PARAMS.
+    n_per_wire = req.get("n_per_wire")
+    if n_per_wire is not None:
+        builder.nominal_nsegs = int(n_per_wire)
+    return builder
 
 
 def _ground_for_engine(req: dict, ground_z: float):
