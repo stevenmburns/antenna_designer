@@ -154,6 +154,45 @@ _BAND_10M_OPT = {
 }
 
 
+# Coupled-mode tune from scripts/tune_hexbeam_5band_coupled.py — bands
+# stay present at every objective evaluation so the optimiser sees real
+# inter-band coupling. Four passes converged with worst |Z - 50| ≈ 7.7 Ω
+# on band 1 (resistance stuck at ~42; reactance went to ~0 everywhere).
+# Better starting point than _BAND_*_OPT for the joint solve, but you'd
+# need a 3-knob tune (add tipspacer_factor) or relax R to push closer
+# to a perfect 50+0j match.
+_BAND_20M_COUPLED = {
+    "freq": 14.300,
+    "halfdriver_factor": 1.04834,
+    "tipspacer_factor": 0.1312,
+    "t0_factor": 0.14394,
+}
+_BAND_17M_COUPLED = {
+    "freq": 18.1575,
+    "halfdriver_factor": 1.05036,
+    "tipspacer_factor": 0.1312,
+    "t0_factor": 0.14025,
+}
+_BAND_15M_COUPLED = {
+    "freq": 21.383,
+    "halfdriver_factor": 1.04961,
+    "tipspacer_factor": 0.1312,
+    "t0_factor": 0.14056,
+}
+_BAND_12M_COUPLED = {
+    "freq": 24.97,
+    "halfdriver_factor": 1.04908,
+    "tipspacer_factor": 0.1312,
+    "t0_factor": 0.14045,
+}
+_BAND_10M_COUPLED = {
+    "freq": 28.47,
+    "halfdriver_factor": 1.06693,
+    "tipspacer_factor": 0.1312,
+    "t0_factor": 0.14665,
+}
+
+
 class Builder(AntennaBuilder):
     default_params = MappingProxyType(
         {
@@ -237,6 +276,25 @@ class Builder(AntennaBuilder):
                 _BAND_15M_OPT,
                 _BAND_12M_OPT,
                 _BAND_10M_OPT,
+            ),
+        }
+    )
+
+    # Coupled multi-band tune; see _BAND_*_COUPLED comment.
+    opt_coupled_params = MappingProxyType(
+        {
+            "design_freq": 14.300,
+            "freq": 14.300,
+            "base": 7.0,
+            "z_spacing": 0.2,
+            "daisy_chain": False,
+            "n_bands": _MAX_BANDS,
+            "bands": (
+                _BAND_20M_COUPLED,
+                _BAND_17M_COUPLED,
+                _BAND_15M_COUPLED,
+                _BAND_12M_COUPLED,
+                _BAND_10M_COUPLED,
             ),
         }
     )
