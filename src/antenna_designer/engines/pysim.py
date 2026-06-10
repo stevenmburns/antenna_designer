@@ -28,6 +28,7 @@ def _parity_for_solver(solver, solver_kwargs):
         return "even" if int(degree) == 1 else "odd"
     return "any"
 
+
 C_LIGHT = 299_792_458.0
 EPS0 = 8.854_187_817e-12
 

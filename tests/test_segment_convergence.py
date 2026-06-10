@@ -28,9 +28,7 @@ def test_coerce_n_seg_even_bumps_odd_up(n, expected):
     assert SimulationEngine.coerce_n_seg(n, "even") == expected
 
 
-@pytest.mark.parametrize(
-    "parity,expected", [("any", 1), ("odd", 1), ("even", 2)]
-)
+@pytest.mark.parametrize("parity,expected", [("any", 1), ("odd", 1), ("even", 2)])
 def test_coerce_n_seg_floors_at_minimum(parity, expected):
     """Guard against ZeroDivisionError in pysim's _build_geometry when the
     slider lands at N=0 — the engine still produces a runnable mesh."""
