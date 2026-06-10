@@ -35,8 +35,8 @@ class Builder(AntennaBuilder):
         def rx(p):
             return -p[0], p[1], p[2]
 
-        n_seg0 = 21
-        n_seg1 = 3
+        n_seg0 = self.nominal_nsegs
+        n_seg1 = max(3, self.nominal_nsegs // 7)
 
         d = driver
         h = d * cos_theta / 4 - eps * cos_theta / 2 + eps / 2

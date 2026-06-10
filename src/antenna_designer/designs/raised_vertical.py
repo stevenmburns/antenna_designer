@@ -20,7 +20,7 @@ class Builder(AntennaBuilder):
 
         z = self.length
 
-        n_seg0 = 21
+        n_seg0 = self.nominal_nsegs
         n_seg1 = 1
 
         tups = []

@@ -37,8 +37,8 @@ class Builder(AntennaBuilder):
         slant_cos = math.cos(slant_radians)
         slant_sin = math.sin(slant_radians)
 
-        n_seg0 = 21
-        n_seg1 = 3
+        n_seg0 = self.nominal_nsegs
+        n_seg1 = max(3, self.nominal_nsegs // 7)
 
         """
     Add an invvee like slant, 0 degrees is horizontal

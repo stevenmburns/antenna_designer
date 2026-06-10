@@ -25,8 +25,8 @@ class Builder(AntennaBuilder):
         length = wavelength * self.length_factor
         x = 0.5 * length
 
-        n_seg0 = 21
-        n_seg1 = 3
+        n_seg0 = self.nominal_nsegs
+        n_seg1 = max(3, self.nominal_nsegs // 7)
 
         # Two crossed half-wave dipoles, lower along x at z=base and upper
         # along y at z=base+gap_z. The 1+0j / 0+1j drive is the 90° turnstile

@@ -62,7 +62,7 @@ class Builder(AntennaBuilder):
         S = (eps * cos30, eps * sin30, 0)
         T = ry(S)
 
-        n_seg0 = 21
+        n_seg0 = self.nominal_nsegs
         n_seg1 = 1
 
         tups = []

@@ -41,8 +41,8 @@ class Builder(AntennaBuilder):
         def rz(p):
             return p[0], p[1], -p[2]
 
-        n_seg0 = 21
-        n_seg1 = 3
+        n_seg0 = self.nominal_nsegs
+        n_seg1 = max(3, self.nominal_nsegs // 7)
 
         """
  C----------------------------A

@@ -23,8 +23,8 @@ class Builder(AntennaBuilder):
 
         z = self.length
 
-        n_seg0 = 21
-        n_seg1 = 3
+        n_seg0 = self.nominal_nsegs
+        n_seg1 = max(3, self.nominal_nsegs // 7)
         n_seg_radials = 5
 
         tups = []

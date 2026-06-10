@@ -132,8 +132,8 @@ class Builder(AntennaBuilder):
         def ry(p):
             return p[0], -p[1], p[2]
 
-        n_seg0 = 21
-        n_seg1 = 3
+        n_seg0 = self.nominal_nsegs
+        n_seg1 = max(3, self.nominal_nsegs // 7)
 
         S = (0, eps, wavelength * (mid_height_factor - top_height_factor))
         B = (
