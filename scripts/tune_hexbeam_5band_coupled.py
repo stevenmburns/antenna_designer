@@ -128,16 +128,16 @@ def run(passes: int, tol: float, z0: float, param_names: list[str], verbose: boo
             print(f"converged: worst |Z - z0| < tol ({tol})")
             break
 
-    print("\n# Paste into hexbeam_5band.py as opt2_params or replace opt_params:")
+    print("\n# Paste into hexbeam_5band.py:")
     print("(")
     for bd in b.bands:
         print(
-            "    {{"
+            "    {"
             f'"freq": {bd["freq"]}, '
             f'"halfdriver_factor": {bd["halfdriver_factor"]:.5f}, '
             f'"tipspacer_factor": {bd["tipspacer_factor"]}, '
-            f't0_factor": {bd["t0_factor"]:.5f}'
-            "}},"
+            f'"t0_factor": {bd["t0_factor"]:.5f}'
+            "},"
         )
     print(")")
 
@@ -145,7 +145,9 @@ def run(passes: int, tol: float, z0: float, param_names: list[str], verbose: boo
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--passes", type=int, default=4, help="Max band-cycle passes")
-    ap.add_argument("--tol", type=float, default=0.5, help="Stop when worst |Z-z0| < tol")
+    ap.add_argument(
+        "--tol", type=float, default=0.5, help="Stop when worst |Z-z0| < tol"
+    )
     ap.add_argument("--z0", type=float, default=50.0)
     ap.add_argument(
         "--param",
