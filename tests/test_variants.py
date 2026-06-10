@@ -5,46 +5,52 @@ from antenna_designer.designs import hexbeam, moxon, twoband_fan_dipole
 from antenna_designer.designs.freq_based import hentenna, delta_loop
 
 
+def _design_params(inst):
+    """Builder _params with the framework keys (nominal_nsegs, ...)
+    stripped. Variant resolution is about design params only."""
+    return {k: v for k, v in inst._params.items() if k not in inst.FRAMEWORK_PARAMS}
+
+
 def test_no_colon_uses_default_params():
     factory = get_builder("hexbeam")
     inst = factory()
-    assert dict(inst._params) == dict(hexbeam.Builder.default_params)
+    assert _design_params(inst) == dict(hexbeam.Builder.default_params)
 
 
 def test_explicit_default_variant():
     factory = get_builder("hexbeam:default")
     inst = factory()
-    assert dict(inst._params) == dict(hexbeam.Builder.default_params)
+    assert _design_params(inst) == dict(hexbeam.Builder.default_params)
 
 
 def test_named_variant_resolves():
     factory = get_builder("hexbeam:opt")
     inst = factory()
-    assert dict(inst._params) == dict(hexbeam.Builder.opt_params)
+    assert _design_params(inst) == dict(hexbeam.Builder.opt_params)
 
 
 def test_variant_on_moxon_original():
     factory = get_builder("moxon:original")
     inst = factory()
-    assert dict(inst._params) == dict(moxon.Builder.original_params)
+    assert _design_params(inst) == dict(moxon.Builder.original_params)
 
 
 def test_renamed_twoband_variant():
     factory = get_builder("twoband_fan_dipole:s07")
     inst = factory()
-    assert dict(inst._params) == dict(twoband_fan_dipole.Builder.s07_params)
+    assert _design_params(inst) == dict(twoband_fan_dipole.Builder.s07_params)
 
 
 def test_renamed_freq_based_variant():
     factory = get_builder("freq_based.hentenna:z100")
     inst = factory()
-    assert dict(inst._params) == dict(hentenna.Builder.z100_params)
+    assert _design_params(inst) == dict(hentenna.Builder.z100_params)
 
 
 def test_renamed_loop_variant():
     factory = get_builder("freq_based.delta_loop:z200")
     inst = factory()
-    assert dict(inst._params) == dict(delta_loop.Builder.z200_params)
+    assert _design_params(inst) == dict(delta_loop.Builder.z200_params)
 
 
 def test_unknown_variant_raises_with_available():

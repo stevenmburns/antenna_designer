@@ -9,14 +9,26 @@ from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 
 class AntennaBuilder:
+    # Framework-level params live alongside per-design default_params but
+    # don't surface in the UI param panel (adapter._auto_paramspec walks
+    # default_params, not this). Convergence drives nominal_nsegs from
+    # the request's n_per_wire field; generators read it as
+    # `self.nominal_nsegs` and scale per-edge segment counts accordingly.
+    FRAMEWORK_PARAMS = {"nominal_nsegs": 21}
+
     def __init__(self, params=None):
         # write directly to __dict__ because otherwise __setattr__ goes into infinite loop
-        self.__dict__["_params"] = dict(
+        merged = dict(self.FRAMEWORK_PARAMS)
+        merged.update(
             self.__class__.default_params if params is None else params
         )
+        self.__dict__["_params"] = merged
 
         "Check that params key's are legal"
-        assert all(k in self.__class__.default_params for k in self._params.keys())
+        assert all(
+            k in self.__class__.default_params or k in self.FRAMEWORK_PARAMS
+            for k in self._params.keys()
+        )
 
     def __getattr__(self, nm):
         if nm in self._params:
