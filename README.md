@@ -6,7 +6,7 @@
 |------------------------------------------------------------------------- | -------: | -------: | ------: | --------: |
 | src/antenna\_designer/\_\_init\_\_.py                                    |       13 |        2 |     85% |     50-51 |
 | src/antenna\_designer/\_\_main\_\_.py                                    |        0 |        0 |    100% |           |
-| src/antenna\_designer/builder.py                                         |      201 |        0 |    100% |           |
+| src/antenna\_designer/builder.py                                         |      204 |        0 |    100% |           |
 | src/antenna\_designer/cli.py                                             |      201 |       13 |     94% |85, 99, 113, 127-135, 334 |
 | src/antenna\_designer/core.py                                            |        6 |        0 |    100% |           |
 | src/antenna\_designer/designs/bowtie.py                                  |       26 |        0 |    100% |           |
@@ -43,17 +43,17 @@
 | src/antenna\_designer/designs/twoband\_fan\_dipole.py                    |       79 |       12 |     85% |210, 322-337 |
 | src/antenna\_designer/designs/vertical.py                                |       24 |        0 |    100% |           |
 | src/antenna\_designer/designs/yagiarray.py                               |        7 |        0 |    100% |           |
-| src/antenna\_designer/engine.py                                          |       13 |        2 |     85% |    42, 48 |
+| src/antenna\_designer/engine.py                                          |       40 |        3 |     92% |65, 90, 96 |
 | src/antenna\_designer/engines/\_\_init\_\_.py                            |        3 |        0 |    100% |           |
-| src/antenna\_designer/engines/pynec.py                                   |      104 |        7 |     93% |52, 71, 103, 105, 110, 141-143 |
-| src/antenna\_designer/engines/pysim.py                                   |      154 |        4 |     97% |34, 72, 115, 259 |
+| src/antenna\_designer/engines/pynec.py                                   |      105 |        7 |     93% |56, 75, 107, 109, 114, 145-147 |
+| src/antenna\_designer/engines/pysim.py                                   |      165 |        8 |     95% |26-29, 53, 91, 138, 282 |
 | src/antenna\_designer/far\_field.py                                      |       94 |        0 |    100% |           |
 | src/antenna\_designer/geometry.py                                        |      130 |        5 |     96% |54, 72, 83, 172, 245 |
 | src/antenna\_designer/opt.py                                             |       39 |        1 |     97% |        69 |
 | src/antenna\_designer/sim.py                                             |        2 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                                           |      123 |        7 |     94% |   105-116 |
 | src/antenna\_designer/transform.py                                       |       42 |        1 |     98% |        62 |
-| **TOTAL**                                                                | **2012** |   **61** | **97%** |           |
+| **TOTAL**                                                                | **2054** |   **66** | **97%** |           |
 
 
 ## Setup coverage badge
