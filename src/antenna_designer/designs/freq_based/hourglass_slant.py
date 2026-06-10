@@ -40,7 +40,7 @@ class Builder(AntennaBuilder):
         n_seg0 = self.nominal_nsegs
         n_seg1 = max(3, self.nominal_nsegs // 7)
 
-        """
+        r"""
     Add an invvee like slant, 0 degrees is horizontal
 
  C-------------AA-------------A

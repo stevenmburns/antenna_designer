@@ -33,7 +33,7 @@ class Builder(AntennaBuilder):
         n_seg0 = self.nominal_nsegs
         n_seg1 = max(3, self.nominal_nsegs // 7)
 
-        """
+        r"""
  C----------------------------A
   \                          /
    \                        /

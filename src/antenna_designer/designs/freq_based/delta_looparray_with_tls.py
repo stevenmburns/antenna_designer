@@ -46,7 +46,7 @@ class Builder(AntennaBuilder):
         d = driver
         h = (cos_theta * (d - 2 * eps) + 2 * eps) / (2 * (cos_theta + 1))
 
-        """
+        r"""
          B-----------------A
           \         theta /
            \             /
