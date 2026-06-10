@@ -9,6 +9,10 @@ DEFAULT_GROUND = ("finite", 10.0, 0.002)  # (kind, dielectric, conductivity)
 
 class PyNECEngine(SimulationEngine):
     supports_far_field = True
+    # NEC's source placement uses (n_seg+1)//2, which lands on the centre
+    # segment for odd n_seg. Even counts get bumped up so the feed sits
+    # at a true wire midpoint instead of off-centre.
+    segment_parity = "odd"
 
     def __init__(self, builder, *, ground=DEFAULT_GROUND):
         """
@@ -20,7 +24,7 @@ class PyNECEngine(SimulationEngine):
                                          eps_r=10, sigma=0.002)
         """
         super().__init__(builder)
-        self.tups = builder.build_wires()
+        self.tups = self._coerce_wire_tuples(builder.build_wires())
         self.tls = builder.build_tls()
         self.ground = ground
         self.excitation_pairs = None

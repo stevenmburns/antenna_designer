@@ -1,7 +1,12 @@
+import logging
 from abc import ABC, abstractmethod
-from typing import ClassVar, NamedTuple
+from typing import ClassVar, Literal, NamedTuple
 
 import numpy as np
+
+_logger = logging.getLogger(__name__)
+
+SegmentParity = Literal["odd", "even", "any"]
 
 
 class FarField(NamedTuple):
@@ -28,9 +33,52 @@ class WireCurrents(NamedTuple):
 
 class SimulationEngine(ABC):
     supports_far_field: ClassVar[bool] = False
+    # Engines that demand a specific basis parity override this. The
+    # geometry loader bumps any incoming n_seg up to the next valid value
+    # (we never bump down — n=0 is invalid). "any" disables coercion.
+    segment_parity: ClassVar[SegmentParity] = "any"
 
     def __init__(self, builder):
         self.builder = builder
+
+    @staticmethod
+    def coerce_n_seg(n_seg: int, parity: SegmentParity) -> int:
+        # Floor below the parity step. n_seg=0 is invalid for every engine
+        # (pysim divides edge length by it), and even-parity engines need
+        # at least 2 segments to host a feed straddling a midpoint.
+        if parity == "even":
+            n_seg = max(2, n_seg)
+            return n_seg + 1 if n_seg % 2 == 1 else n_seg
+        if parity == "odd":
+            n_seg = max(1, n_seg)
+            return n_seg + 1 if n_seg % 2 == 0 else n_seg
+        return max(1, n_seg)
+
+    def _coerce_wire_tuples(self, tups):
+        """Returns the input tuples with each n_seg bumped to the engine's
+        required parity. Logs once per distinct (n_in, n_out) shift so a
+        converge sweep doesn't spam the log per-edge. Reads
+        self.segment_parity so subclasses can set it per-instance (e.g.
+        PysimEngine, where the parity depends on the chosen solver)."""
+        parity = self.segment_parity
+        if parity == "any":
+            return tups
+        seen = set()
+        out = []
+        for t in tups:
+            p0, p1, n_seg, ev = t
+            n_new = self.coerce_n_seg(n_seg, parity)
+            if n_new != n_seg and (n_seg, n_new) not in seen:
+                seen.add((n_seg, n_new))
+                _logger.info(
+                    "%s bumped n_seg=%d → %d for %s parity",
+                    type(self).__name__,
+                    n_seg,
+                    n_new,
+                    parity,
+                )
+            out.append((p0, p1, n_new, ev))
+        return out
 
     @abstractmethod
     def impedance(self): ...
