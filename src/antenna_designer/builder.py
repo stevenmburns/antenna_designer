@@ -19,9 +19,7 @@ class AntennaBuilder:
     def __init__(self, params=None):
         # write directly to __dict__ because otherwise __setattr__ goes into infinite loop
         merged = dict(self.FRAMEWORK_PARAMS)
-        merged.update(
-            self.__class__.default_params if params is None else params
-        )
+        merged.update(self.__class__.default_params if params is None else params)
         self.__dict__["_params"] = merged
 
         "Check that params key's are legal"
