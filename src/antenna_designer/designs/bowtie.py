@@ -17,8 +17,8 @@ class Builder(AntennaBuilder):
         y = 0.5 * self.length / (self.slope + math.sqrt(1 + self.slope**2))
         z = self.slope * y
 
-        n_seg0 = 21
-        n_seg1 = 3
+        n_seg0 = self.nominal_nsegs
+        n_seg1 = max(3, self.nominal_nsegs // 7)
 
         tups = []
         tups.extend([((-y, 0), (-y, z), n_seg0, None)])

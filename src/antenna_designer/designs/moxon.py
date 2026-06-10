@@ -89,7 +89,7 @@ class Builder(AntennaBuilder):
         D = rx(A)
         E, F, G, H, T = ry(D), ry(C), ry(B), ry(A), ry(S)
 
-        n_seg0, n_seg1 = 21, 1
+        n_seg0, n_seg1 = self.nominal_nsegs, 1
 
         tups = []
         tups.extend(build_path([S, A, B], n_seg0, None))
