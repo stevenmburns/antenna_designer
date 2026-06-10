@@ -28,6 +28,7 @@
 | src/antenna\_designer/designs/freq\_based/folded\_invvee.py              |       34 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/hentenna.py                    |       35 |        1 |     97% |        42 |
 | src/antenna\_designer/designs/freq\_based/hentenna\_slant.py             |       43 |        0 |    100% |           |
+| src/antenna\_designer/designs/freq\_based/hexbeam\_5band.py              |      103 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/hourglass.py                   |       33 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/hourglass\_slant.py            |       39 |        1 |     97% |        34 |
 | src/antenna\_designer/designs/freq\_based/inv\_delta\_loop.py            |       30 |        0 |    100% |           |
@@ -49,11 +50,11 @@
 | src/antenna\_designer/engines/pysim.py                                   |      165 |        8 |     95% |26-29, 53, 91, 138, 282 |
 | src/antenna\_designer/far\_field.py                                      |       94 |        0 |    100% |           |
 | src/antenna\_designer/geometry.py                                        |      130 |        5 |     96% |54, 72, 83, 172, 245 |
-| src/antenna\_designer/opt.py                                             |       39 |        1 |     97% |        69 |
+| src/antenna\_designer/opt.py                                             |       90 |       14 |     84% |54-55, 57-60, 65-66, 72-76, 144 |
 | src/antenna\_designer/sim.py                                             |        2 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                                           |      123 |        7 |     94% |   105-116 |
 | src/antenna\_designer/transform.py                                       |       42 |        1 |     98% |        62 |
-| **TOTAL**                                                                | **2054** |   **66** | **97%** |           |
+| **TOTAL**                                                                | **2208** |   **79** | **96%** |           |
 
 
 ## Setup coverage badge
