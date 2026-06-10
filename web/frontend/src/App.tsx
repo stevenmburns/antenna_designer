@@ -210,11 +210,17 @@ function ParamForm({
   values,
   onChange,
   pathPrefix = [],
+  disabledFields,
 }: {
   schema: SchemaItem[];
   values: ParamValueBag;
   onChange: (path: (string | number)[], value: number | string | boolean) => void;
   pathPrefix?: (string | number)[];
+  // Param names that should render as disabled even though they're
+  // visible in the schema. Used to grey out controls whose effect
+  // depends on the active backend (e.g. daisy_chain only works on
+  // PyNEC; pysim engines don't support transmission lines yet).
+  disabledFields?: Set<string>;
 }) {
   return (
     <>
@@ -236,6 +242,7 @@ function ParamForm({
                     values={instances[i]}
                     onChange={onChange}
                     pathPrefix={[...pathPrefix, item.name, i]}
+                    disabledFields={disabledFields}
                   />
                 </div>
               ))}
@@ -275,12 +282,16 @@ function ParamForm({
 
         if (item.kind === "bool") {
           const checked = Boolean(currentRaw ?? item.default);
+          const isDisabled = disabledFields?.has(item.name) ?? false;
           return (
             <div key={item.name} className="field field-bool">
-              <label className="field-bool-label">
+              <label
+                className={`field-bool-label${isDisabled ? " field-disabled" : ""}`}
+              >
                 <input
                   type="checkbox"
                   checked={checked}
+                  disabled={isDisabled}
                   onChange={(e) =>
                     onChange(
                       [...pathPrefix, item.name],
@@ -1211,6 +1222,15 @@ export function App() {
     // `bands: [{band_id, freq, length_factor}, ...]` array; the backend
     // unpacks it in _bands_from_request().
     Object.assign(base, currentValues);
+    // hexbeam_5band's daisy_chain feed mode uses NEC TL cards; pysim
+    // engines reject any non-empty build_tls(). The daisy_chain gear
+    // is greyed out when a pysim slot is active (see the disabled prop
+    // on the schema control), and we belt-and-suspenders force the
+    // request to daisy_chain=false here so a stale value from a
+    // previously-active pynec slot doesn't slip through.
+    if (backend !== "pynec" && "daisy_chain" in base) {
+      base.daisy_chain = false;
+    }
     return base;
   }
 
@@ -1743,6 +1763,15 @@ export function App() {
             schema={currentExample.param_schema}
             values={currentValues}
             onChange={setParamAtPath}
+            // hexbeam_5band's daisy_chain mode emits NEC TL cards;
+            // pysim engines reject any non-empty build_tls() so the
+            // toggle has no effect there. Grey it out when the active
+            // slot's backend is pysim — the request-build side also
+            // forces daisy_chain=false so a stale value doesn't slip
+            // through.
+            disabledFields={
+              backend !== "pynec" ? new Set(["daisy_chain"]) : undefined
+            }
           />
         )}
 

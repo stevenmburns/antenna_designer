@@ -551,6 +551,11 @@ input[type=range]:disabled {
   cursor: not-allowed;
 }
 
+.field-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .stage {
   position: relative;
   display: flex;
