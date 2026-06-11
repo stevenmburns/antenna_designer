@@ -5,6 +5,9 @@ SWEEP_SLOPE
 __pycache__/
 PyNEC/
 *~
+# Emacs auto-save (#file#) and lock (.#file) files
+\#*\#
+.\#*
 TEST_RESULTS
 dist/
 build/
