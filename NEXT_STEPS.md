@@ -20,8 +20,8 @@ These are the topologies `PysimEngine` currently rejects. PyNECEngine is unaffec
 | limitation | affected designs (today) | status |
 |---|---|---|
 | ~~pure closed loops~~ | ~~bowtie, delta_loop, diamond_loop, inv_delta_loop, folded_invvee, delta_loop_slanted{,2,3}~~ | **done** — cut-at-feed-edge in `flat_wires_to_polylines` |
-| multiple excitations (`ex_card` voltage on more than one segment) | every array design — `invveearray`, `moxonarray`, `yagiarray`, `bowtiearray*`, `delta_looparray*`, `hentenna_array`, `hourglass_array`, `folded_invveearray`, `diamond_loop_turnstile` | deeper PysimEngine + likely upstream pysim change |
-| transmission-line cards (`tl_card`) | `freq_based.delta_looparray_with_tls` | upstream pysim has no equivalent today |
+| ~~multiple excitations (`ex_card` voltage on more than one segment)~~ | ~~every array design~~ | **done** — translator emits a `feeds` list, `PysimEngine.impedance()` returns per-port Z |
+| transmission-line cards (`tl_card`) | `freq_based.delta_looparray_with_tls` | upstream pysim has no equivalent today — **last remaining blocker** (1 design) |
 
 ## ~~Next branch: closed-loop support in the translator~~ — landed
 
@@ -41,33 +41,49 @@ Both pysim bases agree with PyNEC to ~1–3 % R and a few Ω X on the closed-loo
 
 Parasitic-only loops (a cycle with no excited segment, no other component) raise a clear `NotImplementedError` rather than crashing inside pysim. Loops with multiple excitations also raise specifically. Neither case appears in `designs/`.
 
+## ~~Next branch: cross-engine pattern comparison in the CLI~~ — landed
+
+The `compare_patterns` subcommand accepts `--engines` plural, with each spec spelled as `pynec`, `pysim`, or `pysim:triangular|sinusoidal|bspline` (basis is part of engine identity, not a separate flag). Builders × engines combine via **numpy-style broadcasting** in `broadcast_pairs` (cli.py), not literal Cartesian product: equal lengths zip pairwise, length-1 broadcasts against the other, other mismatches reject. Labels are `bname/espec` when both vary, otherwise whichever varies. Covered by `tests/test_engine_spec.py` (23 tests).
+
+Surprise relative to the plan: broadcasting beats cross-product because it lets you express specific pairings (`--builders A B C --engines E1 E2 E3` zips into 3 chosen pairs); a true Cartesian product would always yield 9. If we ever want both, add an opt-in `--cross-product` flag on top.
+
+## ~~Next branch: named parameter variants per builder~~ — landed
+
+The convention turned out simpler than the original `VARIANTS: dict[str, dict]` proposal: a Builder class exposes variants as class attributes whose name ends in `_params` and whose value is a `Mapping` (typically `MappingProxyType`). The unnamed default is `default_params`; named variants are `opt_params`, `s07_params`, `current_physical_params`, etc. CLI selector syntax is `builder[:variant]` (cli.py:90 `get_builder`); `:default` and no colon both pick `default_params`. `list_variants` discovers the available names for error messages.
+
+In practice this nests with the existing builder-resolution rules (local/library × explicit/implicit `Builder`), so `freq_based.invvee:dipole` works the same way `freq_based.invvee` does.
+
+Open question deferred: compositing variants with per-flag overrides (`--set length=5.2`). Not implemented; ad-hoc sweeping still goes through `sweep`/`optimize`.
+
+## ~~Next branch: multi-feed PysimEngine~~ — landed
+
+Discovered to already be working when re-auditing the design tree: 34/35 designs solve cleanly through `PysimEngine.impedance()`, including every multi-feed array previously listed as blocked (`invveearray`, `moxonarray`, `yagiarray`, `bowtiearray{,1x2,2x4}`, `delta_looparray{,_1x4,_1x4_grouped,_2x2}`, `hentenna_array`, `hourglass_array`, `folded_invveearray`, `diamond_loop_turnstile`). The geometry translator emits a `feeds: list[(polyline_idx, arclength, voltage)]` and `PysimEngine.impedance()` returns a list of per-port impedances; `impedance_sweep` normalises its return to `(n_k, n_feeds)` to match PyNECEngine.
+
+The only remaining limitation is `tl_card` (1 design: `delta_looparray_with_tls`).
+
+Cross-validation at design freq, free space (R, X in Ω) — sampled multi-feed arrays vs PyNEC:
+
+| design  | feeds | PyNEC range          | pysim Triangular range | max ΔR | max ΔX |
+|---------|-------|----------------------|------------------------|--------|--------|
+| invveearray | 4 | 48.0…55.4, −7.8…−3.0 | 47.1…54.8, −9.5…−4.8   | 0.95   | 1.82   |
+| moxonarray  | 4 | 43.8…44.3, −28.5…−24.9 | 39.9…40.4, −30.0…−26.4 | 3.95   | 1.51   |
+| yagiarray   | 4 | 81.6…81.9, +2.1     | 83.8…84.1, +0.7…+0.8  | 2.23   | 1.34   |
+
+Same ballpark agreement as the closed-loop work (~few % R, a few Ω X). Cross-validation tests live in `tests/test_pysim_engine.py`.
+
+**Where the interface code lives.** Same call as before: don't move the translator upstream yet. The shape just settled; let it bake.
+
 ## Next branches (rough priority order)
 
-### 1. Cross-engine pattern comparison in the CLI
+### 1. `tl_card` support in PysimEngine
 
-Today `compare --engine pysim --builders dipole invvee` runs both builders through *one* engine. The Python API already lets `compare_patterns` take a heterogeneous list of engine instances; the gap is just CLI plumbing. Extend the `compare` subcommand to accept `--engines pynec pysim` and take the cross-product with `--builders` (labels become `dipole/pynec`, `dipole/pysim`, …). Same change naturally subsumes the previously-listed `--basis triangular|sinusoidal|bspline` follow-up: spell engine choices as `pynec`, `pysim:triangular`, `pysim:sinusoidal`, `pysim:bspline` so the basis is part of the engine identity rather than a separate orthogonal flag. Small, no upstream changes, immediate cross-validation value.
+The only remaining design blocked from PysimEngine is `freq_based.delta_looparray_with_tls`, which uses NEC2's `tl_card` to model transmission-line stubs between feed points. pysim has no native equivalent. Two paths:
 
-### 2. Named parameter variants per builder
+- **(a) Lumped transmission-line network bolted onto the multi-port Y.** Solve pysim normally, get the multi-port Y, then post-process: add the TL ABCD matrices and re-extract terminal Z at the actual driven port(s). Stays above pysim's API. Probably the cheaper path.
+- **(b) Native TL primitive in pysim.** Properly cleaner but requires upstream changes.
 
-Designs currently export one default param dict per module. Real usage (different bands, different element counts, swept-then-frozen configurations) wants multiple named variants checked into the same file. Proposal:
+Also: while here, fix `PysimEngine.__init__` calling `builder.build_tls()` on a builder whose `self.tls` attribute is only populated lazily — currently an `AttributeError` rather than a clean `NotImplementedError`. Trivial.
 
-- A design module can expose a `VARIANTS: dict[str, dict]` mapping name → param dict alongside the existing default. The default stays the unnamed variant.
-- Builder selector syntax on the CLI becomes `builder[:variant]`, e.g. `dipole:80m`, `hentenna:wide`. No colon → default variant (back-compatible).
-- The builder registry resolves `name:variant` to `(builder_callable, params_override)` and threads the override through the existing builder API.
+### 2. Far-field for the new designs
 
-Open question: should variants compose with per-flag overrides (`--set length=5.2`)? The two solve different problems — named variants are for reproducible saved configurations, ad-hoc overrides are for sweeping. Probably both, but named variants first.
-
-### 3. Multi-feed PysimEngine (and where the interface code should live)
-
-This is the dominant blocker — 16 of the currently-rejected designs are multi-feed arrays. Two viable shapes, unchanged from before:
-
-- **(a) N independent solves, superpose for Y.** Drive each feed in turn with the others open/shorted (the choice matters for what Y means), recover the multi-port impedance matrix column-by-column. Works entirely above pysim's existing single-source API. Cheapest path; the answer is exact for linear MoM.
-- **(b) Genuine multi-source solve in pysim.** Requires upstream changes — basis assembly and the RHS construction need to know about multiple excitations simultaneously. More natural and avoids N solves, but couples our roadmap to a pysim release.
-
-Worth a design sketch before either. Recommend prototyping (a) first because it's reversible and validates the multi-port plumbing in `antenna_designer` independently of upstream churn.
-
-**Where the interface code lives.** Once multi-feed works, a real question opens up: the geometry translator (`flat_wires_to_polylines`, the closed-loop cut, the multi-port Y assembly) is antenna-agnostic and would benefit any pysim user, not just us. Tempting to move it upstream. **Don't do this yet** — moving code across repos creates an API contract that's expensive to iterate against, and we're still discovering the right shape (multi-feed will almost certainly reshape the translator's interface). Revisit after multi-feed lands and the translator's signature has been stable for a release or two.
-
-### 4. Far-field for the new designs
-
-Stage 2b validated the pattern math on the dipole; once tee-junction geometries are stable, re-run the directivity cross-check on hentenna and fandipole and add a corresponding test. Lower priority — falls out naturally as a side effect of #1 once the CLI can compare engines on these designs.
+Stage 2b validated the pattern math on the dipole; once tee-junction geometries are stable, re-run the directivity cross-check on hentenna and fandipole and add a corresponding test. Lower priority — now that cross-engine `compare_patterns` is in the CLI, this is largely a "run it and write a test" task.

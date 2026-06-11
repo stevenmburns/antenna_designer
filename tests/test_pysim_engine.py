@@ -63,6 +63,47 @@ def test_pysim_matches_pynec_in_free_space():
     )
 
 
+@pytest.mark.parametrize(
+    "design_module, max_dR, max_dX",
+    [
+        ("antenna_designer.designs.invveearray", 1.5, 2.5),
+        ("antenna_designer.designs.moxonarray", 5.0, 2.5),
+        ("antenna_designer.designs.yagiarray", 3.0, 2.0),
+    ],
+)
+def test_pysim_multi_feed_impedance_matches_pynec(design_module, max_dR, max_dX):
+    """Multi-feed arrays: per-port Z from PysimEngine should track PyNEC
+    feed-for-feed. Both backends solve free space (no gn_card) so the only
+    physics difference is the MoM formulation. Tolerances are 'within a few
+    percent R, a few ohms X' — comparable to the closed-loop cross-check."""
+    from importlib import import_module
+
+    b = import_module(design_module).Builder()
+    z_nec = PyNECEngine(b, ground=None).impedance()
+    z_ps = PysimEngine(b).impedance()
+    assert len(z_nec) == len(z_ps) > 1, (
+        f"expected multi-feed, got {len(z_nec)}/{len(z_ps)}"
+    )
+    for i, (zn, zp) in enumerate(zip(z_nec, z_ps)):
+        assert abs(zn.real - zp.real) < max_dR, (
+            f"feed {i}: R diverged nec={zn} pysim={zp}"
+        )
+        assert abs(zn.imag - zp.imag) < max_dX, (
+            f"feed {i}: X diverged nec={zn} pysim={zp}"
+        )
+
+
+def test_pysim_multi_feed_impedance_sweep_shape():
+    """impedance_sweep on a multi-feed array returns (n_k, n_feeds), not
+    (n_k,). The shape normalisation is what lets the rest of the analysis
+    code treat single- and multi-feed sweeps uniformly."""
+    from antenna_designer.designs.invveearray import Builder as ArrBuilder
+
+    freqs = np.linspace(28.0, 29.0, 4)
+    zs = PysimEngine(ArrBuilder()).impedance_sweep(freqs)
+    assert zs.shape == (4, 4), zs.shape
+
+
 def test_pysim_engine_declares_far_field_support():
     assert PysimEngine.supports_far_field is True
 
