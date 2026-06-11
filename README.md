@@ -6,7 +6,7 @@
 |------------------------------------------------------------------------- | -------: | -------: | ------: | --------: |
 | src/antenna\_designer/\_\_init\_\_.py                                    |       13 |        2 |     85% |     50-51 |
 | src/antenna\_designer/\_\_main\_\_.py                                    |        0 |        0 |    100% |           |
-| src/antenna\_designer/builder.py                                         |      204 |        0 |    100% |           |
+| src/antenna\_designer/builder.py                                         |      206 |        0 |    100% |           |
 | src/antenna\_designer/cli.py                                             |      201 |       13 |     94% |85, 99, 113, 127-135, 334 |
 | src/antenna\_designer/core.py                                            |        6 |        0 |    100% |           |
 | src/antenna\_designer/designs/bowtie.py                                  |       26 |        0 |    100% |           |
@@ -20,6 +20,7 @@
 | src/antenna\_designer/designs/folded\_invveearray.py                     |        7 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/delta\_loop.py                 |       36 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/delta\_loop\_slanted.py        |       40 |        0 |    100% |           |
+| src/antenna\_designer/designs/freq\_based/delta\_looparray\_network.py   |       42 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/delta\_looparray\_with\_tls.py |       50 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/diamond\_loop.py               |       31 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/diamond\_loop\_turnstile.py    |       37 |        0 |    100% |           |
@@ -44,17 +45,18 @@
 | src/antenna\_designer/designs/twoband\_fan\_dipole.py                    |       79 |       12 |     85% |210, 322-337 |
 | src/antenna\_designer/designs/vertical.py                                |       24 |        0 |    100% |           |
 | src/antenna\_designer/designs/yagiarray.py                               |        7 |        0 |    100% |           |
-| src/antenna\_designer/engine.py                                          |       40 |        3 |     92% |65, 90, 96 |
+| src/antenna\_designer/engine.py                                          |       43 |        3 |     93% |65, 94, 100 |
 | src/antenna\_designer/engines/\_\_init\_\_.py                            |        3 |        0 |    100% |           |
 | src/antenna\_designer/engines/pynec.py                                   |      105 |        7 |     93% |56, 75, 107, 109, 114, 145-147 |
-| src/antenna\_designer/engines/pysim.py                                   |      232 |       12 |     95% |26-29, 53, 229, 372-378, 410 |
+| src/antenna\_designer/engines/pysim.py                                   |      316 |        9 |     97% |27-30, 54, 173, 271, 326, 537 |
 | src/antenna\_designer/far\_field.py                                      |       94 |        0 |    100% |           |
-| src/antenna\_designer/geometry.py                                        |      130 |        5 |     96% |54, 72, 83, 172, 245 |
+| src/antenna\_designer/geometry.py                                        |      141 |        6 |     96% |54, 79, 83, 95, 190, 271 |
+| src/antenna\_designer/network.py                                         |       55 |        3 |     95% |132, 143, 145 |
 | src/antenna\_designer/opt.py                                             |       90 |       14 |     84% |54-55, 57-60, 65-66, 72-76, 144 |
 | src/antenna\_designer/sim.py                                             |        2 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                                           |      123 |        7 |     94% |   105-116 |
 | src/antenna\_designer/transform.py                                       |       42 |        1 |     98% |        62 |
-| **TOTAL**                                                                | **2275** |   **82** | **96%** |           |
+| **TOTAL**                                                                | **2472** |   **83** | **97%** |           |
 
 
 ## Setup coverage badge
