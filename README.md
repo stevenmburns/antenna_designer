@@ -47,14 +47,14 @@
 | src/antenna\_designer/engine.py                                          |       40 |        3 |     92% |65, 90, 96 |
 | src/antenna\_designer/engines/\_\_init\_\_.py                            |        3 |        0 |    100% |           |
 | src/antenna\_designer/engines/pynec.py                                   |      105 |        7 |     93% |56, 75, 107, 109, 114, 145-147 |
-| src/antenna\_designer/engines/pysim.py                                   |      234 |       13 |     94% |26-29, 53, 245, 250, 381-387, 419 |
+| src/antenna\_designer/engines/pysim.py                                   |      232 |       12 |     95% |26-29, 53, 229, 372-378, 410 |
 | src/antenna\_designer/far\_field.py                                      |       94 |        0 |    100% |           |
 | src/antenna\_designer/geometry.py                                        |      130 |        5 |     96% |54, 72, 83, 172, 245 |
 | src/antenna\_designer/opt.py                                             |       90 |       14 |     84% |54-55, 57-60, 65-66, 72-76, 144 |
 | src/antenna\_designer/sim.py                                             |        2 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                                           |      123 |        7 |     94% |   105-116 |
 | src/antenna\_designer/transform.py                                       |       42 |        1 |     98% |        62 |
-| **TOTAL**                                                                | **2277** |   **83** | **96%** |           |
+| **TOTAL**                                                                | **2275** |   **82** | **96%** |           |
 
 
 ## Setup coverage badge
