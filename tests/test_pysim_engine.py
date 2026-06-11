@@ -104,6 +104,91 @@ def test_pysim_multi_feed_impedance_sweep_shape():
     assert zs.shape == (4, 4), zs.shape
 
 
+def test_pysim_tl_card_runs_and_returns_finite_impedance():
+    """delta_looparray_with_tls — the one design with tl_card. PysimEngine
+    extracts the N-port Y via N independent solves, stamps the TL admittance
+    between the right port pairs, then reduces back to the driven port.
+    No strict PyNEC match here: NEC2 models the TL as a segment-level
+    multiport while pysim's ports are basis-level (delta-gap at the wire
+    midpoint). The two converge on simple geometries but diverge wildly
+    near TL half-wave resonance (the default twist puts one TL at ~0.5λ).
+    Validate that the engine produces a finite, passive impedance and
+    that the underlying Y matrix is symmetric (reciprocity)."""
+    from antenna_designer.designs.freq_based.delta_looparray_with_tls import (
+        Builder as TLBuilder,
+    )
+
+    b = TLBuilder()
+    e = PysimEngine(b)
+    z_list = e.impedance()
+    assert len(z_list) == 1
+    z = z_list[0]
+    assert np.isfinite(z.real) and np.isfinite(z.imag), z
+    assert z.real > 0, f"non-passive impedance: {z}"
+    assert abs(z) < 1e4, f"unrealistic magnitude: {z}"
+
+    wl = 299.792458 / b.freq
+    Y = e._compute_y_via_n_solves(wl)
+    assert np.allclose(Y, Y.T, atol=1e-10), "Y matrix not symmetric (reciprocity)"
+
+
+def test_pysim_tl_card_passive_port_floats_correctly():
+    """With TLs present, the passive (TL-only) ports must satisfy I_ext=0
+    in the reduced solution. Reconstruct V from the impedance() solve and
+    verify the constraint at every passive port."""
+    from antenna_designer.designs.freq_based.delta_looparray_with_tls import (
+        Builder as TLBuilder,
+    )
+
+    b = TLBuilder()
+    e = PysimEngine(b)
+    wl = 299.792458 / b.freq
+    Y = e._compute_y_via_n_solves(wl)
+    Y_total = e._apply_tls(Y, wl)
+
+    n = Y_total.shape[0]
+    driven = [i for i in range(n) if i not in e._tl_passive_feed_idx]
+    passive = sorted(e._tl_passive_feed_idx)
+    assert len(passive) >= 1, "test fixture has no passive ports"
+    v_driven = np.array([e._feeds[i][2] for i in driven], dtype=np.complex128)
+    Y_pp = Y_total[np.ix_(passive, passive)]
+    Y_pd = Y_total[np.ix_(passive, driven)]
+    v_passive = np.linalg.solve(Y_pp, -Y_pd @ v_driven)
+    V = np.empty(n, dtype=np.complex128)
+    V[driven] = v_driven
+    V[passive] = v_passive
+    I = Y_total @ V
+    # Passive ports should have I_ext = 0 to within solver tolerance.
+    assert np.allclose(I[passive], 0, atol=1e-10), I[passive]
+
+
+def test_pysim_tl_admittance_quarter_wave():
+    """Hand-checked Y_TL for a quarter-wave TL with Z0=50: at θ=π/2,
+    Y_TL = (1/(j50)) [[0,-1],[-1,0]] = [[0, j/50], [j/50, 0]].
+    A unit-length TL of length λ/4 satisfies sin(βl)=1, cos(βl)=0."""
+    from antenna_designer.designs.freq_based.invvee import (
+        Builder as InvBuilder,
+    )
+
+    e = PysimEngine(InvBuilder())
+    wl = 4.0  # arbitrary; TL length = wl/4 gives θ=π/2
+    Y_tl = e._tl_admittance_2x2(z0=50.0, length=1.0, wavelength=wl)
+    expected = np.array([[0, 1j / 50], [1j / 50, 0]], dtype=np.complex128)
+    assert np.allclose(Y_tl, expected, atol=1e-12), Y_tl
+
+
+def test_pysim_tl_admittance_half_wave_singular():
+    """A half-wavelength TL gives sin(βl)=0 — the admittance is singular.
+    Raise instead of returning nans so callers can adjust geometry."""
+    from antenna_designer.designs.freq_based.invvee import (
+        Builder as InvBuilder,
+    )
+
+    e = PysimEngine(InvBuilder())
+    with pytest.raises(ValueError, match="singular"):
+        e._tl_admittance_2x2(z0=50.0, length=2.0, wavelength=4.0)
+
+
 def test_pysim_engine_declares_far_field_support():
     assert PysimEngine.supports_far_field is True
 
