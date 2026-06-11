@@ -65,12 +65,24 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
             nodes.append(np.asarray(p, dtype=float))
         return node_of[key]
 
-    for i, (p0, p1, n_seg, ev) in enumerate(tups):
+    # Names are an optional 5th tuple field. None (or absent) means
+    # "unnamed"; otherwise a string identifying this edge as a network
+    # port in `build_network()`.
+    tup_names = []
+    for i, t in enumerate(tups):
+        if len(t) == 4:
+            p0, p1, n_seg, ev = t
+            name = None
+        elif len(t) == 5:
+            p0, p1, n_seg, ev, name = t
+        else:
+            raise ValueError(f"tuple {i}: expected 4- or 5-tuple, got {len(t)}")
         a = node_id(p0)
         b = node_id(p1)
         if a == b:
             raise ValueError(f"tuple {i}: degenerate edge (p0==p1 within eps)")
         edges.append((a, b, int(n_seg), ev, i))
+        tup_names.append(name)
 
     # adj[nid] = list of (other_node, edge_index), in registration order.
     adj = [[] for _ in nodes]
@@ -162,16 +174,21 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
                         in_comp.add(eo)
                         stack.append(eo)
 
-        excited_in_comp = [ei for ei in comp_edges if edges[ei][3] is not None]
+        # A "port edge" carries either a voltage (legacy build_tls path) or
+        # a network-spec name. Both are valid cut points for closed loops.
+        excited_in_comp = [
+            ei
+            for ei in comp_edges
+            if edges[ei][3] is not None or tup_names[edges[ei][4]] is not None
+        ]
         if not excited_in_comp:
             raise NotImplementedError(
-                "closed loop with no excited segment is not supported "
+                "closed loop with no port edge is not supported "
                 "(parasitic-only loops are not yet handled)"
             )
         if len(excited_in_comp) > 1:
             raise NotImplementedError(
-                f"closed loop with {len(excited_in_comp)} excited segments "
-                "is not supported"
+                f"closed loop with {len(excited_in_comp)} port edges is not supported"
             )
 
         feed_ei = excited_in_comp[0]
@@ -228,10 +245,16 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
     # excited tuple — the middle segment 1-indexed, i.e. the physical
     # midpoint of the wire. The excited tuple is one edge of its
     # polyline; feed at that edge's midpoint.
+    #
+    # A tuple is a feed if either (a) it has a non-None ex value (legacy
+    # voltage-driven feed) or (b) it has a non-None name (network-port
+    # placeholder, voltage gets set later by `build_network()`).
     feeds = []
+    feed_names = []
     for tup_index, edge in enumerate(edges):
         voltage = edge[3]
-        if voltage is None:
+        name = tup_names[tup_index]
+        if voltage is None and name is None:
             continue
         feed_pl, feed_edge_idx = edge_to_polyline[tup_index]
         polyline = polylines[feed_pl]
@@ -239,7 +262,10 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
         feed_arclength = float(
             edge_lengths[:feed_edge_idx].sum() + 0.5 * edge_lengths[feed_edge_idx]
         )
-        feeds.append((feed_pl, feed_arclength, complex(voltage)))
+        feeds.append(
+            (feed_pl, feed_arclength, complex(voltage if voltage is not None else 0))
+        )
+        feed_names.append(name)
 
     if not feeds:
         raise ValueError("no excitation found in wire list")
@@ -248,6 +274,7 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
         "polylines": polylines,
         "edge_segments": edge_segments,
         "feeds": feeds,
+        "feed_names": feed_names,
         # Back-compat scalars — first feed.
         "feed_wire_index": feeds[0][0],
         "feed_arclength": feeds[0][1],

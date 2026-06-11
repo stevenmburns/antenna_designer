@@ -9,6 +9,7 @@ from pysim import TriangularPySim
 
 from ..engine import FarField, SimulationEngine, WireCurrents
 from ..geometry import flat_wires_to_polylines
+from ..network import TL, Driven, PortAtEdge, PortVirtual
 
 
 def _parity_for_solver(solver, solver_kwargs):
@@ -97,7 +98,8 @@ class PysimEngine(SimulationEngine):
         # build_wires() must run before build_tls() — some designs populate
         # self.tls inside build_wires() (delta_looparray_with_tls).
         tups = self._coerce_wire_tuples(builder.build_wires())
-        self._tls = list(builder.build_tls())
+        self._network = builder.build_network()
+        self._tls = [] if self._network is not None else list(builder.build_tls())
 
         # Resolve TL endpoint tags into augmented tups: any tag whose ev was
         # nullified gets a passive feed (V=0) so pysim assembles the full
@@ -107,7 +109,8 @@ class PysimEngine(SimulationEngine):
             tups = list(tups)
             for tag1, _seg1, tag2, _seg2, _z0, _length in self._tls:
                 for tag in (tag1, tag2):
-                    p0, p1, n_seg, ev = tups[tag - 1]
+                    t = tups[tag - 1]
+                    p0, p1, n_seg, ev = t[0], t[1], t[2], t[3]
                     if ev is None:
                         tups[tag - 1] = (p0, p1, n_seg, 0 + 0j)
                         augmented_tags.add(tag)
@@ -116,22 +119,60 @@ class PysimEngine(SimulationEngine):
         self._polylines = translated["polylines"]
         self._edge_segments = translated["edge_segments"]
         self._feeds = translated["feeds"]
+        self._feed_names = translated["feed_names"]
         self._junctions = translated["junctions"]
         self._wire_radius = wire_radius
         self._ground = _normalise_ground(ground)
         self._ground_z = ground_z if self._ground is not None else None
 
-        # Map TL tags to feed indices. The translator emits feeds in tup-
-        # index order over excited tuples, so we walk the augmented tups in
-        # the same order to build the tag→feed_index map.
+        # Map TL tags to feed indices for the legacy build_tls() path.
         self._tag_to_feed = {}
         feed_i = 0
-        for tag, (_p0, _p1, _n, ev) in enumerate(tups, start=1):
+        for tag, t in enumerate(tups, start=1):
+            ev = t[3]
             if ev is not None:
                 self._tag_to_feed[tag] = feed_i
                 feed_i += 1
         # 0-based feed indices that are TL passive ports (V=0, floating).
         self._tl_passive_feed_idx = {self._tag_to_feed[t] for t in augmented_tags}
+
+        if self._network is not None:
+            self._init_network()
+
+    def _init_network(self):
+        """Build port-index maps and validate that every PortAtEdge resolves
+        to a translated feed name. Real ports come first (matching pysim's
+        feed list); virtual ports are appended after."""
+        net = self._network
+        feed_name_to_idx = {n: i for i, n in enumerate(self._feed_names) if n}
+
+        self._port_to_idx = {}
+        for name, port in net.ports.items():
+            if isinstance(port, PortAtEdge):
+                if name not in feed_name_to_idx:
+                    raise ValueError(
+                        f"network port {name!r} is a PortAtEdge but no edge in "
+                        f"build_wires() carries that name; named edges: "
+                        f"{sorted(feed_name_to_idx)}"
+                    )
+                self._port_to_idx[name] = feed_name_to_idx[name]
+
+        # Virtual ports are indexed after the real feeds.
+        next_idx = len(self._feeds)
+        for name, port in net.ports.items():
+            if isinstance(port, PortVirtual):
+                self._port_to_idx[name] = next_idx
+                next_idx += 1
+        self._n_total_ports = next_idx
+
+        # 0-based driven port indices and their applied voltages.
+        self._driven_port_idx = []
+        self._driven_voltages = []
+        for src in net.sources:
+            if not isinstance(src, Driven):
+                raise NotImplementedError(f"unknown source type: {src!r}")
+            self._driven_port_idx.append(self._port_to_idx[src.port])
+            self._driven_voltages.append(complex(src.voltage))
 
     def _make_solver(self, *, wavelength):
         return self._solver(
@@ -210,8 +251,64 @@ class PysimEngine(SimulationEngine):
             dtype=np.complex128,
         )
 
+    def _apply_branches(self, Y, wavelength):
+        """Pad Y to include virtual ports, then stamp every network branch.
+
+        Y comes from pysim with shape (n_real, n_real); we return a
+        (n_total, n_total) augmented matrix with zeros in the virtual-port
+        rows/cols (no antenna admittance) plus the branch contributions.
+        """
+        n_total = self._n_total_ports
+        Y_full = np.zeros((n_total, n_total), dtype=np.complex128)
+        n_real = Y.shape[0]
+        Y_full[:n_real, :n_real] = Y
+        for br in self._network.branches:
+            if isinstance(br, TL):
+                a, b = self._port_to_idx[br.a], self._port_to_idx[br.b]
+                y_tl = self._tl_admittance_2x2(br.z0, br.length, wavelength)
+                Y_full[np.ix_([a, b], [a, b])] += y_tl
+            else:
+                raise NotImplementedError(f"branch type {type(br).__name__}")
+        return Y_full
+
+    def _resolve_network_voltages(self, Y_total):
+        """Return the (n_total,) voltage vector after solving the network:
+        driven ports at their applied voltages, every other port floating
+        with I_ext = 0."""
+        n = Y_total.shape[0]
+        driven = list(self._driven_port_idx)
+        passive = [i for i in range(n) if i not in driven]
+        v_driven = np.array(self._driven_voltages, dtype=np.complex128)
+        V = np.empty(n, dtype=np.complex128)
+        V[driven] = v_driven
+        if passive:
+            Y_pp = Y_total[np.ix_(passive, passive)]
+            Y_pd = Y_total[np.ix_(passive, driven)]
+            V[passive] = np.linalg.solve(Y_pp, -Y_pd @ v_driven)
+        return V
+
+    def _impedance_from_network_y(self, Y_total):
+        """Driven-port impedance with non-driven ports floating (I_ext=0).
+        Mirrors `_impedance_from_y` for the network-spec path."""
+        n = Y_total.shape[0]
+        driven = list(self._driven_port_idx)
+        passive = [i for i in range(n) if i not in driven]
+        v_driven = np.array(self._driven_voltages, dtype=np.complex128)
+        V = np.empty(n, dtype=np.complex128)
+        V[driven] = v_driven
+        if passive:
+            Y_pp = Y_total[np.ix_(passive, passive)]
+            Y_pd = Y_total[np.ix_(passive, driven)]
+            V[passive] = np.linalg.solve(Y_pp, -Y_pd @ v_driven)
+        I = Y_total @ V
+        return [complex(V[i] / I[i]) for i in driven]
+
     def impedance(self):
         wavelength = self._wavelength_for(self.builder.freq)
+        if self._network is not None:
+            Y = self._compute_y_matrix(wavelength)
+            Y_total = self._apply_branches(Y, wavelength)
+            return self._impedance_from_network_y(Y_total)
         if self._tls:
             Y = self._compute_y_matrix(wavelength)
             Y_total = self._apply_tls(Y, wavelength)
@@ -229,6 +326,16 @@ class PysimEngine(SimulationEngine):
             raise ValueError("freqs must be a 1-D non-empty array")
         s = self._make_solver(wavelength=self._wavelength_for(freqs[0]))
         k_array = 2.0 * np.pi * freqs * 1e6 / C_LIGHT
+        if self._network is not None:
+            Y_swept = np.asarray(
+                s.compute_y_matrix_swept(k_array), dtype=np.complex128
+            )  # (n_k, n_real, n_real)
+            n_driven = len(self._driven_port_idx)
+            zs = np.empty((freqs.size, n_driven), dtype=np.complex128)
+            for ki, freq in enumerate(freqs):
+                Y_total = self._apply_branches(Y_swept[ki], self._wavelength_for(freq))
+                zs[ki] = self._impedance_from_network_y(Y_total)
+            return zs
         if self._tls:
             # Batched Y at every frequency, then per-k TL stamping (βL is
             # frequency-dependent) and driven-port reduction. The Y assembly
@@ -364,11 +471,31 @@ class PysimEngine(SimulationEngine):
         k = 2.0 * np.pi / wavelength
         freq_hz = self.builder.freq * 1e6
 
-        if self._tls:
-            # Run the batched Y extraction, apply TLs, resolve passive port
-            # voltages, then re-solve once with every feed at its true V so
-            # the basis coefficients reflect TL-induced loop drives (not
-            # just driver-with-loops-shorted).
+        if self._network is not None:
+            # Same trick as the legacy TL path: extract Y at the real ports,
+            # pad to include virtual ports, stamp the branches, solve for
+            # the resolved real-port voltages, then re-solve the MoM once
+            # with every real feed at its true V so basis coefficients
+            # reflect the branch-induced port voltages.
+            Y = self._compute_y_matrix(wavelength)
+            Y_total = self._apply_branches(Y, wavelength)
+            V_full = self._resolve_network_voltages(Y_total)
+            feeds_resolved = [
+                (w, arc, complex(V_full[i]))
+                for i, (w, arc, _v) in enumerate(self._feeds)
+            ]
+            sim = self._solver(
+                wires=self._polylines,
+                n_per_edge_per_wire=self._edge_segments,
+                feeds=feeds_resolved,
+                wavelength=wavelength,
+                wire_radius=self._wire_radius,
+                ground_z=self._ground_z,
+                junctions=self._junctions or None,
+                **self._solver_kwargs,
+            )
+        elif self._tls:
+            # Legacy TL path: same pattern but everything's a real port.
             Y = self._compute_y_matrix(wavelength)
             Y_total = self._apply_tls(Y, wavelength)
             V, _ = self._resolve_feed_voltages(Y_total)
