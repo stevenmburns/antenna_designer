@@ -131,9 +131,7 @@ class PysimEngine(SimulationEngine):
                 self._tag_to_feed[tag] = feed_i
                 feed_i += 1
         # 0-based feed indices that are TL passive ports (V=0, floating).
-        self._tl_passive_feed_idx = {
-            self._tag_to_feed[t] for t in augmented_tags
-        }
+        self._tl_passive_feed_idx = {self._tag_to_feed[t] for t in augmented_tags}
 
     def _make_solver(self, *, wavelength):
         return self._solver(
@@ -179,27 +177,27 @@ class PysimEngine(SimulationEngine):
             Y[np.ix_([a, b], [a, b])] += y_tl
         return Y
 
-    def _impedance_from_y(self, Y_total):
-        """Driving-point Z at each driven port, with passive (TL-only) ports
-        floating (I_ext=0). Matches PyNECEngine's per-driven-port semantics
-        when all drivers are excited simultaneously."""
+    def _resolve_feed_voltages(self, Y_total):
+        """Return the full per-feed voltage vector V with passive ports'
+        voltages set so I_ext=0 there. The driven ports keep their applied V."""
         n = Y_total.shape[0]
         driven = [i for i in range(n) if i not in self._tl_passive_feed_idx]
         passive = sorted(self._tl_passive_feed_idx)
         v_driven = np.array([self._feeds[i][2] for i in driven], dtype=np.complex128)
-
+        V = np.empty(n, dtype=np.complex128)
+        V[driven] = v_driven
         if passive:
-            # Y_pp · V_p = -Y_pd · V_d (passive ports float, I_ext=0)
             Y_pp = Y_total[np.ix_(passive, passive)]
             Y_pd = Y_total[np.ix_(passive, driven)]
-            v_passive = np.linalg.solve(Y_pp, -Y_pd @ v_driven)
-            V = np.empty(n, dtype=np.complex128)
-            V[driven] = v_driven
-            V[passive] = v_passive
-        else:
-            V = v_driven
+            V[passive] = np.linalg.solve(Y_pp, -Y_pd @ v_driven)
+        return V, driven
+
+    def _impedance_from_y(self, Y_total):
+        """Driving-point Z at each driven port, with passive (TL-only) ports
+        floating (I_ext=0). Matches PyNECEngine's per-driven-port semantics
+        when all drivers are excited simultaneously."""
+        V, driven = self._resolve_feed_voltages(Y_total)
         I = Y_total @ V
-        # Return per-driven-port Z in feed order (matches no-TL path).
         return [complex(V[i] / I[i]) for i in driven]
 
     def _compute_y_via_n_solves(self, wavelength):
@@ -375,7 +373,29 @@ class PysimEngine(SimulationEngine):
         k = 2.0 * np.pi / wavelength
         freq_hz = self.builder.freq * 1e6
 
-        sim = self._make_solver(wavelength=wavelength)
+        if self._tls:
+            # Run N-solve Y extraction, apply TLs, resolve passive port
+            # voltages, then re-solve once with every feed at its true V so
+            # the basis coefficients reflect TL-induced loop drives (not
+            # just driver-with-loops-shorted).
+            Y = self._compute_y_via_n_solves(wavelength)
+            Y_total = self._apply_tls(Y, wavelength)
+            V, _ = self._resolve_feed_voltages(Y_total)
+            feeds_resolved = [
+                (w, arc, complex(V[i])) for i, (w, arc, _v) in enumerate(self._feeds)
+            ]
+            sim = self._solver(
+                wires=self._polylines,
+                n_per_edge_per_wire=self._edge_segments,
+                feeds=feeds_resolved,
+                wavelength=wavelength,
+                wire_radius=self._wire_radius,
+                ground_z=self._ground_z,
+                junctions=self._junctions or None,
+                **self._solver_kwargs,
+            )
+        else:
+            sim = self._make_solver(wavelength=wavelength)
         _z, coeffs = sim.compute_impedance()
         mid, dr, i_mid = self._segment_dipoles(sim, coeffs)
 
