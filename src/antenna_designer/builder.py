@@ -55,6 +55,14 @@ class AntennaBuilder:
     def build_tls(self):
         return []
 
+    def build_network(self):
+        """Return a port-based network spec, or None to fall through to the
+        legacy `build_tls()` path. See `antenna_designer.network` for the
+        type shape (Network/Port*/Branch*/Driven). When non-None, engines
+        consume this instead of `build_tls()` — virtual ports don't need
+        a dummy stub wire, branches refer to ports by name, etc."""
+        return None
+
     @staticmethod
     def draw(tups, fn=None):
 

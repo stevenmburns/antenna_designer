@@ -66,7 +66,8 @@ class SimulationEngine(ABC):
         seen = set()
         out = []
         for t in tups:
-            p0, p1, n_seg, ev = t
+            p0, p1, n_seg, ev = t[0], t[1], t[2], t[3]
+            name = t[4] if len(t) >= 5 else None
             n_new = self.coerce_n_seg(n_seg, parity)
             if n_new != n_seg and (n_seg, n_new) not in seen:
                 seen.add((n_seg, n_new))
@@ -77,7 +78,10 @@ class SimulationEngine(ABC):
                     n_new,
                     parity,
                 )
-            out.append((p0, p1, n_new, ev))
+            if name is None:
+                out.append((p0, p1, n_new, ev))
+            else:
+                out.append((p0, p1, n_new, ev, name))
         return out
 
     @abstractmethod

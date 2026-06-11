@@ -601,6 +601,92 @@ def test_current_distribution_peak_matches_one_over_z():
         assert abs(peak - abs(1 / z)) < 0.02 * abs(1 / z), (peak, z)
 
 
+def test_network_spec_matches_legacy_tls_on_delta_looparray():
+    """build_network() variant of delta_looparray omits the central dummy
+    stub wire (~0.01λ long) that the legacy build_tls() variant needs as
+    an attachment point for tl_card. Same antenna, same TLs, same drive.
+    Impedance should agree to within the stub wire's tiny radiative
+    contribution (~0.5%), far-field peak essentially identical."""
+    from antenna_designer.designs.freq_based.delta_looparray_with_tls import (
+        Builder as LegacyBuilder,
+    )
+    from antenna_designer.designs.freq_based.delta_looparray_network import (
+        Builder as NetBuilder,
+    )
+
+    zl = PysimEngine(LegacyBuilder()).impedance()[0]
+    zn = PysimEngine(NetBuilder()).impedance()[0]
+    assert abs(zl - zn) / abs(zl) < 0.01, f"legacy {zl}, network {zn}"
+
+    ffl = PysimEngine(LegacyBuilder()).far_field(
+        n_theta=90, n_phi=360, del_theta=1, del_phi=1
+    )
+    ffn = PysimEngine(NetBuilder()).far_field(
+        n_theta=90, n_phi=360, del_theta=1, del_phi=1
+    )
+    assert abs(ffl.max_gain - ffn.max_gain) < 0.05, (ffl.max_gain, ffn.max_gain)
+
+
+def test_network_spec_impedance_sweep_matches_per_freq():
+    """impedance_sweep() in the network path should match per-freq
+    impedance() — exercises the swept Y + per-k branch stamping path."""
+    from antenna_designer.designs.freq_based.delta_looparray_network import (
+        Builder as NetBuilder,
+    )
+
+    freqs = np.array([28.0, 28.47, 29.0])
+    zs_swept = PysimEngine(NetBuilder()).impedance_sweep(freqs)
+    assert zs_swept.shape == (3, 1)
+    for i, f in enumerate(freqs):
+        b = NetBuilder()
+        b.freq = f
+        z_one = PysimEngine(b).impedance()[0]
+        assert abs(zs_swept[i, 0] - z_one) < 1e-9, (
+            f"f={f}: swept={zs_swept[i, 0]}, per-freq={z_one}"
+        )
+
+
+def test_network_spec_rejects_unknown_port_reference():
+    """Constructing a Network with a branch referencing a port name that
+    isn't in `ports` should raise immediately, not silently at solve time."""
+    from antenna_designer.network import Driven, Network, PortVirtual, TL
+
+    with pytest.raises(ValueError, match="unknown port"):
+        Network(
+            ports={"drv": PortVirtual("drv")},
+            branches=[TL(a="drv", b="missing", z0=50, length=1.0)],
+            sources=[Driven(port="drv")],
+        )
+
+
+def test_network_spec_rejects_port_at_edge_with_no_named_edge():
+    """PortAtEdge("loop1") with no `loop1` edge in build_wires() should
+    raise a clear error at engine construction time."""
+    from antenna_designer import AntennaBuilder
+    from antenna_designer.network import Driven, Network, PortAtEdge, PortVirtual, TL
+    from types import MappingProxyType
+
+    class BadBuilder(AntennaBuilder):
+        default_params = MappingProxyType({"freq": 28.0, "design_freq": 28.0})
+
+        def build_wires(self):
+            # Single straight wire, no named edges.
+            return [((0, -2, 5), (0, 2, 5), 21, 1 + 0j)]
+
+        def build_network(self):
+            return Network(
+                ports={
+                    "loop1": PortAtEdge("loop1"),  # no matching named edge!
+                    "drv": PortVirtual("drv"),
+                },
+                branches=[TL(a="drv", b="loop1", z0=50, length=1.0)],
+                sources=[Driven(port="drv")],
+            )
+
+    with pytest.raises(ValueError, match="no edge in build_wires"):
+        PysimEngine(BadBuilder())
+
+
 def test_translator_rejects_loop_without_feed():
     """A pure cycle with no excited segment can't be handled (parasitic
     coupling not yet implemented). Should raise a clear NotImplementedError
