@@ -227,17 +227,24 @@ class PysimEngine(SimulationEngine):
         freqs = np.asarray(freqs, dtype=float)
         if freqs.ndim != 1 or freqs.size == 0:
             raise ValueError("freqs must be a 1-D non-empty array")
-        if self._tls:
-            # compute_y_matrix_swept exists, but stamping TLs per-k and
-            # solving the driven-port reduction every frequency is its own
-            # piece of code. Not needed for any current design.
-            raise NotImplementedError(
-                "PysimEngine.impedance_sweep with transmission-line cards "
-                "is not implemented yet; use single-frequency impedance()"
-            )
-        # All k-independent setup happens in the constructor; build once.
         s = self._make_solver(wavelength=self._wavelength_for(freqs[0]))
         k_array = 2.0 * np.pi * freqs * 1e6 / C_LIGHT
+        if self._tls:
+            # Batched Y at every frequency, then per-k TL stamping (βL is
+            # frequency-dependent) and driven-port reduction. The Y assembly
+            # is amortised across frequencies via the upstream swept solve;
+            # the per-k post-processing is O(n_p³) and dwarfed by the solve.
+            Y_swept = np.asarray(
+                s.compute_y_matrix_swept(k_array), dtype=np.complex128
+            )  # (n_k, n_p, n_p)
+            n_driven = sum(
+                1 for i in range(Y_swept.shape[1]) if i not in self._tl_passive_feed_idx
+            )
+            zs = np.empty((freqs.size, n_driven), dtype=np.complex128)
+            for ki, freq in enumerate(freqs):
+                Y_total = self._apply_tls(Y_swept[ki], self._wavelength_for(freq))
+                zs[ki] = self._impedance_from_y(Y_total)
+            return zs
         zs = s.compute_impedance_swept(k_array)
         # Single-feed: (n_k,); multi-feed: (n_k, n_feeds). Normalise to
         # (n_k, n_feeds) to match PyNECEngine.
