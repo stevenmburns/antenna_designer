@@ -75,7 +75,7 @@ Same ballpark agreement as the closed-loop work (~few % R, a few Ω X). Cross-va
 
 ## ~~Next branch: `tl_card` support in PysimEngine~~ — landed
 
-`PysimEngine.impedance()` now handles transmission-line cards by extracting the multi-port Y matrix via **N independent solves** (one per port, V=1 at driven port, V=0 elsewhere), stamping each TL's 2×2 admittance contribution at its endpoint pair, then reducing back to the driven-port impedance via nodal analysis with passive-port currents constrained to zero. The N-solves approach was forced by an upstream limitation: pysim's `compute_y_matrix` doesn't yet support junctions, and every TL design has junctions (the delta loops).
+`PysimEngine.impedance()` handles transmission-line cards by extracting the multi-port Y matrix, stamping each TL's 2×2 admittance contribution at its endpoint pair, then reducing back to the driven-port impedance via nodal analysis with passive-port currents constrained to zero. The original implementation used **N independent solves** as a workaround for pysim's `compute_y_matrix` not supporting junctions; that's been lifted upstream and the engine now calls `compute_y_matrix` directly (one LU + N back-subs instead of N × factor cost).
 
 The path also fixed a latent `AttributeError` — `PysimEngine.__init__` used to call `builder.build_tls()` before `build_wires()` had run, blowing up on builders that populate `self.tls` inside `build_wires`. Order is reversed now.
 
@@ -83,7 +83,11 @@ The path also fixed a latent `AttributeError` — `PysimEngine.__init__` used to
 
 What this means going forward: the multi-port Y reduction is mathematically clean (verified: Y symmetric, passive-port `I_ext=0` constraint exact, `coeffs[m] = 1/Z` at the feed for single-port). Self-consistency tests are in `tests/test_pysim_engine.py`; strict PyNEC numerical agreement isn't currently achievable on the one available test fixture. If we ever land another TL design where loop-driver coupling is non-negligible, retry the comparison.
 
-`impedance_sweep` with TLs raises `NotImplementedError` — `compute_y_matrix_swept` exists upstream, but per-k stamping plus reduction is its own piece of code that no current design needs.
+`impedance_sweep` with TLs is implemented: batched Y over k via `compute_y_matrix_swept`, then per-k TL stamping (βl is frequency-dependent) and driven-port reduction. Matches per-k `impedance()` to ~1e-11 on `delta_looparray_with_tls`.
+
+## ~~Next branch: junction support in pysim's `compute_y_matrix`~~ — landed upstream
+
+Originally listed here as a follow-up. Landed in stevenmburns/pysim#78: both `compute_y_matrix` and `compute_y_matrix_swept` now handle junctions via a matrix-RHS Schur-complement KCL solve across all three solvers (triangular, bspline; sinusoidal already worked structurally). The N-solves workaround in `PysimEngine` has been deleted; the engine calls the upstream batched path directly.
 
 ## Next branches (rough priority order)
 
@@ -94,14 +98,6 @@ What this means going forward: the multi-port Y reduction is mathematically clea
 - Add a TL design where the in-antenna coupling between TL endpoints isn't near-zero, then re-run the comparison; agreement should be much tighter when the antenna's own Y has meaningful off-diagonal terms.
 - Implement segment-averaging at the TL endpoints (averaged current over the TL-end segment instead of basis coefficient at the midpoint). Closer to NEC2's convention; may reconcile.
 
-### 2. `impedance_sweep` with TLs
-
-`compute_y_matrix_swept` exists upstream — wire it up + per-k TL stamping + reduction. No current design needs this; add when one does.
-
-### 3. Junction support in pysim's `compute_y_matrix`
-
-The N-independent-solves path costs N× the LU factor cost. pysim's batched `compute_y_matrix` would do it in one factor + N back-substitutions, but currently rejects junctions. The Schur-complement KCL solve in `_solve_with_kcl` needs a matrix-RHS generalisation. Upstream change; only worth it if larger N-port problems appear.
-
-### 4. Far-field for the new designs
+### 2. Far-field for the new designs
 
 Stage 2b validated the pattern math on the dipole; once tee-junction geometries are stable, re-run the directivity cross-check on hentenna and fandipole and add a corresponding test. Lower priority — now that cross-engine `compare_patterns` is in the CLI, this is largely a "run it and write a test" task.

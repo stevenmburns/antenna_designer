@@ -162,6 +162,32 @@ def test_pysim_tl_card_passive_port_floats_correctly():
     assert np.allclose(I[passive], 0, atol=1e-10), I[passive]
 
 
+def test_pysim_tl_impedance_sweep_matches_per_freq():
+    """impedance_sweep with TLs should match per-frequency impedance() calls
+    to within solver noise. Exercises the swept-Y → per-k TL stamp →
+    driven-port reduction path that was added once compute_y_matrix_swept
+    learned about junctions upstream."""
+    from antenna_designer.designs.freq_based.delta_looparray_with_tls import (
+        Builder as TLBuilder,
+    )
+
+    freqs = np.array([28.0, 28.47, 29.0])
+
+    # Per-freq reference
+    z_per = []
+    for f in freqs:
+        b = TLBuilder()
+        b.freq = f
+        z_per.append(PysimEngine(b).impedance()[0])
+
+    # Swept (engine constructed at any freq; impedance_sweep rebuilds per-k)
+    b = TLBuilder()
+    zs = PysimEngine(b).impedance_sweep(freqs)
+    assert zs.shape == (3, 1), zs.shape
+    for i, (zp, zs_i) in enumerate(zip(z_per, zs[:, 0])):
+        assert abs(zp - zs_i) < 1e-9, f"f={freqs[i]}: per={zp}, swept={zs_i}"
+
+
 def test_pysim_tl_admittance_quarter_wave():
     """Hand-checked Y_TL for a quarter-wave TL with Z0=50: at θ=π/2,
     Y_TL = (1/(j50)) [[0,-1],[-1,0]] = [[0, j/50], [j/50, 0]].
