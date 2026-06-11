@@ -687,6 +687,113 @@ def test_network_spec_rejects_port_at_edge_with_no_named_edge():
         PysimEngine(BadBuilder())
 
 
+def _load_dipole_builder(load_branch=None, name_feed=False):
+    """Synthetic half-wave dipole at 28 MHz with one named feed edge.
+    When `load_branch` is given, build_network() returns a Network with that
+    Load and a Driven on the same port. Otherwise build_network()=None and
+    the engine falls through to the plain-feed path."""
+    from antenna_designer import AntennaBuilder
+    from antenna_designer.network import Driven, Network, PortAtEdge
+    from types import MappingProxyType
+
+    class Builder(AntennaBuilder):
+        default_params = MappingProxyType({"freq": 28.0, "design_freq": 28.0})
+
+        def build_wires(self):
+            # ~λ/2 at 28 MHz is ~5.35m; half-arms of 2.5m straddling origin.
+            ex = 1 + 0j
+            if load_branch is None and not name_feed:
+                return [((0, -2.5, 5), (0, 2.5, 5), 21, ex)]
+            return [((0, -2.5, 5), (0, 2.5, 5), 21, ex, "feed")]
+
+        def build_network(self):
+            if load_branch is None:
+                return None
+            return Network(
+                ports={"feed": PortAtEdge("feed")},
+                branches=[load_branch],
+                sources=[Driven(port="feed", voltage=1 + 0j)],
+            )
+
+    return Builder()
+
+
+def test_load_branch_resistor_adds_to_impedance():
+    """Load(r=R) on the driven port should shift driving-point Z by exactly R
+    — Sherman-Morrison on a 1-port reduces to Z' = Z + Z_L."""
+    from antenna_designer.network import Load
+
+    z_bare = PysimEngine(_load_dipole_builder(name_feed=True)).impedance()[0]
+    z_loaded = PysimEngine(_load_dipole_builder(Load(port="feed", r=50.0))).impedance()[
+        0
+    ]
+    assert abs((z_loaded - z_bare) - 50.0) < 1e-6, (z_bare, z_loaded)
+
+
+def test_load_branch_series_lc_at_resonance_zero_impact():
+    """A series LC tuned to be resonant at the operating freq has Z_L=0 →
+    no shift in driving-point Z."""
+    from antenna_designer.network import Load
+
+    f_hz = 28.0e6
+    l = 1e-6
+    c = 1.0 / ((2 * np.pi * f_hz) ** 2 * l)  # ω²LC = 1
+    z_bare = PysimEngine(_load_dipole_builder(name_feed=True)).impedance()[0]
+    z_loaded = PysimEngine(
+        _load_dipole_builder(Load(port="feed", l=l, c=c))
+    ).impedance()[0]
+    assert abs(z_loaded - z_bare) < 1e-3, (z_bare, z_loaded)
+
+
+def test_load_branch_inductor_adds_reactance():
+    """Load(l=L) adds jωL to driving-point Z — pure reactive shift."""
+    from antenna_designer.network import Load
+
+    l = 1e-6
+    omega = 2 * np.pi * 28.0e6
+    z_bare = PysimEngine(_load_dipole_builder(name_feed=True)).impedance()[0]
+    z_loaded = PysimEngine(_load_dipole_builder(Load(port="feed", l=l))).impedance()[0]
+    assert abs((z_loaded - z_bare).real) < 1e-6, (z_bare, z_loaded)
+    assert abs((z_loaded - z_bare).imag - omega * l) < 1e-3, (z_bare, z_loaded)
+
+
+def test_load_branch_rejects_virtual_port():
+    """Load on a PortVirtual has no antenna segment to load → ValueError."""
+    from antenna_designer import AntennaBuilder
+    from antenna_designer.network import (
+        Driven,
+        Load,
+        Network,
+        PortAtEdge,
+        PortVirtual,
+        TL,
+    )
+    from types import MappingProxyType
+
+    class Builder(AntennaBuilder):
+        default_params = MappingProxyType({"freq": 28.0, "design_freq": 28.0})
+
+        def build_wires(self):
+            return [((0, -2.5, 5), (0, 2.5, 5), 21, 1 + 0j, "feed")]
+
+        def build_network(self):
+            return Network(
+                ports={
+                    "feed": PortAtEdge("feed"),
+                    "drv": PortVirtual("drv"),
+                },
+                branches=[
+                    TL(a="drv", b="feed", z0=50, length=1.0),
+                    Load(port="drv", r=10),
+                ],
+                sources=[Driven(port="drv")],
+            )
+
+    eng = PysimEngine(Builder())
+    with pytest.raises(ValueError, match="Load on virtual port"):
+        eng.impedance()
+
+
 def test_translator_rejects_loop_without_feed():
     """A pure cycle with no excited segment can't be handled (parasitic
     coupling not yet implemented). Should raise a clear NotImplementedError
