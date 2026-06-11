@@ -128,7 +128,7 @@ def test_pysim_tl_card_runs_and_returns_finite_impedance():
     assert abs(z) < 1e4, f"unrealistic magnitude: {z}"
 
     wl = 299.792458 / b.freq
-    Y = e._compute_y_via_n_solves(wl)
+    Y = e._compute_y_matrix(wl)
     assert np.allclose(Y, Y.T, atol=1e-10), "Y matrix not symmetric (reciprocity)"
 
 
@@ -143,7 +143,7 @@ def test_pysim_tl_card_passive_port_floats_correctly():
     b = TLBuilder()
     e = PysimEngine(b)
     wl = 299.792458 / b.freq
-    Y = e._compute_y_via_n_solves(wl)
+    Y = e._compute_y_matrix(wl)
     Y_total = e._apply_tls(Y, wl)
 
     n = Y_total.shape[0]

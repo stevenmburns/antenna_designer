@@ -200,36 +200,20 @@ class PysimEngine(SimulationEngine):
         I = Y_total @ V
         return [complex(V[i] / I[i]) for i in driven]
 
-    def _compute_y_via_n_solves(self, wavelength):
-        """Y matrix column-by-column via N independent solves with the j-th
-        column built from V_j=1, V_{k≠j}=0. Works through junctions (which
-        the solvers' batched `compute_y_matrix` doesn't yet handle)."""
-        n = len(self._feeds)
-        Y = np.empty((n, n), dtype=np.complex128)
-        for j in range(n):
-            feeds_j = [
-                (w, arc, 1.0 + 0j if k == j else 0.0 + 0j)
-                for k, (w, arc, _v) in enumerate(self._feeds)
-            ]
-            solver = self._solver(
-                wires=self._polylines,
-                n_per_edge_per_wire=self._edge_segments,
-                feeds=feeds_j,
-                wavelength=wavelength,
-                wire_radius=self._wire_radius,
-                ground_z=self._ground_z,
-                junctions=self._junctions or None,
-                **self._solver_kwargs,
-            )
-            _z, coeffs = solver.compute_impedance()
-            m_indices = solver._feed_basis_indices(solver._build_geometry())
-            Y[:, j] = [coeffs[m] for m in m_indices]
-        return Y
+    def _compute_y_matrix(self, wavelength):
+        """Multi-port short-circuit Y at the configured feeds. Builds one
+        solver with the full feed list and calls pysim's compute_y_matrix,
+        which since the junction-aware-y-matrix PR handles closed-loop /
+        tee-junction antennas correctly (one LU + N back-subs per Y)."""
+        return np.asarray(
+            self._make_solver(wavelength=wavelength).compute_y_matrix(),
+            dtype=np.complex128,
+        )
 
     def impedance(self):
         wavelength = self._wavelength_for(self.builder.freq)
         if self._tls:
-            Y = self._compute_y_via_n_solves(wavelength)
+            Y = self._compute_y_matrix(wavelength)
             Y_total = self._apply_tls(Y, wavelength)
             return self._impedance_from_y(Y_total)
         s = self._make_solver(wavelength=wavelength)
@@ -374,11 +358,11 @@ class PysimEngine(SimulationEngine):
         freq_hz = self.builder.freq * 1e6
 
         if self._tls:
-            # Run N-solve Y extraction, apply TLs, resolve passive port
+            # Run the batched Y extraction, apply TLs, resolve passive port
             # voltages, then re-solve once with every feed at its true V so
             # the basis coefficients reflect TL-induced loop drives (not
             # just driver-with-loops-shorted).
-            Y = self._compute_y_via_n_solves(wavelength)
+            Y = self._compute_y_matrix(wavelength)
             Y_total = self._apply_tls(Y, wavelength)
             V, _ = self._resolve_feed_voltages(Y_total)
             feeds_resolved = [
