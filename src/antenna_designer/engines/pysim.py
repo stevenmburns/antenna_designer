@@ -87,10 +87,6 @@ class PysimEngine(SimulationEngine):
                                      is approximate.
         """
         super().__init__(builder)
-        if builder.build_tls():
-            raise NotImplementedError(
-                "transmission-line cards not supported by PysimEngine yet"
-            )
 
         self._solver = solver
         self._solver_kwargs = dict(solver_kwargs) if solver_kwargs else {}
@@ -98,7 +94,24 @@ class PysimEngine(SimulationEngine):
         # bspline depends on degree. Set before _coerce_wire_tuples runs.
         self.segment_parity = _parity_for_solver(self._solver, self._solver_kwargs)
 
+        # build_wires() must run before build_tls() — some designs populate
+        # self.tls inside build_wires() (delta_looparray_with_tls).
         tups = self._coerce_wire_tuples(builder.build_wires())
+        self._tls = list(builder.build_tls())
+
+        # Resolve TL endpoint tags into augmented tups: any tag whose ev was
+        # nullified gets a passive feed (V=0) so pysim assembles the full
+        # multi-port Y matrix. Driven ports keep their original voltages.
+        augmented_tags = set()
+        if self._tls:
+            tups = list(tups)
+            for tag1, _seg1, tag2, _seg2, _z0, _length in self._tls:
+                for tag in (tag1, tag2):
+                    p0, p1, n_seg, ev = tups[tag - 1]
+                    if ev is None:
+                        tups[tag - 1] = (p0, p1, n_seg, 0 + 0j)
+                        augmented_tags.add(tag)
+
         translated = flat_wires_to_polylines(tups)
         self._polylines = translated["polylines"]
         self._edge_segments = translated["edge_segments"]
@@ -107,6 +120,20 @@ class PysimEngine(SimulationEngine):
         self._wire_radius = wire_radius
         self._ground = _normalise_ground(ground)
         self._ground_z = ground_z if self._ground is not None else None
+
+        # Map TL tags to feed indices. The translator emits feeds in tup-
+        # index order over excited tuples, so we walk the augmented tups in
+        # the same order to build the tag→feed_index map.
+        self._tag_to_feed = {}
+        feed_i = 0
+        for tag, (_p0, _p1, _n, ev) in enumerate(tups, start=1):
+            if ev is not None:
+                self._tag_to_feed[tag] = feed_i
+                feed_i += 1
+        # 0-based feed indices that are TL passive ports (V=0, floating).
+        self._tl_passive_feed_idx = {
+            self._tag_to_feed[t] for t in augmented_tags
+        }
 
     def _make_solver(self, *, wavelength):
         return self._solver(
@@ -124,8 +151,90 @@ class PysimEngine(SimulationEngine):
     def _wavelength_for(freq_mhz):
         return C_LIGHT / (freq_mhz * 1e6)
 
+    def _tl_admittance_2x2(self, z0, length, wavelength):
+        """Lossless ideal-TL nodal admittance between its two terminals.
+
+        For electrical length θ = 2π·length/λ:
+            Y_TL = 1/(j Z0 sin θ) · [[cos θ, -1], [-1, cos θ]]
+        Singular at sin θ = 0 (TL is a half-wavelength multiple); raise
+        rather than return garbage so callers can pick a different length.
+        """
+        theta = 2.0 * np.pi * length / wavelength
+        s, c = np.sin(theta), np.cos(theta)
+        if abs(s) < 1e-12:
+            raise ValueError(
+                f"TL length {length} is ~kλ/2 at f={C_LIGHT / wavelength / 1e6:.4f} MHz "
+                "(sin βl ≈ 0); admittance is singular"
+            )
+        scale = 1.0 / (1j * z0 * s)
+        return scale * np.array([[c, -1.0], [-1.0, c]], dtype=np.complex128)
+
+    def _apply_tls(self, Y, wavelength):
+        """Y + per-TL stamps at the corresponding feed-index pairs."""
+        Y = Y.copy()
+        for tag1, _s1, tag2, _s2, z0, length in self._tls:
+            a = self._tag_to_feed[tag1]
+            b = self._tag_to_feed[tag2]
+            y_tl = self._tl_admittance_2x2(z0, length, wavelength)
+            Y[np.ix_([a, b], [a, b])] += y_tl
+        return Y
+
+    def _impedance_from_y(self, Y_total):
+        """Driving-point Z at each driven port, with passive (TL-only) ports
+        floating (I_ext=0). Matches PyNECEngine's per-driven-port semantics
+        when all drivers are excited simultaneously."""
+        n = Y_total.shape[0]
+        driven = [i for i in range(n) if i not in self._tl_passive_feed_idx]
+        passive = sorted(self._tl_passive_feed_idx)
+        v_driven = np.array([self._feeds[i][2] for i in driven], dtype=np.complex128)
+
+        if passive:
+            # Y_pp · V_p = -Y_pd · V_d (passive ports float, I_ext=0)
+            Y_pp = Y_total[np.ix_(passive, passive)]
+            Y_pd = Y_total[np.ix_(passive, driven)]
+            v_passive = np.linalg.solve(Y_pp, -Y_pd @ v_driven)
+            V = np.empty(n, dtype=np.complex128)
+            V[driven] = v_driven
+            V[passive] = v_passive
+        else:
+            V = v_driven
+        I = Y_total @ V
+        # Return per-driven-port Z in feed order (matches no-TL path).
+        return [complex(V[i] / I[i]) for i in driven]
+
+    def _compute_y_via_n_solves(self, wavelength):
+        """Y matrix column-by-column via N independent solves with the j-th
+        column built from V_j=1, V_{k≠j}=0. Works through junctions (which
+        the solvers' batched `compute_y_matrix` doesn't yet handle)."""
+        n = len(self._feeds)
+        Y = np.empty((n, n), dtype=np.complex128)
+        for j in range(n):
+            feeds_j = [
+                (w, arc, 1.0 + 0j if k == j else 0.0 + 0j)
+                for k, (w, arc, _v) in enumerate(self._feeds)
+            ]
+            solver = self._solver(
+                wires=self._polylines,
+                n_per_edge_per_wire=self._edge_segments,
+                feeds=feeds_j,
+                wavelength=wavelength,
+                wire_radius=self._wire_radius,
+                ground_z=self._ground_z,
+                junctions=self._junctions or None,
+                **self._solver_kwargs,
+            )
+            _z, coeffs = solver.compute_impedance()
+            m_indices = solver._feed_basis_indices(solver._build_geometry())
+            Y[:, j] = [coeffs[m] for m in m_indices]
+        return Y
+
     def impedance(self):
-        s = self._make_solver(wavelength=self._wavelength_for(self.builder.freq))
+        wavelength = self._wavelength_for(self.builder.freq)
+        if self._tls:
+            Y = self._compute_y_via_n_solves(wavelength)
+            Y_total = self._apply_tls(Y, wavelength)
+            return self._impedance_from_y(Y_total)
+        s = self._make_solver(wavelength=wavelength)
         z, _coeffs = s.compute_impedance()
         # Single-feed path returns a scalar; multi-feed returns an array.
         # Match PyNECEngine's list-of-Z return shape.
@@ -136,6 +245,14 @@ class PysimEngine(SimulationEngine):
         freqs = np.asarray(freqs, dtype=float)
         if freqs.ndim != 1 or freqs.size == 0:
             raise ValueError("freqs must be a 1-D non-empty array")
+        if self._tls:
+            # compute_y_matrix_swept exists, but stamping TLs per-k and
+            # solving the driven-port reduction every frequency is its own
+            # piece of code. Not needed for any current design.
+            raise NotImplementedError(
+                "PysimEngine.impedance_sweep with transmission-line cards "
+                "is not implemented yet; use single-frequency impedance()"
+            )
         # All k-independent setup happens in the constructor; build once.
         s = self._make_solver(wavelength=self._wavelength_for(freqs[0]))
         k_array = 2.0 * np.pi * freqs * 1e6 / C_LIGHT

@@ -21,7 +21,7 @@ These are the topologies `PysimEngine` currently rejects. PyNECEngine is unaffec
 |---|---|---|
 | ~~pure closed loops~~ | ~~bowtie, delta_loop, diamond_loop, inv_delta_loop, folded_invvee, delta_loop_slanted{,2,3}~~ | **done** — cut-at-feed-edge in `flat_wires_to_polylines` |
 | ~~multiple excitations (`ex_card` voltage on more than one segment)~~ | ~~every array design~~ | **done** — translator emits a `feeds` list, `PysimEngine.impedance()` returns per-port Z |
-| transmission-line cards (`tl_card`) | `freq_based.delta_looparray_with_tls` | upstream pysim has no equivalent today — **last remaining blocker** (1 design) |
+| ~~transmission-line cards (`tl_card`)~~ | ~~`freq_based.delta_looparray_with_tls`~~ | **done** — `impedance()` only; sweep raises `NotImplementedError` |
 
 ## ~~Next branch: closed-loop support in the translator~~ — landed
 
@@ -73,17 +73,35 @@ Same ballpark agreement as the closed-loop work (~few % R, a few Ω X). Cross-va
 
 **Where the interface code lives.** Same call as before: don't move the translator upstream yet. The shape just settled; let it bake.
 
+## ~~Next branch: `tl_card` support in PysimEngine~~ — landed
+
+`PysimEngine.impedance()` now handles transmission-line cards by extracting the multi-port Y matrix via **N independent solves** (one per port, V=1 at driven port, V=0 elsewhere), stamping each TL's 2×2 admittance contribution at its endpoint pair, then reducing back to the driven-port impedance via nodal analysis with passive-port currents constrained to zero. The N-solves approach was forced by an upstream limitation: pysim's `compute_y_matrix` doesn't yet support junctions, and every TL design has junctions (the delta loops).
+
+The path also fixed a latent `AttributeError` — `PysimEngine.__init__` used to call `builder.build_tls()` before `build_wires()` had run, blowing up on builders that populate `self.tls` inside `build_wires`. Order is reversed now.
+
+**Cross-validation surprise.** PyNEC and pysim disagree wildly on `delta_looparray_with_tls` at default params (PyNEC: −77 −18255j; pysim: +55 −3j). Both engines stay self-consistent across frequency and TL length sweeps — this is a genuine modeling-convention difference, not numerical noise. The most likely root cause: NEC2's `tl_card` treats TL endpoints as **segment-level** ports (network attached to the segment as a whole) while my pysim post-processing treats them as **basis-level** ports (delta-gap at the wire midpoint). On simple geometries the two coincide; on this design the central driver is a 10cm gap with effectively zero coupling to the loops in the antenna's own Y matrix, so the TL transformation dominates and the segment-vs-basis distinction blows up the result. Reproducer: `Y[loop, driver] ≈ 3e-7` (essentially decoupled) — every Ω of driver impedance comes from how you stamp the TLs, so the conventions diverge maximally.
+
+What this means going forward: the multi-port Y reduction is mathematically clean (verified: Y symmetric, passive-port `I_ext=0` constraint exact, `coeffs[m] = 1/Z` at the feed for single-port). Self-consistency tests are in `tests/test_pysim_engine.py`; strict PyNEC numerical agreement isn't currently achievable on the one available test fixture. If we ever land another TL design where loop-driver coupling is non-negligible, retry the comparison.
+
+`impedance_sweep` with TLs raises `NotImplementedError` — `compute_y_matrix_swept` exists upstream, but per-k stamping plus reduction is its own piece of code that no current design needs.
+
 ## Next branches (rough priority order)
 
-### 1. `tl_card` support in PysimEngine
+### 1. Strict PyNEC cross-validation for `tl_card`
 
-The only remaining design blocked from PysimEngine is `freq_based.delta_looparray_with_tls`, which uses NEC2's `tl_card` to model transmission-line stubs between feed points. pysim has no native equivalent. Two paths:
+`PysimEngine.impedance()` runs cleanly on `delta_looparray_with_tls` but the numerical answer doesn't match PyNEC (segment-vs-basis port convention — see the closed branch above). Two follow-ups, both optional:
 
-- **(a) Lumped transmission-line network bolted onto the multi-port Y.** Solve pysim normally, get the multi-port Y, then post-process: add the TL ABCD matrices and re-extract terminal Z at the actual driven port(s). Stays above pysim's API. Probably the cheaper path.
-- **(b) Native TL primitive in pysim.** Properly cleaner but requires upstream changes.
+- Add a TL design where the in-antenna coupling between TL endpoints isn't near-zero, then re-run the comparison; agreement should be much tighter when the antenna's own Y has meaningful off-diagonal terms.
+- Implement segment-averaging at the TL endpoints (averaged current over the TL-end segment instead of basis coefficient at the midpoint). Closer to NEC2's convention; may reconcile.
 
-Also: while here, fix `PysimEngine.__init__` calling `builder.build_tls()` on a builder whose `self.tls` attribute is only populated lazily — currently an `AttributeError` rather than a clean `NotImplementedError`. Trivial.
+### 2. `impedance_sweep` with TLs
 
-### 2. Far-field for the new designs
+`compute_y_matrix_swept` exists upstream — wire it up + per-k TL stamping + reduction. No current design needs this; add when one does.
+
+### 3. Junction support in pysim's `compute_y_matrix`
+
+The N-independent-solves path costs N× the LU factor cost. pysim's batched `compute_y_matrix` would do it in one factor + N back-substitutions, but currently rejects junctions. The Schur-complement KCL solve in `_solve_with_kcl` needs a matrix-RHS generalisation. Upstream change; only worth it if larger N-port problems appear.
+
+### 4. Far-field for the new designs
 
 Stage 2b validated the pattern math on the dipole; once tee-junction geometries are stable, re-run the directivity cross-check on hentenna and fandipole and add a corresponding test. Lower priority — now that cross-engine `compare_patterns` is in the CLI, this is largely a "run it and write a test" task.
