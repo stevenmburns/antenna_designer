@@ -91,13 +91,19 @@ Originally listed here as a follow-up. Landed in stevenmburns/pysim#78: both `co
 
 ## Next branches (rough priority order)
 
-### 1. Strict PyNEC cross-validation for `tl_card`
+### 1. Port-based network spec (TL cleanup + lumped R/L/C) — [#65](https://github.com/stevenmburns/antenna_designer/issues/65)
+
+Replace `build_tls()` (NEC2-shaped: segment indices, requires a dummy stub wire) with `build_network()` returning named logical ports and 2-port branches. Same branch shape covers TLs **and** lumped R/L/C — every branch stamps a frequency-dependent 2×2 admittance into Y at the right port pair, which `_apply_tls` is already the prototype of.
+
+PysimEngine loses the dummy stub wire (virtual ports become Y-matrix rows only); PyNECEngine auto-generates the NEC2 hacks via `tl_card` / `ld_card` (segment loading) / `nt_card` (arbitrary 2-port Y between segments). Issue #65 has the full sketch plus seven open design questions to settle before implementation — naming convention for feed edges, ground reference semantics, backwards-compat with `build_tls()`, etc. **Biggest-impact next branch** — unblocks lumped-element designs (matching networks, traps, bandpass filters) which we currently can't model at all.
+
+### 2. Strict PyNEC cross-validation for `tl_card`
 
 `PysimEngine.impedance()` runs cleanly on `delta_looparray_with_tls` but the numerical answer doesn't match PyNEC (segment-vs-basis port convention — see the closed branch above). Two follow-ups, both optional:
 
 - Add a TL design where the in-antenna coupling between TL endpoints isn't near-zero, then re-run the comparison; agreement should be much tighter when the antenna's own Y has meaningful off-diagonal terms.
 - Implement segment-averaging at the TL endpoints (averaged current over the TL-end segment instead of basis coefficient at the midpoint). Closer to NEC2's convention; may reconcile.
 
-### 2. Far-field for the new designs
+### 3. Far-field for the new designs
 
 Stage 2b validated the pattern math on the dipole; once tee-junction geometries are stable, re-run the directivity cross-check on hentenna and fandipole and add a corresponding test. Lower priority — now that cross-engine `compare_patterns` is in the CLI, this is largely a "run it and write a test" task.
