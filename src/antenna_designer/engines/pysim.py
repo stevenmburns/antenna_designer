@@ -9,7 +9,19 @@ from pysim import TriangularPySim
 
 from ..engine import FarField, SimulationEngine, WireCurrents
 from ..geometry import flat_wires_to_polylines
-from ..network import TL, Driven, PortAtEdge, PortVirtual
+from ..network import TL, Driven, Load, PortAtEdge, PortVirtual
+
+
+def _series_rlc_impedance(r, l, c, omega):
+    """Series R + jωL + 1/(jωC). Any of r/l/c may be None (omitted term)."""
+    z = 0.0 + 0.0j
+    if r is not None:
+        z += r
+    if l is not None:
+        z += 1j * omega * l
+    if c is not None:
+        z += 1.0 / (1j * omega * c)
+    return z
 
 
 def _parity_for_solver(solver, solver_kwargs):
@@ -251,13 +263,53 @@ class PysimEngine(SimulationEngine):
             dtype=np.complex128,
         )
 
+    def _apply_loads(self, Y, omega):
+        """Apply every Load branch as a Sherman-Morrison rank-1 update on
+        the real-port Y. Series Z_L inserted at port k transforms
+
+            Y' = Y − Z_L · Y[:,k] · Y[k,:] / (1 + Z_L · Y[k,k])
+
+        which is the network-level equivalent of NEC2's `ld_card` modifying
+        the segment's MoM Z[k,k] (derived via Sherman-Morrison on Z_mom +
+        Z_L·e_k·e_k^T). Same physics, no solver hook required.
+        """
+        Y = Y.copy()
+        for br in self._network.branches:
+            if not isinstance(br, Load):
+                continue
+            port = self._network.ports[br.port]
+            if not isinstance(port, PortAtEdge):
+                raise ValueError(
+                    f"Load on virtual port {br.port!r}: a Load is a series "
+                    "impedance on an antenna segment, which only PortAtEdge has"
+                )
+            z_l = _series_rlc_impedance(br.r, br.l, br.c, omega)
+            if z_l == 0:
+                continue
+            k = self._port_to_idx[br.port]
+            y_col = Y[:, k].copy()
+            denom = 1.0 + z_l * Y[k, k]
+            if abs(denom) < 1e-15:
+                raise ValueError(
+                    f"Load on port {br.port!r}: 1 + Z_L·Y[k,k] ≈ 0 (singular)"
+                )
+            Y -= (z_l / denom) * np.outer(y_col, y_col)
+        return Y
+
     def _apply_branches(self, Y, wavelength):
         """Pad Y to include virtual ports, then stamp every network branch.
 
         Y comes from pysim with shape (n_real, n_real); we return a
         (n_total, n_total) augmented matrix with zeros in the virtual-port
         rows/cols (no antenna admittance) plus the branch contributions.
+
+        Order matters: Load branches modify the antenna's real-port Y first
+        (matching ld_card's effect inside the MoM), then TL/TwoPort branches
+        stamp on the loaded Y. A TL connected to a loaded port sees the
+        external side of the load.
         """
+        omega = 2.0 * np.pi * C_LIGHT / wavelength
+        Y = self._apply_loads(Y, omega)
         n_total = self._n_total_ports
         Y_full = np.zeros((n_total, n_total), dtype=np.complex128)
         n_real = Y.shape[0]
@@ -267,6 +319,8 @@ class PysimEngine(SimulationEngine):
                 a, b = self._port_to_idx[br.a], self._port_to_idx[br.b]
                 y_tl = self._tl_admittance_2x2(br.z0, br.length, wavelength)
                 Y_full[np.ix_([a, b], [a, b])] += y_tl
+            elif isinstance(br, Load):
+                continue  # already applied to the real-port Y
             else:
                 raise NotImplementedError(f"branch type {type(br).__name__}")
         return Y_full
