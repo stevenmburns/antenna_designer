@@ -918,15 +918,17 @@ def test_trap_dipole_cross_engine_impedance_at_trap_resonance():
     b.freq = 28.0
     (z_ps,) = PysimEngine(b).impedance()
     (z_nec,) = PyNECEngine(b, ground=None).impedance()
-    # Both engines agree on the qualitative regime: substantial R, positive X.
-    assert 150 < z_ps.real < 250, z_ps
-    assert 150 < z_nec.real < 250, z_nec
-    assert 50 < z_ps.imag < 200, z_ps
-    assert 50 < z_nec.imag < 200, z_nec
-    # Cross-engine tolerance: ~5 Ω R, ~20 Ω X is what we get at the design
-    # point with the parallel-LC at exact resonance.
-    assert abs(z_ps.real - z_nec.real) < 10.0, (z_ps, z_nec)
-    assert abs(z_ps.imag - z_nec.imag) < 20.0, (z_ps, z_nec)
+    # Both engines see Z ≈ 80-90 + 60j at the design point (loaded short-
+    # dipole regime — the trap-isolated inner arm with parasitic outer-arm
+    # coupling sits slightly past resonance for the default geometry).
+    assert 60 < z_ps.real < 110, z_ps
+    assert 60 < z_nec.real < 110, z_nec
+    assert 30 < z_ps.imag < 100, z_ps
+    assert 30 < z_nec.imag < 100, z_nec
+    # Cross-engine tolerance is tight at the design point with a centered
+    # feed: ~2 Ω R, ~10 Ω X.
+    assert abs(z_ps.real - z_nec.real) < 3.0, (z_ps, z_nec)
+    assert abs(z_ps.imag - z_nec.imag) < 12.0, (z_ps, z_nec)
 
 
 def test_trap_dipole_trap_C_changes_impedance():
