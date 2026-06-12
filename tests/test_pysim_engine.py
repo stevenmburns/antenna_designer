@@ -747,11 +747,51 @@ def test_pynec_network_rejects_virtual_to_virtual_tl():
         PyNECEngine(Builder(), ground=None)
 
 
-def test_pynec_network_rejects_load_branch():
-    """Load (ld_card backport) is a follow-up; raise NotImplementedError so
-    users get a clear pointer rather than silent omission."""
+def test_pynec_load_branch_resistor_adds_to_impedance():
+    """Load(r=R) on a PyNEC-driven dipole should shift driving-point Z by
+    exactly R — ld_card type-0 inserts a series R+L+C at the segment. This
+    is the cross-engine cross-check for piece (A) on the PyNEC side."""
     from antenna_designer import AntennaBuilder
     from antenna_designer.network import Driven, Load, Network, PortAtEdge
+    from types import MappingProxyType
+
+    class Builder(AntennaBuilder):
+        default_params = MappingProxyType({"freq": 28.0, "design_freq": 28.0})
+
+        def __init__(self, with_load=True):
+            super().__init__()
+            self._with_load = with_load
+
+        def build_wires(self):
+            return [((0, -2.5, 5), (0, 2.5, 5), 21, None, "feed")]
+
+        def build_network(self):
+            branches = [Load(port="feed", r=50.0)] if self._with_load else []
+            return Network(
+                ports={"feed": PortAtEdge("feed")},
+                branches=branches,
+                sources=[Driven(port="feed", voltage=1 + 0j)],
+            )
+
+    (z_bare,) = PyNECEngine(Builder(with_load=False), ground=None).impedance()
+    (z_loaded,) = PyNECEngine(Builder(with_load=True), ground=None).impedance()
+    # NEC2 distributes the load across the loaded segment, with a small
+    # discretisation error vs the analytical +R shift. Half an ohm at 50 Ω
+    # is well within ld_card's typical accuracy.
+    assert abs((z_loaded - z_bare) - 50.0) < 0.5, (z_bare, z_loaded)
+
+
+def test_pynec_load_branch_rejects_virtual_port():
+    """Load on a PortVirtual is rejected — same check as PysimEngine."""
+    from antenna_designer import AntennaBuilder
+    from antenna_designer.network import (
+        Driven,
+        Load,
+        Network,
+        PortAtEdge,
+        PortVirtual,
+        TL,
+    )
     from types import MappingProxyType
 
     class Builder(AntennaBuilder):
@@ -762,12 +802,18 @@ def test_pynec_network_rejects_load_branch():
 
         def build_network(self):
             return Network(
-                ports={"feed": PortAtEdge("feed")},
-                branches=[Load(port="feed", r=50)],
-                sources=[Driven(port="feed")],
+                ports={
+                    "feed": PortAtEdge("feed"),
+                    "drv": PortVirtual("drv"),
+                },
+                branches=[
+                    TL(a="drv", b="feed", z0=50, length=1.0),
+                    Load(port="drv", r=10),
+                ],
+                sources=[Driven(port="drv")],
             )
 
-    with pytest.raises(NotImplementedError, match="Load"):
+    with pytest.raises(ValueError, match="Load on virtual port"):
         PyNECEngine(Builder(), ground=None)
 
 

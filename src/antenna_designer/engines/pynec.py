@@ -181,19 +181,44 @@ class PyNECEngine(SimulationEngine):
             next_tag += 1
 
     def _emit_network_cards(self):
-        """Translate Network branches into tl_card calls and Network sources
-        into ex_card calls. Called after geometry_complete()."""
+        """Translate Network branches into tl_card / ld_card calls and Network
+        sources into ex_card calls. Called after geometry_complete().
+
+        Load branches are emitted as NEC2 type-0 ld_cards (short series RLC
+        on a single segment). NEC2's convention: a zero value for R, L, or C
+        means that element isn't present in the load — same semantics as the
+        Load dataclass's optional fields.
+        """
         net = self._network
+        # ld_cards first — conventional ordering; loading affects the MoM
+        # solution that the TL/EX stages then read from.
+        for br in net.branches:
+            if isinstance(br, Load):
+                port = net.ports[br.port]
+                if not isinstance(port, PortAtEdge):
+                    raise ValueError(
+                        f"Load on virtual port {br.port!r}: a Load is a series "
+                        "impedance on an antenna segment, which only PortAtEdge has"
+                    )
+                tag, seg = self._network_port_loc[br.port]
+                r = float(br.r) if br.r is not None else 0.0
+                l = float(br.l) if br.l is not None else 0.0
+                c = float(br.c) if br.c is not None else 0.0
+                if r == 0.0 and l == 0.0 and c == 0.0:
+                    continue
+                # ldtyp=0: short series RLC at segments [seg, seg] on tag.
+                self.c.ld_card(0, tag, seg, seg, r, l, c)
         for br in net.branches:
             if isinstance(br, TL):
                 tag_a, seg_a = self._network_port_loc[br.a]
                 tag_b, seg_b = self._network_port_loc[br.b]
                 self.c.tl_card(tag_a, seg_a, tag_b, seg_b, br.z0, br.length, 0, 0, 0, 0)
-            elif isinstance(br, (Load, TwoPort)):
+            elif isinstance(br, Load):
+                continue  # already emitted above
+            elif isinstance(br, TwoPort):
                 raise NotImplementedError(
-                    f"{type(br).__name__} on PyNECEngine is a follow-up piece of "
-                    "issue #65 (ld_card / nt_card translation); use PysimEngine "
-                    "for now"
+                    "TwoPort on PyNECEngine is a follow-up piece of issue #65 "
+                    "(nt_card translation); use PysimEngine for now"
                 )
             else:
                 raise NotImplementedError(f"branch type {type(br).__name__}")
