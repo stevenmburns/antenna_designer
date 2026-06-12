@@ -406,14 +406,26 @@ def _feed_indices(engine, currents) -> tuple[int, int]:
     """Pick a (wire, knot) for the feed marker.
 
     PysimEngine exposes `_feeds = [(polyline_idx, arclength, voltage)]`
-    post-translator. Map the first feed's polyline to the WireCurrents
-    list (they're 1:1 in index order) and place the marker on the knot
-    closest to that arclength along the polyline.
+    post-translator. For network-spec designs the geometry translator
+    registers a feed for every named edge — including non-driven ports
+    like trap stubs — so `_feeds[0]` is whichever named tuple appears
+    first in `build_wires()`, not necessarily the driven feed. Look up
+    the driven port's `_feeds` entry by index when a Network is present.
     """
     feeds = getattr(engine, "_feeds", None) or []
+    feed_names = getattr(engine, "_feed_names", None) or []
     if not feeds:
         return 0, 0
-    pl_idx, arclen, _v = feeds[0]
+    feed_idx = 0
+    network = getattr(engine, "_network", None)
+    if network is not None and network.sources:
+        # The first Driven source is the primary feed. If it resolves to a
+        # real (PortAtEdge) port, use its position; otherwise (virtual port,
+        # e.g. delta_looparray_network's "driver"), fall back to feeds[0].
+        driven_name = network.sources[0].port
+        if driven_name in feed_names:
+            feed_idx = feed_names.index(driven_name)
+    pl_idx, arclen, _v = feeds[feed_idx]
     if pl_idx >= len(currents):
         return 0, 0
     knots = currents[pl_idx].knot_positions
@@ -428,24 +440,35 @@ def _feed_indices(engine, currents) -> tuple[int, int]:
 
 def _pynec_feed_indices(builder, currents) -> tuple[int, int]:
     """PyNECEngine returns one WireCurrents per build_wires() tuple in
-    the same order, so the feed wire index is just the position of
-    the first excitation-bearing tuple. Place the marker on that
-    wire's centre knot — close enough to NEC's per-segment feed for a
-    UI dot.
+    the same order, so the feed wire index is the position of the tuple
+    that carries the driven port. Place the marker on that wire's centre
+    knot — close enough to NEC's per-segment feed for a UI dot.
+
+    Network-spec designs route excitation through build_network() rather
+    than the per-tuple `ev` field. Network-spec named tuples include
+    non-driven ports (trap stubs, TL endpoints), so we look up the driven
+    port's name and pick the tuple that matches.
     """
-    # build_wires() may emit 5-tuples with a trailing `name` field for
-    # network-spec designs — permissive unpacking.
-    for i, t in enumerate(builder.build_wires()):
+    tuples = list(builder.build_wires())
+    driven_name = None
+    if hasattr(builder, "build_network"):
+        net = builder.build_network()
+        if net is not None and net.sources:
+            driven_name = net.sources[0].port
+    for i, t in enumerate(tuples):
         ev = t[3]
         name = t[4] if len(t) >= 5 else None
-        # Network-spec designs source excitation off build_network() rather
-        # than the `ev` field; fall back to the first named edge as the
-        # visual feed location.
-        if ev is not None or name is not None:
-            if i >= len(currents):
-                return 0, 0
-            k = currents[i].knot_positions.shape[0]
-            return i, k // 2
+        # Network-spec path: only the named tuple matching the Driven port.
+        # Legacy path (no network): first `ev` is the feed.
+        if driven_name is not None:
+            if name != driven_name:
+                continue
+        elif ev is None:
+            continue
+        if i >= len(currents):
+            return 0, 0
+        k = currents[i].knot_positions.shape[0]
+        return i, k // 2
     return 0, 0
 
 

@@ -97,19 +97,22 @@ class Builder(AntennaBuilder):
             return (x, 0.0, z)
 
         n_outer = max(3, int(round(outer / (wavelength / 40))))
-        # Half of the inner span (from one trap to feed). The feed is at the
-        # geometric centre of the inner_l + inner_r joined polyline.
-        n_inner_half = max(11, int(round(inner_arm / (wavelength / 40))))
+        # Single continuous inner wire spanning −X_inner → +X_inner so the
+        # named "feed" middle segment lands exactly at the geometric centre
+        # (x = 0). Splitting the inner span at the origin would put `feed`
+        # on the middle of *one half*, offsetting the feed point by
+        # X_inner/2 — a real asymmetry that broke the symmetric design.
+        # Engine parity coercion bumps to odd/even as needed; we just pick a
+        # plausible segment count.
+        n_inner = max(21, int(round(2 * inner_arm / (wavelength / 40))))
 
         return [
-            # Left arm, outer → inner.
+            # Left arm, outer → trap.
             (p(x_outer_tip_l), p(x_trap_outer_l), n_outer, None),
             (p(x_trap_outer_l), p(x_trap_inner_l), 1, None, "trap_l"),
-            (p(x_trap_inner_l), p(0.0), n_inner_half, None),  # left inner half → centre
-            # Right arm, inner → outer. The feed sits at the join of the two
-            # inner-half wires (vertex at the origin), so give the right half
-            # a name to mark the feed port.
-            (p(0.0), p(x_trap_inner_r), n_inner_half, None, "feed"),
+            # Inner span — one wire, feed at middle = origin.
+            (p(x_trap_inner_l), p(x_trap_inner_r), n_inner, None, "feed"),
+            # Right arm, trap → outer.
             (p(x_trap_inner_r), p(x_trap_outer_r), 1, None, "trap_r"),
             (p(x_trap_outer_r), p(x_outer_tip_r), n_outer, None),
         ]
