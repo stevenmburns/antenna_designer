@@ -9,19 +9,15 @@ from pysim import TriangularPySim
 
 from ..engine import FarField, SimulationEngine, WireCurrents
 from ..geometry import flat_wires_to_polylines
-from ..network import TL, Driven, Load, PortAtEdge, PortVirtual
-
-
-def _series_rlc_impedance(r, l, c, omega):
-    """Series R + jωL + 1/(jωC). Any of r/l/c may be None (omitted term)."""
-    z = 0.0 + 0.0j
-    if r is not None:
-        z += r
-    if l is not None:
-        z += 1j * omega * l
-    if c is not None:
-        z += 1.0 / (1j * omega * c)
-    return z
+from ..network import (
+    TL,
+    Driven,
+    Load,
+    PortAtEdge,
+    PortVirtual,
+    TwoPort,
+    load_impedance,
+)
 
 
 def _parity_for_solver(solver, solver_kwargs):
@@ -186,6 +182,21 @@ class PysimEngine(SimulationEngine):
             self._driven_port_idx.append(self._port_to_idx[src.port])
             self._driven_voltages.append(complex(src.voltage))
 
+        # A Load on a port modifies the MoM Z-diagonal of that segment via
+        # Sherman-Morrison (equivalent to NEC2's ld_card on segment k). The
+        # right boundary condition at a loaded port is V_external = 0 (no
+        # source attached to the segment's external terminal) — NOT
+        # I_external = 0, which is the right BC for TL passive ports. With
+        # I_ext = 0 forced, the Sherman-Morrison update's effect on the
+        # driven-port impedance cancels out algebraically (you can derive
+        # it: V_passive picks up a factor (1 − α·Y_kk) that divides out).
+        # So track loaded ports separately and pin their V = 0 in the
+        # reduction. They take precedence over the floating-passive default.
+        self._loaded_port_idx = set()
+        for br in net.branches:
+            if isinstance(br, Load):
+                self._loaded_port_idx.add(self._port_to_idx[br.port])
+
     def _make_solver(self, *, wavelength):
         return self._solver(
             wires=self._polylines,
@@ -283,7 +294,7 @@ class PysimEngine(SimulationEngine):
                     f"Load on virtual port {br.port!r}: a Load is a series "
                     "impedance on an antenna segment, which only PortAtEdge has"
                 )
-            z_l = _series_rlc_impedance(br.r, br.l, br.c, omega)
+            z_l = load_impedance(br, omega)
             if z_l == 0:
                 continue
             k = self._port_to_idx[br.port]
@@ -304,9 +315,9 @@ class PysimEngine(SimulationEngine):
         rows/cols (no antenna admittance) plus the branch contributions.
 
         Order matters: Load branches modify the antenna's real-port Y first
-        (matching ld_card's effect inside the MoM), then TL/TwoPort branches
-        stamp on the loaded Y. A TL connected to a loaded port sees the
-        external side of the load.
+        (matching ld_card's effect inside the MoM), then TL branches stamp
+        on the loaded Y. A TL connected to a loaded port sees the external
+        side of the load.
         """
         omega = 2.0 * np.pi * C_LIGHT / wavelength
         Y = self._apply_loads(Y, omega)
@@ -321,6 +332,11 @@ class PysimEngine(SimulationEngine):
                 Y_full[np.ix_([a, b], [a, b])] += y_tl
             elif isinstance(br, Load):
                 continue  # already applied to the real-port Y
+            elif isinstance(br, TwoPort):
+                raise NotImplementedError(
+                    "TwoPort on PysimEngine: sketched but not cross-engine "
+                    "validated. See issue #65 piece (B)."
+                )
             else:
                 raise NotImplementedError(f"branch type {type(br).__name__}")
         return Y_full
@@ -331,31 +347,30 @@ class PysimEngine(SimulationEngine):
         with I_ext = 0."""
         n = Y_total.shape[0]
         driven = list(self._driven_port_idx)
-        passive = [i for i in range(n) if i not in driven]
+        # Loaded ports get V = 0 forced (correct BC for "no external source
+        # on a wire-interior segment"; see _init_network for the derivation).
+        floating = [
+            i for i in range(n) if i not in driven and i not in self._loaded_port_idx
+        ]
         v_driven = np.array(self._driven_voltages, dtype=np.complex128)
-        V = np.empty(n, dtype=np.complex128)
+        V = np.zeros(n, dtype=np.complex128)
         V[driven] = v_driven
-        if passive:
-            Y_pp = Y_total[np.ix_(passive, passive)]
-            Y_pd = Y_total[np.ix_(passive, driven)]
-            V[passive] = np.linalg.solve(Y_pp, -Y_pd @ v_driven)
+        # V[loaded] = 0 by zeros init.
+        if floating:
+            # I_ext = 0 at floating ports: Y_ff V_f = -Y_fd V_d - Y_fl V_l.
+            # V_l = 0 so the last term drops; same form as before.
+            Y_ff = Y_total[np.ix_(floating, floating)]
+            Y_fd = Y_total[np.ix_(floating, driven)]
+            V[floating] = np.linalg.solve(Y_ff, -Y_fd @ v_driven)
         return V
 
     def _impedance_from_network_y(self, Y_total):
-        """Driven-port impedance with non-driven ports floating (I_ext=0).
-        Mirrors `_impedance_from_y` for the network-spec path."""
-        n = Y_total.shape[0]
-        driven = list(self._driven_port_idx)
-        passive = [i for i in range(n) if i not in driven]
-        v_driven = np.array(self._driven_voltages, dtype=np.complex128)
-        V = np.empty(n, dtype=np.complex128)
-        V[driven] = v_driven
-        if passive:
-            Y_pp = Y_total[np.ix_(passive, passive)]
-            Y_pd = Y_total[np.ix_(passive, driven)]
-            V[passive] = np.linalg.solve(Y_pp, -Y_pd @ v_driven)
+        """Driven-port impedance: solve the network for V (loaded ports
+        pinned at V=0, floating ports satisfying I_ext=0, driven ports at
+        their applied V), then read I_driven = (Y_total @ V)_driven."""
+        V = self._resolve_network_voltages(Y_total)
         I = Y_total @ V
-        return [complex(V[i] / I[i]) for i in driven]
+        return [complex(V[i] / I[i]) for i in self._driven_port_idx]
 
     def impedance(self):
         wavelength = self._wavelength_for(self.builder.freq)
