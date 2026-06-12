@@ -687,6 +687,118 @@ def test_network_spec_rejects_port_at_edge_with_no_named_edge():
         PysimEngine(BadBuilder())
 
 
+def test_pynec_network_dispatch_runs_delta_looparray_network():
+    """delta_looparray_network on PyNECEngine. With build_network() now
+    consumed, the engine synthesises a stub wire for the central virtual
+    driver, emits tl_cards from network.branches, ex_card from sources.
+
+    No strict numerical match to the legacy `delta_looparray_with_tls` is
+    expected — the segment-vs-basis port convention issue from #63 makes
+    both PyNEC variants of this design produce wonky impedances at default
+    params. The point is to verify the network-spec dispatch ran and the
+    network and legacy PyNEC results are in the same ballpark (same
+    physical antenna, modulo a tiny stub-wire difference)."""
+    from antenna_designer.designs.freq_based.delta_looparray_network import (
+        Builder as NetBuilder,
+    )
+    from antenna_designer.designs.freq_based.delta_looparray_with_tls import (
+        Builder as LegacyBuilder,
+    )
+
+    (z_net,) = PyNECEngine(NetBuilder(), ground=None).impedance()
+    (z_leg,) = PyNECEngine(LegacyBuilder(), ground=None).impedance()
+    assert np.isfinite(z_net.real) and np.isfinite(z_net.imag), z_net
+    # Same antenna, just different stub-wire placement: order-of-magnitude
+    # agreement is enough to confirm the dispatch wired through correctly.
+    ratio = abs(z_net) / abs(z_leg)
+    assert 0.3 < ratio < 3.0, (
+        f"network and legacy PyNEC results diverged too far: "
+        f"net={z_net}, legacy={z_leg}, |ratio|={ratio:.2f}"
+    )
+
+
+def test_pynec_network_rejects_virtual_to_virtual_tl():
+    """TL between two PortVirtuals has no NEC2 mapping — reject at construction."""
+    from antenna_designer import AntennaBuilder
+    from antenna_designer.network import Driven, Network, PortAtEdge, PortVirtual, TL
+    from types import MappingProxyType
+
+    class Builder(AntennaBuilder):
+        default_params = MappingProxyType({"freq": 28.0, "design_freq": 28.0})
+
+        def build_wires(self):
+            return [((0, -2.5, 5), (0, 2.5, 5), 21, None, "feed")]
+
+        def build_network(self):
+            return Network(
+                ports={
+                    "feed": PortAtEdge("feed"),
+                    "a": PortVirtual("a"),
+                    "b": PortVirtual("b"),
+                },
+                branches=[
+                    TL(a="a", b="b", z0=50, length=1.0),  # virtual ↔ virtual
+                    TL(a="a", b="feed", z0=50, length=1.0),
+                ],
+                sources=[Driven(port="a")],
+            )
+
+    with pytest.raises(ValueError, match="TL between two virtual ports"):
+        PyNECEngine(Builder(), ground=None)
+
+
+def test_pynec_network_rejects_load_branch():
+    """Load (ld_card backport) is a follow-up; raise NotImplementedError so
+    users get a clear pointer rather than silent omission."""
+    from antenna_designer import AntennaBuilder
+    from antenna_designer.network import Driven, Load, Network, PortAtEdge
+    from types import MappingProxyType
+
+    class Builder(AntennaBuilder):
+        default_params = MappingProxyType({"freq": 28.0, "design_freq": 28.0})
+
+        def build_wires(self):
+            return [((0, -2.5, 5), (0, 2.5, 5), 21, None, "feed")]
+
+        def build_network(self):
+            return Network(
+                ports={"feed": PortAtEdge("feed")},
+                branches=[Load(port="feed", r=50)],
+                sources=[Driven(port="feed")],
+            )
+
+    with pytest.raises(NotImplementedError, match="Load"):
+        PyNECEngine(Builder(), ground=None)
+
+
+def test_pynec_network_rejects_port_at_edge_with_no_named_edge():
+    """PortAtEdge("loop1") with no `loop1` edge in build_wires() should
+    raise a clear error at engine construction time — mirror of the
+    PysimEngine check."""
+    from antenna_designer import AntennaBuilder
+    from antenna_designer.network import Driven, Network, PortAtEdge, PortVirtual, TL
+    from types import MappingProxyType
+
+    class Builder(AntennaBuilder):
+        default_params = MappingProxyType({"freq": 28.0, "design_freq": 28.0})
+
+        def build_wires(self):
+            return [((0, -2.5, 5), (0, 2.5, 5), 21, 1 + 0j)]  # no name
+
+        def build_network(self):
+            return Network(
+                ports={
+                    "loop1": PortAtEdge("loop1"),
+                    "drv": PortVirtual("drv"),
+                },
+                branches=[TL(a="drv", b="loop1", z0=50, length=1.0)],
+                sources=[Driven(port="drv")],
+            )
+
+    with pytest.raises(ValueError, match="no edge in build_wires"):
+        PyNECEngine(Builder(), ground=None)
+
+
 def _load_dipole_builder(load_branch=None, name_feed=False):
     """Synthetic half-wave dipole at 28 MHz with one named feed edge.
     When `load_branch` is given, build_network() returns a Network with that
