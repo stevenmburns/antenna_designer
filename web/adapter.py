@@ -433,8 +433,15 @@ def _pynec_feed_indices(builder, currents) -> tuple[int, int]:
     wire's centre knot — close enough to NEC's per-segment feed for a
     UI dot.
     """
-    for i, (_p0, _p1, _n, ev) in enumerate(builder.build_wires()):
-        if ev is not None:
+    # build_wires() may emit 5-tuples with a trailing `name` field for
+    # network-spec designs — permissive unpacking.
+    for i, t in enumerate(builder.build_wires()):
+        ev = t[3]
+        name = t[4] if len(t) >= 5 else None
+        # Network-spec designs source excitation off build_network() rather
+        # than the `ev` field; fall back to the first named edge as the
+        # visual feed location.
+        if ev is not None or name is not None:
             if i >= len(currents):
                 return 0, 0
             k = currents[i].knot_positions.shape[0]

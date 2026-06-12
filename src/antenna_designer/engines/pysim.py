@@ -429,8 +429,46 @@ class PysimEngine(SimulationEngine):
             zs = zs.reshape(-1, 1)
         return zs
 
+    def _make_excited_solver(self, *, wavelength):
+        """Build a solver whose feed voltages match the actual excitation:
+        for plain designs, just the build_wires() voltages; for TL or
+        Network designs, the per-port voltages after the network reduction
+        so basis coefficients reflect the branch-induced port voltages.
+        Without this, network-spec designs (where every named feed carries
+        a placeholder V=0) would solve with no excitation — every basis
+        coefficient is zero and `compute_impedance`'s V/I returns NaN."""
+        if self._network is not None:
+            Y = self._compute_y_matrix(wavelength)
+            Y_total = self._apply_branches(Y, wavelength)
+            V_full = self._resolve_network_voltages(Y_total)
+            feeds_resolved = [
+                (w, arc, complex(V_full[i]))
+                for i, (w, arc, _v) in enumerate(self._feeds)
+            ]
+        elif self._tls:
+            Y = self._compute_y_matrix(wavelength)
+            Y_total = self._apply_tls(Y, wavelength)
+            V, _ = self._resolve_feed_voltages(Y_total)
+            feeds_resolved = [
+                (w, arc, complex(V[i])) for i, (w, arc, _v) in enumerate(self._feeds)
+            ]
+        else:
+            return self._make_solver(wavelength=wavelength)
+        return self._solver(
+            wires=self._polylines,
+            n_per_edge_per_wire=self._edge_segments,
+            feeds=feeds_resolved,
+            wavelength=wavelength,
+            wire_radius=self._wire_radius,
+            ground_z=self._ground_z,
+            junctions=self._junctions or None,
+            **self._solver_kwargs,
+        )
+
     def current_distribution(self):
-        sim = self._make_solver(wavelength=self._wavelength_for(self.builder.freq))
+        sim = self._make_excited_solver(
+            wavelength=self._wavelength_for(self.builder.freq)
+        )
         _z, coeffs = sim.compute_impedance()
         knot_currents = sim.currents_at_knots(coeffs)
         out = []
