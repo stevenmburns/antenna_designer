@@ -781,6 +781,65 @@ def test_pynec_load_branch_resistor_adds_to_impedance():
     assert abs((z_loaded - z_bare) - 50.0) < 0.5, (z_bare, z_loaded)
 
 
+def test_short_dipole_loaded_cross_engine_impedance():
+    """Showcase for the Load branch: a 0.5·λ/2 shortened dipole at 28 MHz
+    with a series loading coil at the feed point. Pysim's Sherman-Morrison
+    Y stamp and PyNEC's ld_card should agree to within their baseline
+    free-space dipole tolerance (~1-2 Ω R, tens of Ω X)."""
+    from antenna_designer.designs.freq_based.short_dipole_loaded import (
+        Builder as ShortB,
+    )
+
+    b = ShortB()
+    (z_ps,) = PysimEngine(b).impedance()
+    (z_nec,) = PyNECEngine(b, ground=None).impedance()
+    # R agreement matches the dipole baseline cross-check.
+    assert abs(z_ps.real - z_nec.real) < 2.0, (z_ps, z_nec)
+    # Reactance: each engine reaches the same loaded Z within ~25 Ω,
+    # which is dominated by the underlying short-dipole reactance offset
+    # (the Load shift itself is identical between engines: each adds ωL
+    # to whatever the bare antenna's X was).
+    assert abs(z_ps.imag - z_nec.imag) < 30.0, (z_ps, z_nec)
+
+
+def test_short_dipole_loaded_pattern_similar_lower_gain_than_full():
+    """A center-loaded shortened dipole radiates the same broadside-peak
+    pattern as a full-length dipole but with ~0.4 dB less peak gain
+    (closer to the ideal short-dipole directivity of 1.76 dBi vs the
+    half-wave's 2.15 dBi). Confirmed on both engines."""
+    from antenna_designer.designs.freq_based.short_dipole_loaded import (
+        Builder as ShortB,
+    )
+
+    short = ShortB()
+    # Same Builder, length_factor=1 + no load → full-length unloaded dipole.
+    full = ShortB()
+    full.length_factor = 1.0
+    full.inductance_uH = 0.0
+
+    for engine_cls, kwargs in [(PysimEngine, {}), (PyNECEngine, {"ground": None})]:
+        ff_s = engine_cls(short, **kwargs).far_field(
+            n_theta=90, n_phi=360, del_theta=1, del_phi=1
+        )
+        ff_f = engine_cls(full, **kwargs).far_field(
+            n_theta=90, n_phi=360, del_theta=1, del_phi=1
+        )
+        # Less peak gain — the user's hypothesis. ~0.3-0.4 dB range observed.
+        assert ff_s.max_gain < ff_f.max_gain, (engine_cls.__name__, ff_s, ff_f)
+        assert 0.1 < (ff_f.max_gain - ff_s.max_gain) < 1.0, (
+            engine_cls.__name__,
+            ff_s.max_gain,
+            ff_f.max_gain,
+        )
+        # Same pattern shape: short and full dipole patterns should be
+        # highly correlated bin-by-bin (just shifted in absolute level).
+        # >0.99 corr ⇒ "same shape" to a tight tolerance.
+        rings_s = np.asarray(ff_s.rings).ravel()
+        rings_f = np.asarray(ff_f.rings).ravel()
+        corr = np.corrcoef(rings_s, rings_f)[0, 1]
+        assert corr > 0.99, f"{engine_cls.__name__}: pattern correlation {corr:.4f}"
+
+
 def test_pynec_load_branch_rejects_virtual_port():
     """Load on a PortVirtual is rejected — same check as PysimEngine."""
     from antenna_designer import AntennaBuilder
