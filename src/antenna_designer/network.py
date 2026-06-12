@@ -68,23 +68,44 @@ class TL:
 # pattern is established but not consumed yet by any engine.
 @dataclass(frozen=True)
 class Load:
-    """Series R+jωL+1/(jωC) inserted at a single port (an in-line load).
+    """R/L/C load inserted in series with a single segment's current path.
 
-    NEC2's `ld_card` type 0 is the direct backing on PyNECEngine. On
-    PysimEngine the effect is the same — a series impedance modifies the
-    segment's Z diagonal. Any of r/l/c may be None (omitted).
+    `parallel=False` (default): series R + jωL + 1/(jωC). The whole expression
+    is a single series impedance Z_load that adds to the segment's MoM Z[k,k].
+    NEC2 calls this `ld_card` type 0.
+
+    `parallel=True`: parallel R || jωL || 1/(jωC). The branch's effective
+    series impedance Z_load = 1 / (1/R + 1/(jωL) + jωC). At ω₀ = 1/√(LC)
+    the parallel-LC has Y → 0 → Z_load → ∞, which is exactly the trap idiom:
+    the segment's current is interrupted at the trap's resonant frequency.
+    NEC2 calls this `ld_card` type 1.
+
+    Either way the effect is "lumped impedance in series with the segment":
+    Load modifies a single segment's self-Z (rank-1 update on the MoM
+    matrix). The classic dual-band trap dipole uses Load(parallel=True) at
+    a single segment in each arm — see designs/freq_based/trap_dipole.py.
     """
 
     port: str
     r: float | None = None
     l: float | None = None
     c: float | None = None
+    parallel: bool = False
 
 
 @dataclass(frozen=True)
 class TwoPort:
     """Lumped R+jωL+1/(jωC) between two ports. NEC2's `nt_card` is the
-    direct backing on PyNECEngine. Any of r/l/c may be None (omitted)."""
+    direct backing on PyNECEngine. Any of r/l/c may be None (omitted).
+
+    NOTE: Implementation is sketched on both engines but has not been
+    cross-validated. Use at your own risk; prefer `Load(parallel=True)`
+    for the trap-dipole idiom (series Z on a wire-interior segment, which
+    is what `ld_card` was designed for). See issue #65 piece (B) for the
+    open work — cross-engine sanity tests revealed disagreement when the
+    branch is conducting (R small), suggesting either a BC issue in the
+    pysim reduction or a `nt_card` semantics mismatch we haven't
+    untangled yet."""
 
     a: str
     b: str
@@ -94,6 +115,49 @@ class TwoPort:
 
 
 Branch = Union[TL, Load, TwoPort]
+
+
+def _series_rlc_impedance(r, l, c, omega):
+    """Series R + jωL + 1/(jωC). Any of r/l/c may be None (omitted term)."""
+    z = 0.0 + 0.0j
+    if r is not None:
+        z += r
+    if l is not None:
+        z += 1j * omega * l
+    if c is not None:
+        z += 1.0 / (1j * omega * c)
+    return z
+
+
+def _parallel_rlc_admittance(r, l, c, omega):
+    """Parallel 1/R + 1/(jωL) + jωC. Any of r/l/c may be None (omitted term).
+    Trap dipoles use this: parallel-LC has Y → 0 at ω₀ = 1/√(LC), so the
+    branch opens at the trap's resonant frequency."""
+    y = 0.0 + 0.0j
+    if r is not None:
+        y += 1.0 / r
+    if l is not None:
+        y += 1.0 / (1j * omega * l)
+    if c is not None:
+        y += 1j * omega * c
+    return y
+
+
+def load_impedance(br, omega):
+    """Effective series impedance of a Load branch at angular ω.
+    Series mode: Z = R + jωL + 1/(jωC).
+    Parallel mode: Z = 1 / (1/R + 1/(jωL) + jωC) — equals the parallel-LC
+    tank impedance, diverging at ω₀ = 1/√(LC) (the trap idiom)."""
+    if br.parallel:
+        y = _parallel_rlc_admittance(br.r, br.l, br.c, omega)
+        if y == 0:
+            raise ValueError(
+                f"Load {br!r} parallel-mode admittance is 0 (LC at exact "
+                "resonance with no R); the load impedance is infinite. Add "
+                "a finite r, or evaluate off-resonance."
+            )
+        return 1.0 / y
+    return _series_rlc_impedance(br.r, br.l, br.c, omega)
 
 
 @dataclass(frozen=True)

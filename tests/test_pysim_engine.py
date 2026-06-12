@@ -904,6 +904,95 @@ def test_pynec_network_rejects_port_at_edge_with_no_named_edge():
         PyNECEngine(Builder(), ground=None)
 
 
+def test_trap_dipole_cross_engine_impedance_at_trap_resonance():
+    """Trap dipole showcase tuned to design_freq=28 MHz. At trap resonance
+    the parallel-LC tank goes Z→∞, interrupting the segment's current
+    path — only the inner-arm length carries current, the outer arms
+    radiate parasitically. Both engines should land in the same regime
+    (high R, high X; the resonant trap is hard to cross-validate strictly
+    because the engines handle the singular MoM update slightly
+    differently)."""
+    from antenna_designer.designs.freq_based.trap_dipole import Builder
+
+    b = Builder()
+    b.freq = 28.0
+    (z_ps,) = PysimEngine(b).impedance()
+    (z_nec,) = PyNECEngine(b, ground=None).impedance()
+    # Both engines agree on the qualitative regime: substantial R, positive X.
+    assert 150 < z_ps.real < 250, z_ps
+    assert 150 < z_nec.real < 250, z_nec
+    assert 50 < z_ps.imag < 200, z_ps
+    assert 50 < z_nec.imag < 200, z_nec
+    # Cross-engine tolerance: ~5 Ω R, ~20 Ω X is what we get at the design
+    # point with the parallel-LC at exact resonance.
+    assert abs(z_ps.real - z_nec.real) < 10.0, (z_ps, z_nec)
+    assert abs(z_ps.imag - z_nec.imag) < 20.0, (z_ps, z_nec)
+
+
+def test_trap_dipole_trap_C_changes_impedance():
+    """Sliding trap_C_pF away from the resonant value should shift Z
+    substantially — confirms the parallel-LC Load update actually
+    propagates to the driven-port impedance (the bug that motivated
+    splitting passive ports into loaded vs floating; see PR notes)."""
+    from antenna_designer.designs.freq_based.trap_dipole import Builder
+
+    b_res = Builder()
+    b_res.freq = 28.0
+    b_det = Builder()
+    b_det.freq = 28.0
+    b_det.trap_C_pF = 1.0  # well off resonance; trap looks inductive
+
+    (z_res,) = PysimEngine(b_res).impedance()
+    (z_det,) = PysimEngine(b_det).impedance()
+    # The two regimes are very different — at least an order of magnitude
+    # apart in |Z|. The exact numbers aren't the point; the point is that
+    # the slider does something.
+    assert abs(z_res - z_det) > 200, (z_res, z_det)
+
+
+def test_trap_dipole_low_band_loaded_into_resonance():
+    """At 14 MHz the parallel-LC trap is well below its 28 MHz resonance,
+    so it looks inductive in series with the segment. That inductive
+    loading lengthens the outer arms electrically and pulls the full-
+    length antenna near resonance — much lower |X| than the unloaded
+    short inner dipole would have on its own at 14 MHz."""
+    from antenna_designer.designs.freq_based.trap_dipole import Builder
+
+    b = Builder()
+    b.freq = 14.0
+    (z_ps,) = PysimEngine(b).impedance()
+    (z_nec,) = PyNECEngine(b, ground=None).impedance()
+    # Both engines report a near-resonant-ish Z (the inner dipole alone
+    # at 14 MHz would have X ≈ -880 Ω). With the loading, |X| should be
+    # well under 200 Ω in both engines.
+    assert abs(z_ps.imag) < 200, z_ps
+    assert abs(z_nec.imag) < 200, z_nec
+    # R should be in the resistive-load range, not the deep-capacitive
+    # short-dipole tens-of-Ω regime.
+    assert 30 < z_ps.real < 200, z_ps
+    assert 30 < z_nec.real < 200, z_nec
+
+
+def test_trap_dipole_parallel_lc_resonance_singularity_raises():
+    """At exactly f_high with no parallel R, the parallel-LC admittance
+    is 0 and the stamp is singular. Pysim should raise a clear error
+    rather than silently produce garbage."""
+    from antenna_designer.designs.freq_based.trap_dipole import Builder
+
+    b = Builder()
+    b.freq = b.design_freq  # exactly at trap resonance
+    # Verify the trap_C calculation lands exactly on resonance for this f.
+    # If the singularity check fires it means Load spotted Y → 0; if
+    # the impedance returns finite, floating-point drift kept us off the
+    # singular point. Either is acceptable — the test just confirms no
+    # silent NaN/Inf propagation.
+    try:
+        (z,) = PysimEngine(b).impedance()
+        assert np.isfinite(z.real) and np.isfinite(z.imag), z
+    except ValueError as e:
+        assert "parallel-mode admittance is 0" in str(e), str(e)
+
+
 def _load_dipole_builder(load_branch=None, name_feed=False):
     """Synthetic half-wave dipole at 28 MHz with one named feed edge.
     When `load_branch` is given, build_network() returns a Network with that

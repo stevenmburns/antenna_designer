@@ -2,7 +2,14 @@ import numpy as np
 import PyNEC as nec
 
 from ..engine import FarField, SimulationEngine, WireCurrents
-from ..network import Driven, Load, PortAtEdge, PortVirtual, TL, TwoPort
+from ..network import (
+    Driven,
+    Load,
+    PortAtEdge,
+    PortVirtual,
+    TL,
+    TwoPort,
+)
 
 
 DEFAULT_GROUND = ("finite", 10.0, 0.002)  # (kind, dielectric, conductivity)
@@ -206,8 +213,10 @@ class PyNECEngine(SimulationEngine):
                 c = float(br.c) if br.c is not None else 0.0
                 if r == 0.0 and l == 0.0 and c == 0.0:
                     continue
-                # ldtyp=0: short series RLC at segments [seg, seg] on tag.
-                self.c.ld_card(0, tag, seg, seg, r, l, c)
+                # NEC2 ld_card type 0 = series RLC, type 1 = parallel RLC.
+                # Both apply on a single segment [seg, seg] on `tag`.
+                ldtyp = 1 if br.parallel else 0
+                self.c.ld_card(ldtyp, tag, seg, seg, r, l, c)
         for br in net.branches:
             if isinstance(br, TL):
                 tag_a, seg_a = self._network_port_loc[br.a]
@@ -217,8 +226,8 @@ class PyNECEngine(SimulationEngine):
                 continue  # already emitted above
             elif isinstance(br, TwoPort):
                 raise NotImplementedError(
-                    "TwoPort on PyNECEngine is a follow-up piece of issue #65 "
-                    "(nt_card translation); use PysimEngine for now"
+                    "TwoPort on PyNECEngine: sketched but not cross-engine "
+                    "validated. See issue #65 piece (B)."
                 )
             else:
                 raise NotImplementedError(f"branch type {type(br).__name__}")
