@@ -101,7 +101,11 @@ def optimize(
 
         a = engine(antenna_builder)
         zs = a.impedance()
-        _, max_gain, _, _, _ = get_elevation(a)
+        # Only compute the far-field pattern when opt_gain is on — get_elevation
+        # integrates over the full sphere and dominates per-iteration cost
+        # (>5× the impedance solve). For pure impedance / resonance objectives
+        # the computed max_gain is unused.
+        max_gain = get_elevation(a)[1] if opt_gain else 0.0
         del a
 
         for z in zs:
