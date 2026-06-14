@@ -147,13 +147,7 @@ class Builder(AntennaBuilder):
             # resonance lands slightly off after a length retune — moving
             # the trap a few percent shifts the inner-stub electrical
             # length without touching the geometry. Default 1.0 = no shift.
-            # 0.999 not 1.0 to dodge `network.load_impedance()`'s exact-
-            # equality `y == 0` guard at the trap's LC-resonance. With shift
-            # = 1.0 exactly and the C derived from L via _resonant_C_pF(),
-            # float arithmetic lands ω²LC at exactly 1, triggering the
-            # ValueError. 0.999 puts ω₀ at 24.945 MHz instead of 24.97 — a
-            # 0.1% offset, far less than the trap's resonance bandwidth.
-            "trap0_freq_shift": 0.999,
+            "trap0_freq_shift": 1.0,
             # Set slightly below 1.0 so band-1's trap is just past resonance
             # at 10m. The trap doesn't fully open, the outer extension joins
             # in, and the inner sits in a different mode (~0.40·λ/2 instead

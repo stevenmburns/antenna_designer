@@ -143,19 +143,44 @@ def _parallel_rlc_admittance(r, l, c, omega):
     return y
 
 
+def load_series_admittance(br, omega):
+    """Series-branch admittance y_load = 1/Z_load of a Load branch at ω.
+
+    This is the natural quantity for the Sherman-Morrison port-Y stamp
+    (see PysimEngine._apply_loads): the stamp coefficient is
+    1/(y_load + Y_kk), which stays finite exactly where Z_load blows up.
+
+    Parallel mode: y_load IS the parallel-LC tank admittance,
+        y = 1/R + 1/(jωL) + jωC,
+    which goes cleanly to 0 at ω₀ = 1/√(LC) — the trap-resonance open
+    circuit. No singularity: the "infinite impedance" only ever appeared
+    when we formed Z_load = 1/y and then took 1/Z_load again.
+
+    Series mode: y_load = 1/(R + jωL + 1/(jωC)); returns complex inf when
+    the series impedance is exactly 0 (series-LC short circuit), which the
+    caller treats as "no series element" (the wire is unbroken)."""
+    if br.parallel:
+        return _parallel_rlc_admittance(br.r, br.l, br.c, omega)
+    z = _series_rlc_impedance(br.r, br.l, br.c, omega)
+    if z == 0:
+        return complex(float("inf"), 0.0)
+    return 1.0 / z
+
+
 def load_impedance(br, omega):
     """Effective series impedance of a Load branch at angular ω.
     Series mode: Z = R + jωL + 1/(jωC).
     Parallel mode: Z = 1 / (1/R + 1/(jωL) + jωC) — equals the parallel-LC
-    tank impedance, diverging at ω₀ = 1/√(LC) (the trap idiom)."""
+    tank impedance, diverging at ω₀ = 1/√(LC) (the trap idiom).
+
+    Returns complex inf at parallel-LC resonance rather than raising —
+    Z→∞ is the physically-intended open circuit of a trap. Consumers that
+    stamp the load into a port-Y matrix should prefer
+    `load_series_admittance`, which avoids forming this infinity at all."""
     if br.parallel:
         y = _parallel_rlc_admittance(br.r, br.l, br.c, omega)
         if y == 0:
-            raise ValueError(
-                f"Load {br!r} parallel-mode admittance is 0 (LC at exact "
-                "resonance with no R); the load impedance is infinite. Add "
-                "a finite r, or evaluate off-resonance."
-            )
+            return complex(float("inf"), 0.0)
         return 1.0 / y
     return _series_rlc_impedance(br.r, br.l, br.c, omega)
 
