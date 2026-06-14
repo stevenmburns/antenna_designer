@@ -36,6 +36,7 @@
 | src/antenna\_designer/designs/freq\_based/invvee.py                      |       30 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/short\_dipole\_loaded.py       |       11 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/trap\_dipole.py                |       30 |        0 |    100% |           |
+| src/antenna\_designer/designs/freq\_based/trap\_fan\_dipole.py           |       86 |       15 |     83% |247, 304, 310, 358-371 |
 | src/antenna\_designer/designs/freq\_based/yagi.py                        |       38 |        0 |    100% |           |
 | src/antenna\_designer/designs/hentenna\_array.py                         |        7 |        0 |    100% |           |
 | src/antenna\_designer/designs/hexbeam.py                                 |       45 |        0 |    100% |           |
@@ -58,7 +59,7 @@
 | src/antenna\_designer/sim.py                                             |        2 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                                           |      123 |        7 |     94% |   105-116 |
 | src/antenna\_designer/transform.py                                       |       42 |        1 |     98% |        62 |
-| **TOTAL**                                                                | **2653** |  **101** | **96%** |           |
+| **TOTAL**                                                                | **2739** |  **116** | **96%** |           |
 
 
 ## Setup coverage badge
