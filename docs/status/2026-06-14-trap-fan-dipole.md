@@ -13,7 +13,7 @@ broken by a parallel-LC trap. Spoke 0 covers 17m/12m; spoke 1 covers
 |---|---|---|
 | `slope` | 0.68 | inverted-vee descent angle |
 | `n_bands` | 2 | locked (UI exposes 1..2 but build_wires requires 2) |
-| `trap0_freq_shift` | 0.999 | ~no-op, dodges the framework's `y==0` bug at exact LC-resonance |
+| `trap0_freq_shift` | 1.0 | no shift (the `y==0` framework bug that forced 0.999 is now fixed — see follow-up) |
 | `trap1_freq_shift` | 0.95 | puts 10m into a mode-jump regime where Re(Z)≈50 Ω |
 | band 0 `full_freq` | 18.16 MHz | 17m |
 | band 0 `trap_freq` | 24.97 MHz | 12m |
@@ -85,8 +85,10 @@ Sensitivity to ±1 cm length error: max SWR ≤ 1.17 on any band.
   band-1 trap is slightly past resonance at 10m, the outer extension
   joins the radiating section, and 10m's Re(Z) jumps from ~42 Ω to
   ~50 Ω — drops 10m SWR from 1.20 to 1.02.
-- **trap0_freq_shift=0.999** is a defensive dodge of a framework bug
-  in `network.load_impedance()` — see "Framework issues" below.
+- **trap0_freq_shift was briefly set to 0.999** as a defensive dodge of
+  a framework bug in `network.load_impedance()` (see "Framework issues").
+  That bug is now fixed, so the default is back to a clean 1.0 and band 0
+  runs at exact LC-resonance.
 
 ### Choice of simulation basis
 
@@ -116,15 +118,20 @@ Sensitivity to ±1 cm length error: max SWR ≤ 1.17 on any band.
 
 ## Framework issues / follow-ups
 
-1. **`network.load_impedance()` y==0 guard** — fires whenever a
-   parallel-LC tank's L*C*ω² lands at *exactly* 1 in float arithmetic.
-   The physical interpretation is Z=∞ (segment current=0); the engine
-   should handle this rather than crash. Our `_resonant_C_pF()`
-   construction *deliberately* sets up exact resonance, so this case
-   is on the happy path of the design intent.
-   Defensive workaround in this design: `trap0_freq_shift=0.999`
-   forces a 0.1% offset that breaks the bit-exact equality. The
-   actual fix belongs in `network.py`.
+1. **`network.load_impedance()` y==0 guard** — FIXED (follow-up commit).
+   The guard fired whenever a parallel-LC tank's L*C*ω² landed at
+   *exactly* 1 in float arithmetic — i.e. the trap's design resonance,
+   where Z=∞ (segment current interrupted, the open-circuit trap point).
+   That is the *intended* operating point, not an error. Root cause was
+   purely representational: the code formed Z_load = 1/y_tank and then
+   the consumer formed 1/(1+Z_load·Y_kk), so the infinity appeared in an
+   intermediate even though the final stamp is finite. Fix: added
+   `load_series_admittance()` returning y_load = 1/Z_load directly (= the
+   tank admittance, cleanly 0 at resonance), and reworked
+   `PysimEngine._apply_loads` to the dual Sherman-Morrison form
+   `Y -= outer / (y_load + Y_kk)` — algebraically identical for finite
+   loads, finite at resonance (coefficient → 1/Y_kk). The defensive
+   `trap0_freq_shift=0.999` was reverted to 1.0.
 
 2. **`n_bands` schema test contract** — the `test_schema_covers_every_
    non_freq_default_param` and `test_param_schema_specs_are_typed_
@@ -144,5 +151,5 @@ Sensitivity to ±1 cm length error: max SWR ≤ 1.17 on any band.
 
 ## What's *not* in this PR
 
-- The `opt.py` far-field gate — separate branch `opt-skip-far-field`.
-- A fix for `network.py`'s `y == 0` guard — TODO.
+- The `opt.py` far-field gate — separate branch `opt-skip-far-field`
+  (merged as PR #70).

@@ -17,6 +17,7 @@ from ..network import (
     PortVirtual,
     TwoPort,
     load_impedance,
+    load_series_admittance,
 )
 
 
@@ -276,13 +277,26 @@ class PysimEngine(SimulationEngine):
 
     def _apply_loads(self, Y, omega):
         """Apply every Load branch as a Sherman-Morrison rank-1 update on
-        the real-port Y. Series Z_L inserted at port k transforms
+        the real-port Y — the network-level equivalent of NEC2's `ld_card`
+        modifying the segment's MoM Z[k,k].
 
-            Y' = Y − Z_L · Y[:,k] · Y[k,:] / (1 + Z_L · Y[k,k])
+        The update has two algebraically-identical forms, dual under
+        Z_L ↔ y_L = 1/Z_L:
 
-        which is the network-level equivalent of NEC2's `ld_card` modifying
-        the segment's MoM Z[k,k] (derived via Sherman-Morrison on Z_mom +
-        Z_L·e_k·e_k^T). Same physics, no solver hook required.
+            impedance:   Y − Z_L/(1 + Z_L·Y_kk) · outer(Y[:,k], Y[k,:])
+            admittance:  Y − 1/(y_L + Y_kk)     · outer(Y[:,k], Y[k,:])
+
+        Each Load mode has a resonance where one form divides by an
+        intermediate infinity while the other stays finite, so we pick the
+        form whose denominator is bounded at that mode's resonance:
+
+          - Parallel-LC trap: Z_L→∞ at ω₀ (open circuit). Use the
+            ADMITTANCE form — y_L is the tank admittance, →0 at ω₀, giving
+            coefficient 1/Y_kk (the open-circuit Schur complement).
+          - Series-LC: Z_L→0 at ω₀ (short circuit = unbroken wire). Use the
+            IMPEDANCE form — coefficient →0, i.e. no stamp.
+
+        This way neither path ever forms or tests for infinity.
         """
         Y = Y.copy()
         for br in self._network.branches:
@@ -294,17 +308,31 @@ class PysimEngine(SimulationEngine):
                     f"Load on virtual port {br.port!r}: a Load is a series "
                     "impedance on an antenna segment, which only PortAtEdge has"
                 )
-            z_l = load_impedance(br, omega)
-            if z_l == 0:
-                continue
             k = self._port_to_idx[br.port]
             y_col = Y[:, k].copy()
-            denom = 1.0 + z_l * Y[k, k]
-            if abs(denom) < 1e-15:
-                raise ValueError(
-                    f"Load on port {br.port!r}: 1 + Z_L·Y[k,k] ≈ 0 (singular)"
-                )
-            Y -= (z_l / denom) * np.outer(y_col, y_col)
+
+            if br.parallel:
+                # Admittance form: y_L is the parallel-LC tank admittance,
+                # cleanly 0 at trap resonance (the open-circuit point).
+                y_l = load_series_admittance(br, omega)
+                denom = y_l + Y[k, k]
+                if abs(denom) < 1e-15:
+                    raise ValueError(
+                        f"Load on port {br.port!r}: y_L + Y[k,k] ≈ 0 (singular)"
+                    )
+                Y -= np.outer(y_col, y_col) / denom
+            else:
+                # Impedance form: Z_L is 0 at series-LC resonance (a short
+                # = unbroken wire), where the coefficient vanishes anyway.
+                z_l = load_impedance(br, omega)
+                if z_l == 0:
+                    continue
+                denom = 1.0 + z_l * Y[k, k]
+                if abs(denom) < 1e-15:
+                    raise ValueError(
+                        f"Load on port {br.port!r}: 1 + Z_L·Y[k,k] ≈ 0 (singular)"
+                    )
+                Y -= (z_l / denom) * np.outer(y_col, y_col)
         return Y
 
     def _apply_branches(self, Y, wavelength):

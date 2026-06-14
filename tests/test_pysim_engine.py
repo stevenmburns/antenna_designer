@@ -975,24 +975,63 @@ def test_trap_dipole_low_band_loaded_into_resonance():
     assert 30 < z_nec.real < 200, z_nec
 
 
-def test_trap_dipole_parallel_lc_resonance_singularity_raises():
-    """At exactly f_high with no parallel R, the parallel-LC admittance
-    is 0 and the stamp is singular. Pysim should raise a clear error
-    rather than silently produce garbage."""
+def test_trap_dipole_parallel_lc_resonance_is_finite():
+    """At exactly f_high with no parallel R, the parallel-LC tank admittance
+    is 0 (Z→∞, the trap open circuit). This is the *intended* operating
+    point of a trap, not an error: the admittance-form Sherman-Morrison
+    stamp resolves the 0/∞ analytically (coefficient → 1/Y_kk, the
+    open-circuit Schur complement). Pysim must produce a finite impedance
+    here — no raise, no NaN/Inf."""
     from antenna_designer.designs.freq_based.trap_dipole import Builder
 
     b = Builder()
-    b.freq = b.design_freq  # exactly at trap resonance
-    # Verify the trap_C calculation lands exactly on resonance for this f.
-    # If the singularity check fires it means Load spotted Y → 0; if
-    # the impedance returns finite, floating-point drift kept us off the
-    # singular point. Either is acceptable — the test just confirms no
-    # silent NaN/Inf propagation.
-    try:
-        (z,) = PysimEngine(b).impedance()
-        assert np.isfinite(z.real) and np.isfinite(z.imag), z
-    except ValueError as e:
-        assert "parallel-mode admittance is 0" in str(e), str(e)
+    b.freq = b.design_freq  # exactly at trap resonance — tank admittance → 0
+    (z,) = PysimEngine(b).impedance()
+    assert np.isfinite(z.real) and np.isfinite(z.imag), z
+
+
+def test_load_series_admittance_parallel_lc_zero_at_resonance():
+    """The parallel-LC tank admittance is exactly 0 at ω₀=1/√(LC) — the
+    open-circuit trap point — and load_impedance returns +inf there rather
+    than raising."""
+    import math
+
+    from antenna_designer.network import (
+        Load,
+        load_impedance,
+        load_series_admittance,
+    )
+
+    L = 5e-6
+    C = 1.0 / (L * (2 * math.pi * 28e6) ** 2)  # resonant at 28 MHz
+    omega0 = 1.0 / math.sqrt(L * C)
+    br = Load(port="t", l=L, c=C, parallel=True)
+
+    y = load_series_admittance(br, omega0)
+    assert abs(y) < 1e-6, y  # tank admittance ≈ 0 at resonance
+
+    z = load_impedance(br, omega0)
+    assert math.isinf(z.real), z  # Z = 1/y → ∞ (no raise)
+
+    # Off resonance the tank is reactive and finite.
+    y_off = load_series_admittance(br, omega0 * 1.1)
+    assert abs(y_off) > 1e-6, y_off
+
+
+def test_load_series_admittance_series_short_is_inf():
+    """A series-LC load at its resonance is a short (Z=0); its series
+    admittance is reported as inf so the stamp consumer skips it."""
+    import math
+
+    from antenna_designer.network import Load, load_series_admittance
+
+    L = 5e-6
+    C = 1.0 / (L * (2 * math.pi * 28e6) ** 2)
+    omega0 = 1.0 / math.sqrt(L * C)
+    br = Load(port="t", l=L, c=C, parallel=False)  # series mode
+
+    y = load_series_admittance(br, omega0)
+    assert math.isinf(y.real), y
 
 
 def _load_dipole_builder(load_branch=None, name_feed=False):
