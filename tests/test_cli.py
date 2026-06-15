@@ -1,5 +1,7 @@
 import antenna_designer as ant
 
+from conftest import needs_pynec
+
 o = " --fn /dev/null"
 # o = ''
 
@@ -20,6 +22,7 @@ def test_cli_draw():
         ant.cli(f"draw --builder {design}{o}".split())
 
 
+@needs_pynec
 def test_cli_sweep():
     ant.cli(f"sweep --param tipspacer_factor --builder moxon --npoints 2{o}".split())
     ant.cli(
@@ -43,6 +46,7 @@ def test_cli_sweep():
     )
 
 
+@needs_pynec
 def test_cli_optimize():
     ant.cli(
         f"optimize --params length_factor angle_radians --builder freq_based.invvee{o}".split()
@@ -52,11 +56,13 @@ def test_cli_optimize():
     )
 
 
+@needs_pynec
 def test_cli_pattern():
     ant.cli(f"pattern --builder freq_based.yagi{o}".split())
     ant.cli(f"pattern --builder freq_based.invvee --wireframe{o}".split())
 
 
+@needs_pynec
 def test_cli_compare_patterns():
     ant.cli(f"compare_patterns{o}".split())
     ant.cli(f"compare_patterns --builders freq_based.invvee moxon{o}".split())

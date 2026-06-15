@@ -13,7 +13,10 @@ from antenna_designer.cli import (
 from antenna_designer.engines import PyNECEngine, PysimEngine
 from pysim import TriangularPySim, SinusoidalPySim, BSplinePySim
 
+from conftest import needs_pynec
 
+
+@needs_pynec
 def test_parse_pynec_no_basis():
     assert parse_engine_spec("pynec") == ("pynec", {})
 
@@ -51,6 +54,7 @@ def test_parse_pysim_unknown_basis_raises():
         parse_engine_spec("pysim:not_a_basis")
 
 
+@needs_pynec
 def test_make_factory_returns_class_when_no_kwargs():
     assert make_engine_factory("pynec", _GROUND_UNSET) is PyNECEngine
     assert make_engine_factory("pysim", _GROUND_UNSET) is PysimEngine
@@ -75,12 +79,14 @@ def test_pysim_bases_keys():
 O = " --fn /dev/null"
 
 
+@needs_pynec
 def test_cli_compare_patterns_multi_engine():
     ant.cli(
         f"compare_patterns --builders freq_based.invvee:dipole --engines pynec pysim{O}".split()
     )
 
 
+@needs_pynec
 def test_cli_compare_patterns_single_engine_still_works():
     ant.cli(
         f"compare_patterns --builders freq_based.invvee:dipole freq_based.invvee --engines pynec{O}".split()
@@ -122,6 +128,7 @@ def test_broadcast_mismatch_raises():
         broadcast_pairs(["a", "b"], ["x", "y", "z"])
 
 
+@needs_pynec
 def test_cli_compare_patterns_three_by_three_paired():
     ant.cli(
         f"compare_patterns --builders freq_based.invvee:dipole freq_based.invvee bowtie "

@@ -9,7 +9,8 @@ import pytest
 from antenna_designer.designs.bowtie import Builder as BowtieBuilder
 from antenna_designer.designs.freq_based.invvee import Builder as InvVeeBuilder
 from antenna_designer.engine import SimulationEngine
-from antenna_designer.engines.pynec import PyNECEngine
+pytest.importorskip("PyNEC")
+from antenna_designer.engines.pynec import PyNECEngine  # noqa: E402
 from antenna_designer.engines.pysim import PysimEngine
 
 

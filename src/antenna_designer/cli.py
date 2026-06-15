@@ -21,9 +21,10 @@ from importlib import import_module
 from types import ModuleType
 
 ENGINE_CLASSES = {
-    "pynec": PyNECEngine,
     "pysim": PysimEngine,
 }
+if PyNECEngine is not None:
+    ENGINE_CLASSES["pynec"] = PyNECEngine
 
 PYSIM_BASES = {
     "triangular": TriangularPySim,
