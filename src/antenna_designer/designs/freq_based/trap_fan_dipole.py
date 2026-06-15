@@ -69,16 +69,17 @@ C_LIGHT_MHZ_M = 299.792458
 # bands largely unchanged. (Band-0 shift has near-zero leverage on
 # Re17 — kept at 1.0.)
 # Length factors tuned against PysimEngine with BSplinePySim(degree=2)
-# at nominal_nsegs=41 (initial pass at N=21, final refinement at N=41).
-# Bs2 is the only basis whose Z(N) sequence stays flat as N grows on the
-# heavily-loaded 17m and 10m bands — PyNEC, triangular, and sinusoidal
-# all drift by 20+ Ω from N=21 to N=81 there. Tuning against Bs2 gives
-# defaults that survive engine convergence rather than tracking a
-# specific N's discretization artefact.
+# at nominal_nsegs=41. After moving to adaptive per-wire segmentation
+# (target_seg_len = max_wire / nominal_nsegs, see build_wires), both Bs2
+# and Triangular stay essentially flat across N=21..81 — drift ≤ 0.22 Ω
+# on every band — and agree with each other to ~1 Ω at the converged
+# limit. Sinusoidal still wanders 2–8 Ω over the same N range (basis-
+# family issue, not segmentation). PyNEC sits ~10 Ω above the pysim
+# cluster on every band — a systematic offset — and on 10m / 12m
+# actually drifts UP with refinement (57.7 → 67.2 Ω at 10m from N=21 to
+# N=81), which is its own discretization story.
 # Final SWR50 at target freqs (Bs2 @ N=41): 17m=1.04, 15m=1.02, 12m=1.19, 10m=1.13.
-# Same antenna under PyNEC@21 gives larger SWRs (notably ~1.29 at 17m) —
-# the engines disagree on the trap-loaded bands by more than any tuning
-# tweak can absorb. Plan to verify by measurement after build.
+# Plan to verify by measurement after build.
 _BAND_17_12 = {
     "full_freq": 18.1575,
     "trap_freq": 24.97,
