@@ -41,6 +41,7 @@ from antenna_designer.builder import (
     Array2x2Builder,
     Array2x4Builder,
 )
+
 try:
     from antenna_designer.engines.pynec import PyNECEngine
 except ImportError:
