@@ -95,8 +95,11 @@ os.environ.setdefault("GOMP_SPINCOUNT", "0")
 
 # ruff: noqa: E402 — imports below must follow the env-var setup above so
 # OpenBLAS picks up the thread count at its own import time.
+import hashlib
 import json
 import time
+from collections import OrderedDict
+from copy import deepcopy
 
 import numpy as np
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
@@ -370,7 +373,44 @@ def _polyline_knots(polyline: np.ndarray, npe_list: list[int]) -> np.ndarray:
     return np.vstack(parts)
 
 
-def solve(req: dict) -> dict:
+_SOLVE_CACHE: "OrderedDict[str, dict]" = OrderedDict()
+_SOLVE_CACHE_MAX = 100
+
+# Request fields that are pure metadata and never change the physics. Pop
+# them before hashing so noisy frontend additions (timestamps, request ids)
+# don't shred the hit rate. Anything else in `req` is treated as load-
+# bearing — preferring "extra miss" over "wrong hit".
+_CACHE_KEY_BLOCKLIST = frozenset(
+    {
+        "_request_id",
+        "_client_ts",
+    }
+)
+
+# Quantisation grid for floats in the cache key. Slider grids in the UI
+# are coarser than 1e-6, so this still lets back-and-forth scrubs land on
+# identical values; finer than user-perceivable change so two genuinely
+# different requests don't collide.
+_CACHE_FLOAT_QUANT = 1e-6
+
+
+def _canonical_solve_key(req: dict) -> str:
+    def quantise(x):
+        if isinstance(x, float):
+            return round(x / _CACHE_FLOAT_QUANT) * _CACHE_FLOAT_QUANT
+        if isinstance(x, dict):
+            return {
+                k: quantise(v) for k, v in x.items() if k not in _CACHE_KEY_BLOCKLIST
+            }
+        if isinstance(x, (list, tuple)):
+            return [quantise(v) for v in x]
+        return x
+
+    blob = json.dumps(quantise(req), sort_keys=True, default=str).encode()
+    return hashlib.blake2b(blob, digest_size=16).hexdigest()
+
+
+def _solve_uncached(req: dict) -> dict:
     geometry = req.get("geometry", next(iter(EXAMPLES)))
     use_pynec = req.get("solver") == "pynec" and pynec_backend.HAVE_PYNEC
     if use_pynec:
@@ -383,6 +423,28 @@ def solve(req: dict) -> dict:
     out["solver"] = "pysim"
     _attach_derived_em_fields(out)
     _compute_directivity_norm(out)
+    return out
+
+
+def solve(req: dict) -> dict:
+    key = _canonical_solve_key(req)
+    hit = _SOLVE_CACHE.get(key)
+    if hit is not None:
+        _SOLVE_CACHE.move_to_end(key)
+        t0 = time.perf_counter()
+        out = deepcopy(hit)
+        # Overwrite the cached solve_ms with the actual cost of producing
+        # this response (the lookup + deepcopy) — otherwise the frontend's
+        # "solve time" indicator shows a stale value from whichever earlier
+        # tick first populated this cache entry.
+        out["solve_ms"] = (time.perf_counter() - t0) * 1e3
+        out["cache_hit"] = True
+        return out
+    out = _solve_uncached(req)
+    out["cache_hit"] = False
+    _SOLVE_CACHE[key] = deepcopy(out)
+    while len(_SOLVE_CACHE) > _SOLVE_CACHE_MAX:
+        _SOLVE_CACHE.popitem(last=False)
     return out
 
 

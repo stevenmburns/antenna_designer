@@ -400,6 +400,25 @@ class PysimEngine(SimulationEngine):
         I = Y_total @ V
         return [complex(V[i] / I[i]) for i in self._driven_port_idx]
 
+    def _solved_excited(self, wavelength):
+        """Build the excitation-resolved solver and run compute_impedance
+        once per (wavelength, feed-voltage) tuple, caching on the engine
+        instance. Lets impedance(), current_distribution(), and far_field()
+        share one MoM solve when the live UI tick calls them in sequence.
+
+        Cache lives for this engine instance only; the server constructs a
+        fresh PysimEngine each tick, so nothing leaks across requests.
+        """
+        sim = self._make_excited_solver(wavelength=wavelength)
+        v_key = tuple((complex(v).real, complex(v).imag) for *_, v in sim.feeds)
+        key = (float(wavelength), v_key)
+        cached = getattr(self, "_solved_cache", None)
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        z, coeffs = sim.compute_impedance()
+        self._solved_cache = (key, (sim, coeffs, z))
+        return sim, coeffs, z
+
     def impedance(self):
         wavelength = self._wavelength_for(self.builder.freq)
         if self._network is not None:
@@ -410,8 +429,7 @@ class PysimEngine(SimulationEngine):
             Y = self._compute_y_matrix(wavelength)
             Y_total = self._apply_tls(Y, wavelength)
             return self._impedance_from_y(Y_total)
-        s = self._make_solver(wavelength=wavelength)
-        z, _coeffs = s.compute_impedance()
+        _sim, _coeffs, z = self._solved_excited(wavelength)
         # Single-feed path returns a scalar; multi-feed returns an array.
         # Match PyNECEngine's list-of-Z return shape.
         z_arr = np.atleast_1d(z)
@@ -494,10 +512,7 @@ class PysimEngine(SimulationEngine):
         )
 
     def current_distribution(self):
-        sim = self._make_excited_solver(
-            wavelength=self._wavelength_for(self.builder.freq)
-        )
-        _z, coeffs = sim.compute_impedance()
+        sim, coeffs, _z = self._solved_excited(self._wavelength_for(self.builder.freq))
         knot_currents = sim.currents_at_knots(coeffs)
         out = []
         for w_idx, polyline in enumerate(self._polylines):
@@ -606,50 +621,7 @@ class PysimEngine(SimulationEngine):
         k = 2.0 * np.pi / wavelength
         freq_hz = self.builder.freq * 1e6
 
-        if self._network is not None:
-            # Same trick as the legacy TL path: extract Y at the real ports,
-            # pad to include virtual ports, stamp the branches, solve for
-            # the resolved real-port voltages, then re-solve the MoM once
-            # with every real feed at its true V so basis coefficients
-            # reflect the branch-induced port voltages.
-            Y = self._compute_y_matrix(wavelength)
-            Y_total = self._apply_branches(Y, wavelength)
-            V_full = self._resolve_network_voltages(Y_total)
-            feeds_resolved = [
-                (w, arc, complex(V_full[i]))
-                for i, (w, arc, _v) in enumerate(self._feeds)
-            ]
-            sim = self._solver(
-                wires=self._polylines,
-                n_per_edge_per_wire=self._edge_segments,
-                feeds=feeds_resolved,
-                wavelength=wavelength,
-                wire_radius=self._wire_radius,
-                ground_z=self._ground_z,
-                junctions=self._junctions or None,
-                **self._solver_kwargs,
-            )
-        elif self._tls:
-            # Legacy TL path: same pattern but everything's a real port.
-            Y = self._compute_y_matrix(wavelength)
-            Y_total = self._apply_tls(Y, wavelength)
-            V, _ = self._resolve_feed_voltages(Y_total)
-            feeds_resolved = [
-                (w, arc, complex(V[i])) for i, (w, arc, _v) in enumerate(self._feeds)
-            ]
-            sim = self._solver(
-                wires=self._polylines,
-                n_per_edge_per_wire=self._edge_segments,
-                feeds=feeds_resolved,
-                wavelength=wavelength,
-                wire_radius=self._wire_radius,
-                ground_z=self._ground_z,
-                junctions=self._junctions or None,
-                **self._solver_kwargs,
-            )
-        else:
-            sim = self._make_solver(wavelength=wavelength)
-        _z, coeffs = sim.compute_impedance()
+        sim, coeffs, _z = self._solved_excited(wavelength)
         mid, dr, i_mid = self._segment_dipoles(sim, coeffs)
 
         # Cell-centred integration grid for ∫|M_perp|² dΩ. With ground the

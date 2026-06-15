@@ -770,3 +770,209 @@ def test_compute_directivity_norm_ground_on_stays_finite_and_positive():
     server._compute_directivity_norm(with_ground, n_theta=15, n_phi=30)
     assert with_ground["directivity_norm"] > 0
     assert np.isfinite(with_ground["directivity_norm"])
+
+
+# ---------------------------------------------------------------------------
+# Cache-key allowlist tests
+#
+# The /ws live-tick cache in server.solve() hashes the request to skip
+# repeat solves. Two correctness hazards:
+#
+#  (a) A new field is added to the request that DOES affect the physics,
+#      but it isn't reflected in the key — the cache silently returns a
+#      stale answer.
+#  (b) A new field is added that does NOT affect the physics (a UI-only
+#      hint, a client timestamp) — the key changes on every tick and the
+#      cache effectively never hits.
+#
+# These tests pin a representative request and explicitly enumerate which
+# fields are "physical" (must influence the key) vs "ignored" (must not).
+# When a new field shows up that isn't in either list, the test fails
+# with a message telling the author exactly what to do.
+# ---------------------------------------------------------------------------
+
+
+# Representative live request — the shape the React client posts on the
+# /ws socket for an interactive solve. Update this when the frontend
+# request shape changes; that update is the cue to also revisit the
+# physical/ignored split below.
+_CANONICAL_REQ = {
+    "geometry": "freq_based.fandipole",
+    "solver": "pysim",
+    "pysim_model": "bspline",
+    "model_options": {
+        "degree": 2,
+        "use_singular_enrichment": True,
+        "enrichment_variant": "auto",
+        "tikhonov_lambda": 1e-3,
+    },
+    "wire_radius": 0.0005,
+    "ground": False,
+    "n_per_wire": 21,
+    "variant": None,
+    "design_freq_mhz": 14.300,
+    "measurement_freq_mhz": 14.300,
+    "params": {},
+    # A representative builder param the adapter pulls from the top level.
+    "base": 7.0,
+    "slope": 0.5,
+    "n_bands": 5,
+}
+
+# Top-level fields known to influence the solve numerics. Each MUST cause
+# the canonical key to change when perturbed.
+_PHYSICAL_FIELDS = frozenset(
+    {
+        "geometry",
+        "solver",
+        "pysim_model",
+        "model_options",
+        "wire_radius",
+        "ground",
+        "n_per_wire",
+        "variant",
+        "design_freq_mhz",
+        "measurement_freq_mhz",
+        "params",
+        "base",
+        "slope",
+        "n_bands",
+    }
+)
+
+# Top-level fields known NOT to influence the solve numerics. Adding any
+# of these to the request MUST NOT change the canonical key — otherwise
+# every tick is a cache miss. Members must also be in server's
+# _CACHE_KEY_BLOCKLIST.
+_IGNORED_FIELDS = frozenset(
+    {
+        "_request_id",
+        "_client_ts",
+    }
+)
+
+
+def test_cache_key_field_coverage_is_exhaustive():
+    """The canonical request's top-level keys must be fully classified.
+
+    If this fails, the canonical request has grown a field that isn't
+    declared physical or ignored. Pick one:
+
+      - If the field changes the physics, add it to _PHYSICAL_FIELDS
+        (it's already in the key via the catch-all hash; this just makes
+        intent explicit and gives the perturbation test something to
+        verify).
+      - If the field is UI-only (timestamps, render hints, client ids),
+        add it to _IGNORED_FIELDS *and* to server._CACHE_KEY_BLOCKLIST,
+        otherwise it will torch the cache hit rate.
+    """
+    seen = set(_CANONICAL_REQ.keys())
+    classified = _PHYSICAL_FIELDS | _IGNORED_FIELDS
+    unclassified = seen - classified
+    stale = (
+        classified - seen - _IGNORED_FIELDS
+    )  # ignored fields don't have to be in canonical
+    assert not unclassified, (
+        f"unclassified request fields in canonical request: {sorted(unclassified)}. "
+        f"Add each to _PHYSICAL_FIELDS or _IGNORED_FIELDS (and _CACHE_KEY_BLOCKLIST)."
+    )
+    assert not stale, (
+        f"fields declared physical but missing from canonical request: {sorted(stale)}. "
+        f"Either remove from _PHYSICAL_FIELDS or add to _CANONICAL_REQ."
+    )
+
+
+def test_cache_key_blocklist_matches_ignored_fields():
+    """Ignored fields must also be in server._CACHE_KEY_BLOCKLIST.
+
+    Otherwise the blocklist is a lie: a field declared ignored here would
+    still be hashed into the key in production.
+    """
+    missing = _IGNORED_FIELDS - server._CACHE_KEY_BLOCKLIST
+    assert not missing, (
+        f"fields in _IGNORED_FIELDS but not in server._CACHE_KEY_BLOCKLIST: "
+        f"{sorted(missing)}. Add them to server._CACHE_KEY_BLOCKLIST so the "
+        f"canonical-key builder actually strips them."
+    )
+
+
+@pytest.mark.parametrize("field", sorted(_PHYSICAL_FIELDS))
+def test_cache_key_changes_when_physical_field_perturbed(field):
+    """Perturbing a physical field MUST change the canonical key.
+
+    If this fails on field X, the canonicalizer is dropping X — either it
+    was added to _CACHE_KEY_BLOCKLIST by mistake, or the hashing function
+    isn't reaching it (e.g. lives inside a non-dict / non-list container
+    that quantise() doesn't recurse into).
+    """
+    base_key = server._canonical_solve_key(_CANONICAL_REQ)
+    perturbed = dict(_CANONICAL_REQ)
+    v = perturbed[field]
+    if isinstance(v, bool):
+        perturbed[field] = not v
+    elif isinstance(v, (int, float)):
+        perturbed[field] = v + 1
+    elif isinstance(v, str):
+        perturbed[field] = v + "_x"
+    elif isinstance(v, dict):
+        perturbed[field] = {**v, "__probe__": 999}
+    elif v is None:
+        perturbed[field] = "non_none"
+    else:
+        perturbed[field] = ("__probe__", v)
+    new_key = server._canonical_solve_key(perturbed)
+    assert new_key != base_key, (
+        f"perturbing physical field {field!r} did NOT change the cache key. "
+        f"The canonicalizer is failing to capture this field; cache will return "
+        f"stale results when {field!r} changes between calls."
+    )
+
+
+@pytest.mark.parametrize("field", sorted(_IGNORED_FIELDS))
+def test_cache_key_unchanged_when_ignored_field_added(field):
+    """Adding an ignored field MUST NOT change the canonical key.
+
+    If this fails on field X, X is in _IGNORED_FIELDS but server's
+    blocklist isn't stripping it — every request that carries X will
+    miss the cache. Add X to server._CACHE_KEY_BLOCKLIST.
+    """
+    base_key = server._canonical_solve_key(_CANONICAL_REQ)
+    with_field = dict(_CANONICAL_REQ)
+    with_field[field] = "anything"
+    assert server._canonical_solve_key(with_field) == base_key, (
+        f"adding ignored field {field!r} changed the cache key — the blocklist "
+        f"is not stripping it. Add {field!r} to server._CACHE_KEY_BLOCKLIST."
+    )
+
+
+def test_cache_key_quantises_floats_below_step():
+    """Floats within _CACHE_FLOAT_QUANT must collapse to the same key.
+
+    Slider positions are coarser than this quant; without quantisation,
+    back-and-forth scrubs to nominally-identical values would miss.
+    """
+    base = dict(_CANONICAL_REQ)
+    nudged = dict(_CANONICAL_REQ)
+    nudged["design_freq_mhz"] = (
+        base["design_freq_mhz"] + server._CACHE_FLOAT_QUANT * 0.1
+    )
+    assert server._canonical_solve_key(base) == server._canonical_solve_key(nudged)
+
+
+def test_cache_key_recurses_into_model_options():
+    """Sanity: per-solver kwargs inside model_options must contribute to
+    the key. Otherwise switching bspline degrees or toggling singular
+    enrichment via model_options.use_singular_enrichment would return
+    a stale answer."""
+    base_key = server._canonical_solve_key(_CANONICAL_REQ)
+    for k, alt in [
+        ("degree", 1),
+        ("use_singular_enrichment", False),
+        ("enrichment_variant", "off"),
+        ("tikhonov_lambda", 1e-2),
+    ]:
+        mutant = dict(_CANONICAL_REQ)
+        mutant["model_options"] = {**_CANONICAL_REQ["model_options"], k: alt}
+        assert server._canonical_solve_key(mutant) != base_key, (
+            f"model_options.{k} change did not alter the cache key"
+        )
