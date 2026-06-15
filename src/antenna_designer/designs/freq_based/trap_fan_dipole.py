@@ -310,33 +310,47 @@ class Builder(AntennaBuilder):
             tip = offset_outward(A[i], q1 + trap_seg + q2)
             spokes.append((trap_in, trap_out, tip))
 
-        n_seg0 = self.nominal_nsegs
-        # Feed-wire segment count: see fandipole.py for the reason — pysim
-        # triangular basis needs at least one interior knot, n_seg=1 trips
-        # an argmin-of-empty in triangular._feed_basis_indices.
-        n_seg1 = max(3, self.nominal_nsegs // 7)
-        n_outer = max(5, self.nominal_nsegs // 2)
+        # Adaptive segmentation: size each variable-length wire (cone +
+        # inner outer + outer) so segment length is near-constant across
+        # the antenna. nominal_nsegs sets the count for the longest such
+        # wire; everything else scales proportionally. Trap segments are
+        # pinned to 1 (load-port convention — the named port lives on a
+        # single basis function). Feed segment is also pinned to 1, which
+        # is fine for the BSpline d=2 basis this design is tuned against;
+        # the triangular basis can't drive a 1-segment feed gap, so this
+        # design is no longer drop-in compatible with TriangularPySim.
+        adaptive_lengths = []
+        for i, (trap_in, trap_out, tip) in enumerate(spokes):
+            adaptive_lengths.append(dist(S, A[i]))
+            adaptive_lengths.append(dist(A[i], trap_in))
+            adaptive_lengths.append(dist(trap_out, tip))
+        target_seg_len = max(adaptive_lengths) / self.nominal_nsegs
+
+        def n_for(length):
+            return max(1, round(length / target_seg_len))
 
         tups = []
         for i, (trap_in, trap_out, tip) in enumerate(spokes):
             # +y arm
-            tups.append((S, A[i], n_seg0, None))
-            tups.append((A[i], trap_in, n_seg0, None))
+            tups.append((S, A[i], n_for(dist(S, A[i])), None))
+            tups.append((A[i], trap_in, n_for(dist(A[i], trap_in)), None))
             tups.append((trap_in, trap_out, 1, None, f"trap_p_b{i}"))
-            tups.append((trap_out, tip, n_outer, None))
+            tups.append((trap_out, tip, n_for(dist(trap_out, tip)), None))
 
             # −y arm (mirror via ry)
             Ay = ry(A[i])
             tin_y = ry(trap_in)
             tout_y = ry(trap_out)
             tip_y = ry(tip)
-            tups.append((T, Ay, n_seg0, None))
-            tups.append((Ay, tin_y, n_seg0, None))
+            tups.append((T, Ay, n_for(dist(T, Ay)), None))
+            tups.append((Ay, tin_y, n_for(dist(Ay, tin_y)), None))
             tups.append((tin_y, tout_y, 1, None, f"trap_n_b{i}"))
-            tups.append((tout_y, tip_y, n_outer, None))
+            tups.append((tout_y, tip_y, n_for(dist(tout_y, tip_y)), None))
 
         # Feed wire — named "feed", source supplied by build_network().
-        tups.append((T, S, n_seg1, None, "feed"))
+        # 1 segment matches the design's BSpline d=2 target; the basis
+        # handles a 1-segment feed cleanly (unlike triangular).
+        tups.append((T, S, 1, None, "feed"))
 
         # Lift to base height.
         zoff = self.base
