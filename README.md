@@ -25,7 +25,7 @@
 | src/antenna\_designer/designs/freq\_based/diamond\_loop.py               |       31 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/diamond\_loop\_turnstile.py    |       37 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/dipole\_turnstile.py           |       21 |        0 |    100% |           |
-| src/antenna\_designer/designs/freq\_based/fandipole.py                   |       62 |        4 |     94% |123, 159-161 |
+| src/antenna\_designer/designs/freq\_based/fandipole.py                   |       58 |        1 |     98% |       120 |
 | src/antenna\_designer/designs/freq\_based/folded\_invvee.py              |       34 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/hentenna.py                    |       35 |        1 |     97% |        42 |
 | src/antenna\_designer/designs/freq\_based/hentenna\_slant.py             |       43 |        0 |    100% |           |
@@ -59,7 +59,7 @@
 | src/antenna\_designer/sim.py                                             |        2 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                                           |      123 |        7 |     94% |   105-116 |
 | src/antenna\_designer/transform.py                                       |       42 |        1 |     98% |        62 |
-| **TOTAL**                                                                | **2747** |  **109** | **96%** |           |
+| **TOTAL**                                                                | **2743** |  **106** | **96%** |           |
 
 
 ## Setup coverage badge
