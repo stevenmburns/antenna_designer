@@ -144,6 +144,13 @@ class PyNECEngine(SimulationEngine):
             for v in virt_ends:
                 virtual_neighbours[v].extend(real_ends)
 
+        # Only compute stub geometry if we actually have virtual ports to
+        # synthesise stubs for. Designs with only PortAtEdge ports (e.g.
+        # trap_fan_dipole) shouldn't be required to declare a design_freq
+        # they don't otherwise use.
+        if not virtual_neighbours:
+            return
+
         wavelength = 299.792458 / self.builder.design_freq
         stub_len = wavelength / 100.0
         next_tag = len(self.tups) + 1
