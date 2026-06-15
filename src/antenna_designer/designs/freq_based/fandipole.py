@@ -35,8 +35,7 @@ class Builder(AntennaBuilder):
     # 5-band, 17/15 pair, and 12/10 pair variants.
     default_params = MappingProxyType(
         {
-            "design_freq": 14.300,
-            "freq": 28.57,
+            "freq": _BAND_10M["freq"],
             "base": 7.0,
             "slope": 0.5,
             "n_bands": _MAX_BANDS,
@@ -68,7 +67,7 @@ class Builder(AntennaBuilder):
                         "length_factor": {
                             "min": 0.40,
                             "max": 0.55,
-                            "step": 0.0005,
+                            "step": 0.0001,
                             "precision": 4,
                         },
                     },
@@ -91,8 +90,7 @@ class Builder(AntennaBuilder):
     # 5-band fall-back instead of empty placeholders.
     pair_17_15_params = MappingProxyType(
         {
-            "design_freq": 18.1575,
-            "freq": 21.383,
+            "freq": _BAND_15M["freq"],
             "base": 7.0,
             "slope": 0.5,
             "n_bands": 2,
@@ -103,8 +101,7 @@ class Builder(AntennaBuilder):
     # 12m/10m pair.
     pair_12_10_params = MappingProxyType(
         {
-            "design_freq": 24.97,
-            "freq": 28.47,
+            "freq": _BAND_10M["freq"],
             "base": 7.0,
             "slope": 0.5,
             "n_bands": 2,
@@ -155,10 +152,9 @@ class Builder(AntennaBuilder):
         def dist(p0, p1):
             return math.sqrt(sum((x0 - x1) ** 2 for x0, x1 in zip(p0, p1)))
 
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug("t0: %s dist: %s", t0, dist(S, C))
-            logger.debug("t0: %s dists from C: %s", t0, [dist(C, a) for a in A])
-            logger.debug("radius: %s dists from S: %s", radius, [dist(S, a) for a in A])
+        logger.debug("t0: %s dist: %s", t0, dist(S, C))
+        logger.debug("t0: %s dists from C: %s", t0, [dist(C, a) for a in A])
+        logger.debug("radius: %s dists from S: %s", radius, [dist(S, a) for a in A])
 
         # Per-band physical length = length_factor × (c / freq).
         lengths = [
@@ -197,18 +193,12 @@ class Builder(AntennaBuilder):
             tups.extend(build_path([T, Ay[i], By[i]], n_seg0, None))
         tups.append((T, S, n_seg1, 1 + 0j))
 
-        new_tups = []
-        for xoff, yoff, zoff in [(0, 0, self.base)]:
-            new_tups.extend(
-                [
-                    (
-                        (x0 + xoff, y0 + yoff, z0 + zoff),
-                        (x1 + xoff, y1 + yoff, z1 + zoff),
-                        ns,
-                        ev,
-                    )
-                    for ((x0, y0, z0), (x1, y1, z1), ns, ev) in tups
-                ]
+        return [
+            (
+                (x0, y0, z0 + self.base),
+                (x1, y1, z1 + self.base),
+                ns,
+                ev,
             )
-
-        return new_tups
+            for ((x0, y0, z0), (x1, y1, z1), ns, ev) in tups
+        ]
