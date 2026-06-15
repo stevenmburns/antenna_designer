@@ -42,12 +42,6 @@ from types import MappingProxyType
 C_LIGHT_MHZ_M = 299.792458
 
 
-def _resonant_C_pF(L_uH: float, freq_mhz: float) -> float:
-    """C in pF such that ω² LC = 1 at `freq_mhz`."""
-    omega = 2 * math.pi * freq_mhz * 1e6
-    return 1.0 / (omega**2 * L_uH * 1e-6) * 1e12
-
-
 # Defaults: 5 µH traps, C chosen so each trap LC-resonates at its trap_freq.
 # length_factor ≈ 0.49 captures the usual end-effect shortening on a fan
 # spoke; tweak per band if a sweep shows the resonance off-target.
@@ -68,7 +62,7 @@ def _resonant_C_pF(L_uH: float, freq_mhz: float) -> float:
 # Slope=0.62 (instead of the original 0.5) drops the resistances
 # uniformly so they straddle 50 Ω: 17m and 10m sit at the extremes with
 # matching SWR50≈1.21, and the in-band bands (15m/12m) come in lower.
-# A small `trap1_freq_shift` = 0.98 nudges 10m into a different mode
+# A small `freq_shift` = 0.98 on band 1 nudges 10m into a different mode
 # where Re(Z) ≈ 50 Ω (the trap doesn't fully open at 10m, the outer
 # extension joins in, and the inner settles at ~0.40·λ/2 instead of
 # ~0.50). 10m's SWR50 drops from 1.20 to 1.02 with the other three
@@ -98,7 +92,11 @@ _BAND_17_12 = {
     # tolerance is ≤ 1.17 SWR — buildable. C tracks at LC-resonance for
     # 24.97 MHz given this L.
     "trap_L_uH": 3.0,
-    "trap_C_pF": _resonant_C_pF(L_uH=3.0, freq_mhz=24.97),
+    # Per-band trap resonant-freq multiplier (dimensionless). The tank's
+    # C is computed from L and (trap_freq × freq_shift) at network-build
+    # time, so freq_shift detunes ω₀ without an explicit C knob. Band-0's
+    # shift has near-zero leverage on Re(Z) at 17m so it stays at 1.0.
+    "freq_shift": 1.0,
 }
 
 _BAND_15_10 = {
@@ -109,23 +107,27 @@ _BAND_15_10 = {
     # L=1 µH — practical minimum for a hand-wound air-core coil
     # (sub-µH coils have inductance dominated by stray/lead effects and
     # are hard to build reproducibly). C tracks at LC-resonance for
-    # 28.47 MHz. The trap1_freq_shift below pulls effective ω₀ slightly
-    # to bring 10m into a clean mode-jump resonance.
+    # 28.47 MHz. The freq_shift below pulls effective ω₀ slightly to
+    # bring 10m into a clean mode-jump resonance.
     "trap_L_uH": 1.0,
-    "trap_C_pF": _resonant_C_pF(L_uH=1.0, freq_mhz=28.47),
+    # Set slightly below 1.0 so the trap is just past resonance at 10m.
+    # The trap doesn't fully open, the outer extension joins in, and
+    # the inner sits in a different mode (~0.40·λ/2 instead of ~0.50).
+    # Net effect: 10m's resonant Re(Z) jumps from ~42 Ω toward ~50 Ω,
+    # SWR50 at 10m drops from 1.20 to 1.02.
+    "freq_shift": 0.95,
 }
 
 
 class Builder(AntennaBuilder):
     default_params = MappingProxyType(
         {
-            # `freq` is the operating frequency the sweep UI defaults to;
-            # nothing in the geometry reads it directly. `design_freq` is
-            # read by the PyNEC engine when synthesising virtual-port
-            # stubs and as a sweep-range anchor — set it to the middle of
-            # the band span so per-engine defaults make sense.
-            "design_freq": 21.0,
-            "freq": 28.47,
+            # `freq` is the measurement frequency the live solve evaluates
+            # Z_in at. Geometry doesn't read it — each band sizes itself
+            # from per-band full_freq / trap_freq / *_length_factor. The
+            # frontend overwrites it from the meas-freq slider on every
+            # tick; this default only seeds the very first response.
+            "freq": _BAND_15_10["trap_freq"],
             "base": 7.0,
             # Same fan-spoke slope as fandipole — each spoke drops at this
             # slope from the cone apex outward (y_dir=Zc, z_dir=−Zs).
@@ -140,21 +142,6 @@ class Builder(AntennaBuilder):
             # named Load port. Should be much shorter than λ so radiation
             # from the trap segment itself is negligible.
             "trap_seg_m": 0.05,
-            # Per-trap resonant-frequency multipliers (dimensionless).
-            # Each shift scales the trap's effective ω₀ by its value;
-            # internally this is applied as C_eff = trap_C_pF / shift²
-            # (L held fixed). Useful as a fine knob when the high-band
-            # resonance lands slightly off after a length retune — moving
-            # the trap a few percent shifts the inner-stub electrical
-            # length without touching the geometry. Default 1.0 = no shift.
-            "trap0_freq_shift": 1.0,
-            # Set slightly below 1.0 so band-1's trap is just past resonance
-            # at 10m. The trap doesn't fully open, the outer extension joins
-            # in, and the inner sits in a different mode (~0.40·λ/2 instead
-            # of ~0.50). Net effect: 10m's resonant Re(Z) jumps from ~42 Ω
-            # toward ~50 Ω, SWR50 at 10m drops from 1.20 to 1.02. (Band 0's
-            # shift has almost no leverage on Re17 — left at 1.0.)
-            "trap1_freq_shift": 0.95,
             # Pinned at 2 — the design is hard-coded to two parallel
             # spokes. Exposed in default_params (with min=max=2 in
             # ui_params below) so the bands group has a `repeat_count`
@@ -205,12 +192,15 @@ class Builder(AntennaBuilder):
                             "precision": 3,
                             "unit": " µH",
                         },
-                        "trap_C_pF": {
-                            "min": 0.5,
-                            "max": 500.0,
-                            "step": 0.01,
+                        # Per-band trap resonant-freq multiplier. Scales
+                        # the tank's effective ω₀ (applied internally as
+                        # C_eff = trap_C_pF / freq_shift²). 1.0 = no
+                        # shift; values <1 push ω₀ down, >1 push it up.
+                        "freq_shift": {
+                            "min": 0.8,
+                            "max": 1.2,
+                            "step": 0.001,
                             "precision": 3,
-                            "unit": " pF",
                         },
                     },
                 }
@@ -227,10 +217,18 @@ class Builder(AntennaBuilder):
     # drives the right resonance into place. Used to refine defaults; once
     # the optimized length factors are folded back into the `bands` tuple
     # above these are just convenience entry points.
-    band0_inner_params = MappingProxyType({**default_params, "freq": 24.97})
-    band1_inner_params = MappingProxyType({**default_params, "freq": 28.47})
-    band0_full_params = MappingProxyType({**default_params, "freq": 18.1575})
-    band1_full_params = MappingProxyType({**default_params, "freq": 21.383})
+    band0_inner_params = MappingProxyType(
+        {**default_params, "freq": _BAND_17_12["trap_freq"]}
+    )
+    band1_inner_params = MappingProxyType(
+        {**default_params, "freq": _BAND_15_10["trap_freq"]}
+    )
+    band0_full_params = MappingProxyType(
+        {**default_params, "freq": _BAND_17_12["full_freq"]}
+    )
+    band1_full_params = MappingProxyType(
+        {**default_params, "freq": _BAND_15_10["full_freq"]}
+    )
 
     def build_wires(self):
         eps = 0.01
@@ -350,14 +348,16 @@ class Builder(AntennaBuilder):
 
     def build_network(self):
         bands = tuple(self.bands)
-        shifts = (float(self.trap0_freq_shift), float(self.trap1_freq_shift))
         ports = {"feed": PortAtEdge("feed")}
         branches = []
         for i, b in enumerate(bands):
             L = float(b["trap_L_uH"]) * 1e-6
-            # Shift the tank's LC resonance by `shifts[i]` (dimensionless).
-            # ω₀ = 1/√(LC), so scaling ω₀ by s with L fixed scales C by 1/s².
-            C = float(b["trap_C_pF"]) * 1e-12 / shifts[i] ** 2
+            # Tank C is whatever LC-resonates at (trap_freq × freq_shift)
+            # given L. freq_shift = 1 ⇒ tank resonates exactly at
+            # trap_freq; values <1 push ω₀ down, >1 push it up.
+            shift = float(b.get("freq_shift", 1.0))
+            omega0 = 2 * math.pi * float(b["trap_freq"]) * 1e6 * shift
+            C = 1.0 / (omega0**2 * L)
             for sign in ("p", "n"):
                 name = f"trap_{sign}_b{i}"
                 ports[name] = PortAtEdge(name)
