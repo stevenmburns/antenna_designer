@@ -1,7 +1,7 @@
 """Side-by-side solve-time comparison across 5 engines × 3 N values for
 both the fandipole and trap_fan_dipole designs.
 
-Engines compared (matching the convention from trap_fan_timing.py):
+Engines compared:
   Tri   — pysim TriangularPySim
   Bs1   — pysim BSplinePySim(degree=1)
   Bs2   — pysim BSplinePySim(degree=2)
