@@ -108,6 +108,14 @@ class Array2x2Builder(AntennaBuilder):
             for k in changed_keys:
                 local_element_params[k] = self._params[k + suffix]
 
+            # Propagate framework params (e.g. nominal_nsegs) — they live
+            # outside default_params so the elem_params_keys filter above
+            # skips them, but the child element builder needs them to
+            # actually scale segmentation with the parent's setting.
+            for k in self.FRAMEWORK_PARAMS:
+                if k in self._params:
+                    local_element_params[k] = self._params[k]
+
             element_builder_local = self.element_builder(local_element_params)
 
             return element_builder_local.build_wires()
@@ -168,6 +176,14 @@ class Array2x4Builder(AntennaBuilder):
 
             for k in changed_keys:
                 local_element_params[k] = self._params[k + suffix]
+
+            # Propagate framework params (e.g. nominal_nsegs) — they live
+            # outside default_params so the elem_params_keys filter above
+            # skips them, but the child element builder needs them to
+            # actually scale segmentation with the parent's setting.
+            for k in self.FRAMEWORK_PARAMS:
+                if k in self._params:
+                    local_element_params[k] = self._params[k]
 
             element_builder_local = self.element_builder(local_element_params)
 
@@ -246,6 +262,14 @@ class Array1x4Builder(AntennaBuilder):
             for k in changed_keys:
                 local_element_params[k] = self._params[k + suffix]
 
+            # Propagate framework params (e.g. nominal_nsegs) — they live
+            # outside default_params so the elem_params_keys filter above
+            # skips them, but the child element builder needs them to
+            # actually scale segmentation with the parent's setting.
+            for k in self.FRAMEWORK_PARAMS:
+                if k in self._params:
+                    local_element_params[k] = self._params[k]
+
             element_builder_local = self.element_builder(local_element_params)
 
             return element_builder_local.build_wires()
@@ -312,6 +336,14 @@ class Array1x4GroupedBuilder(AntennaBuilder):
             for k in changed_keys:
                 local_element_params[k] = self._params[k + suffix]
 
+            # Propagate framework params (e.g. nominal_nsegs) — they live
+            # outside default_params so the elem_params_keys filter above
+            # skips them, but the child element builder needs them to
+            # actually scale segmentation with the parent's setting.
+            for k in self.FRAMEWORK_PARAMS:
+                if k in self._params:
+                    local_element_params[k] = self._params[k]
+
             element_builder_local = self.element_builder(local_element_params)
 
             return element_builder_local.build_wires()
@@ -375,6 +407,14 @@ class Array1x2Builder(AntennaBuilder):
 
             for k in changed_keys:
                 local_element_params[k] = self._params[k + suffix]
+
+            # Propagate framework params (e.g. nominal_nsegs) — they live
+            # outside default_params so the elem_params_keys filter above
+            # skips them, but the child element builder needs them to
+            # actually scale segmentation with the parent's setting.
+            for k in self.FRAMEWORK_PARAMS:
+                if k in self._params:
+                    local_element_params[k] = self._params[k]
 
             element_builder_local = self.element_builder(local_element_params)
 
