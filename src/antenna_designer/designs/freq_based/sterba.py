@@ -58,6 +58,10 @@ class Builder(AntennaBuilder):
             "spacing": 0.04,
             "ui_params": MappingProxyType(
                 {
+                    # The curtain's driving-point impedance is ~600 ohm; it's
+                    # fed with open-wire line to a tuner, so the SWR readout is
+                    # referenced to 600 ohm rather than the auto 50 ohm default.
+                    "target_z0": 600.0,
                     # Below ~0.96 the half-wave phasing breaks down (gain
                     # collapses) and the input reactance swings through a
                     # sharp anti-resonance; keep the slider/optimiser in the
