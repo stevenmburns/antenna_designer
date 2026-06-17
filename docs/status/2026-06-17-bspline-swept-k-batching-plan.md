@@ -235,11 +235,16 @@ Estimated 1–2 days of focused work. Risks:
   responds well to numpy broadcasting. The right primitive is numpy
   vectorization on the k axis, not low-level loop acceleration.
 
-## Followups gated on this work
+## Followups
 
-- d=0 extension (`docs/pulse_basis_d0_extension.md` in pysim) — once
-  the batched path exists, the d=0 case should slot in cleanly (one
-  coefficient per segment, no boundary basis bookkeeping).
+- d=0 extension — **investigated and shelved (2026-06-17).** Not gated on
+  this work, and not happening: the original plan's premise (drop the
+  scalar potential at d=0) gives a degenerate solver, and the correct
+  pulse-basis charge term needs a staggered dual-mesh assembly that is
+  essentially a standalone pulse solver's charge core — not worth it for
+  the least-useful (O(1/N)) degree. See `pulse_basis_d0_nodal_charge.md`
+  in pysim for the full diagnosis. The convergence-curve points are
+  d=1/d=2 (and possibly d=3).
 - Triangular retirement — replace with d=1 BSpline once feature
   parity (batched sweep + smoothed source + singular enrichment) is
   reached. Reduces solver-engine surface area.
@@ -258,6 +263,21 @@ Estimated 1–2 days of focused work. Risks:
    (2704 segs, k=11) ran in ~21–32 seconds. A full N=41 with k=41
    batched Z would be ~9.5 GB complex128 — chunking the k axis is
    **mandatory** for that size.
+
+   Note: the web server already chunks sweeps, but for *time*, not
+   *memory*. `web/server.py` splits the pysim `/sweep` freq list into
+   groups targeting `_CHUNK_TARGET_MS = 500` ms each (server.py:120),
+   starting from an 8-chunk heuristic (`chunk_size = max(1,
+   len(freqs) // 8)`, server.py:522) and re-tuning from observed
+   per-freq cost after each chunk (server.py:556–558). This is for
+   cancellation granularity and threadpool/memory pacing under rapid
+   slider drags — each chunk still calls `compute_impedance_swept`
+   once with all its k's. As a side effect it roughly bounds k per
+   solver call (slow/large designs naturally get small chunks), so it
+   *partially* caps the `(n_k, N, N)` allocation — but it's tuned for
+   wall-time, not bytes, so the batched path still needs its own
+   memory-aware `chunk_size` knob inside `compute_impedance_swept`
+   (mirroring triangular's) rather than relying on the server layer.
 3. Is there a non-trivial geometry where the singular enrichment cost
    per k dominates the polynomial-basis cost? If so, the C++
    accelerator extension is more urgent than this doc suggests.
