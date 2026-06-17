@@ -62,6 +62,10 @@ class Builder(AntennaBuilder):
                     # fed with open-wire line to a tuner, so the SWR readout is
                     # referenced to 600 ohm rather than the auto 50 ohm default.
                     "target_z0": 600.0,
+                    # Narrowband, 10m-specific antenna: snap the GUI freq
+                    # sweep to the band containing design_freq (28.0-29.7 MHz)
+                    # instead of the default broad +/-25% out-of-band view.
+                    "sweep_policy": {"band_locked": True},
                     # Below ~0.96 the half-wave phasing breaks down (gain
                     # collapses) and the input reactance swings through a
                     # sharp anti-resonance; keep the slider/optimiser in the
