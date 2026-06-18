@@ -24,9 +24,11 @@ the radiators — the last ~3.5 dB genuinely needs real conductors. Use
 differential-line element.
 
 z0 is the differential-mode impedance (defaulted near the best-gain value,
-not the physical ~526 ohm), z0_cm the common-mode impedance; length is the
-half-wave riser height, kept off exactly lambda/2 via length_factor=0.99
-to dodge the ideal-line singularity.
+not the physical ~526 ohm), z0_cm the common-mode impedance. Each DiffTL's
+electrical length is `h * tl_length_factor`, where h is the half-wave riser
+height (kept off exactly lambda/2 via length_factor=0.99 to dodge the ideal-
+line singularity); tl_length_factor (default 1.0) phase-trims the lines
+independently of the wire geometry.
 """
 
 from ... import AntennaBuilder
@@ -42,26 +44,41 @@ class Builder(AntennaBuilder):
             "design_freq": 28.47,
             "freq": 28.47,
             "base": 7.0,
-            # Off exactly 1.0 so the half-wave DiffTLs miss the nodal-
-            # admittance singularity at length = lambda/2.
+            # Default off exactly 1.0 so the half-wave DiffTLs miss the
+            # nodal-admittance singularity at length = lambda/2. The slider
+            # range now spans 1.0; the singularity is at the *product*
+            # length_factor * tl_length_factor == 1.0, so when running
+            # length_factor at 1.0 keep tl_length_factor off 1.0 (or vice
+            # versa) to stay clear of it.
             "length_factor": 0.99,
             "n_cells": 3,  # odd; interior DiffTLs = n_cells + 1
             "spacing": 0.04,
             "z0": 150.0,  # differential-mode impedance (near best gain)
             "z0_cm": 80.0,  # common-mode impedance
+            # Multiplies the riser height h to set each DiffTL's electrical
+            # length, decoupled from the physical geometry. 1.0 -> length = h
+            # (the half-wave riser); tweak to phase-trim the lines without
+            # moving any wires.
+            "tl_length_factor": 1.0,
             "ui_params": MappingProxyType(
                 {
                     "target_z0": 75.0,  # ~70 ohm driving point (measured)
                     "sweep_policy": {"band_locked": True},
                     "length_factor": {
                         "min": 0.96,
-                        "max": 0.999,
+                        "max": 1.05,
                         "step": 0.001,
                         "precision": 4,
                     },
                     "n_cells": {"min": 1, "max": 7, "step": 2},
                     "z0": {"min": 50.0, "max": 600.0, "step": 5.0},
                     "z0_cm": {"min": 30.0, "max": 600.0, "step": 5.0},
+                    "tl_length_factor": {
+                        "min": 0.8,
+                        "max": 1.2,
+                        "step": 0.001,
+                        "precision": 4,
+                    },
                 }
             ),
         }
@@ -174,7 +191,7 @@ class Builder(AntennaBuilder):
                     f"j{j}_Ab",
                     f"j{j}_Bb",
                     z0=self.z0,
-                    length=h,
+                    length=h * self.tl_length_factor,
                     transposed=False,
                     z0_cm=self.z0_cm,
                 )
