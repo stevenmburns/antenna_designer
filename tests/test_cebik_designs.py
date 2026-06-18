@@ -212,3 +212,53 @@ def test_lazy_h_wider_spacing_adds_gain():
         Builder(dict(Builder.default_params, spacing_frac=0.625))
     ).max_gain
     assert g_wide > g_half
+
+
+# ---------------------------------------------------------------------------
+# LPDA (log-periodic dipole array)
+# ---------------------------------------------------------------------------
+
+
+def test_lpda_broadband_forward_gain():
+    """The defining LPDA behaviour: ~6-9 dBi forward gain held across a wide
+    band, firing toward the apex (+x). (Feedpoint impedance is not asserted
+    -- the ideal lossless crossed feeder makes it unreliable; see module
+    docstring.)"""
+    from antenna_designer.designs.cebik.lpda import Builder
+
+    for fr in (24.0, 26.0, 28.57, 30.0):
+        b = Builder(dict(Builder.default_params, freq=fr))
+        ff = _far_field(b)
+        rings = np.array(ff.rings)
+        front = rings[:, 0].max()  # +x, toward the apex
+        back = rings[:, 180].max()
+        assert ff.max_gain > 5.5, (fr, ff.max_gain)
+        assert front > back, (fr, front, back)
+
+
+def test_lpda_elements_scale_by_tau():
+    """Element half-lengths form a geometric sequence with ratio tau."""
+    from antenna_designer.designs.cebik.lpda import Builder
+
+    b = Builder()
+    half, x = b._layout()
+    ratios = [half[k + 1] / half[k] for k in range(len(half) - 1)]
+    assert all(abs(r - b.tau) < 1e-9 for r in ratios)
+    # boom positions strictly increase toward the front
+    assert all(x[k + 1] > x[k] for k in range(len(x) - 1))
+
+
+def test_lpda_feeder_is_crossed_and_front_driven():
+    """Every feeder section is crossed (negative z0) and the source sits on
+    the front (shortest) element."""
+    from antenna_designer.designs.cebik.lpda import Builder
+    from antenna_designer.network import TL, Driven
+
+    b = Builder()
+    net = b.build_network()
+    tls = [br for br in net.branches if isinstance(br, TL)]
+    assert len(tls) == b.n_elements - 1
+    assert all(tl.z0 < 0 for tl in tls)  # all transposed
+    (src,) = net.sources
+    assert isinstance(src, Driven)
+    assert src.port == f"d{b.n_elements - 1}"  # frontmost / shortest
