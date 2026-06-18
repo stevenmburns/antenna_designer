@@ -52,16 +52,16 @@
 | src/antenna\_designer/designs/yagiarray.py                               |        7 |        0 |    100% |           |
 | src/antenna\_designer/engine.py                                          |       43 |        3 |     93% |65, 94, 100 |
 | src/antenna\_designer/engines/\_\_init\_\_.py                            |        3 |        0 |    100% |           |
-| src/antenna\_designer/engines/pynec.py                                   |      189 |       11 |     94% |160, 234-240, 243, 259, 291, 293, 298, 330-332 |
-| src/antenna\_designer/engines/pysim.py                                   |      349 |       13 |     96% |36-39, 63, 182, 320, 332, 363-369, 441, 644 |
+| src/antenna\_designer/engines/pynec.py                                   |      191 |       11 |     94% |161, 241-247, 250, 266, 298, 300, 305, 337-339 |
+| src/antenna\_designer/engines/pysim.py                                   |      364 |       13 |     96% |37-40, 64, 183, 371, 383, 427-433, 505, 708 |
 | src/antenna\_designer/far\_field.py                                      |       94 |        0 |    100% |           |
 | src/antenna\_designer/geometry.py                                        |      141 |        6 |     96% |54, 79, 83, 95, 190, 271 |
-| src/antenna\_designer/network.py                                         |       88 |        6 |     93% |138, 167, 184, 221, 232, 234 |
+| src/antenna\_designer/network.py                                         |      103 |        6 |     94% |181, 210, 227, 264, 274, 276 |
 | src/antenna\_designer/opt.py                                             |       90 |       14 |     84% |54-55, 57-60, 65-66, 72-76, 148 |
 | src/antenna\_designer/sim.py                                             |        2 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                                           |      123 |        7 |     94% |   105-116 |
 | src/antenna\_designer/transform.py                                       |       42 |        1 |     98% |        62 |
-| **TOTAL**                                                                | **2885** |  **122** | **96%** |           |
+| **TOTAL**                                                                | **2917** |  **122** | **96%** |           |
 
 
 ## Setup coverage badge
