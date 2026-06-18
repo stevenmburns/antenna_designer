@@ -360,3 +360,71 @@ def test_rhombic_has_terminating_load_and_feed():
     assert loads[0].port == "term" and loads[0].r == 700.0
     (src,) = net.sources
     assert isinstance(src, Driven) and src.port == "feed"
+
+
+# ---------------------------------------------------------------------------
+# T2FD (terminated tilted folded dipole)
+# ---------------------------------------------------------------------------
+
+
+def _swr(z, z0):
+    g = abs((z - z0) / (z + z0))
+    return (1 + g) / (1 - g)
+
+
+_T2FD_BAND = (14.0, 18.0, 22.0, 28.57, 36.0, 45.0, 56.0)
+
+
+def test_t2fd_broadband_low_swr():
+    """The defining T2FD behaviour: a flat SWR curve over a 4:1 frequency
+    range (here referenced to the ~850 ohm the terminated geometry settles
+    to), unlike a resonant antenna."""
+    from antenna_designer.designs.cebik.t2fd import Builder
+
+    z0 = 850.0
+    swrs = [
+        _swr(_z(Builder(dict(Builder.default_params, freq=f))), z0) for f in _T2FD_BAND
+    ]
+    assert max(swrs) < 2.5, dict(zip(_T2FD_BAND, swrs))
+
+
+def test_t2fd_termination_flattens_the_response():
+    """Removing the resistor (R -> huge) restores sharp resonances: the
+    unterminated max-SWR over the band is far worse than terminated."""
+    from antenna_designer.designs.cebik.t2fd import Builder
+
+    z0 = 850.0
+
+    def band_max(r):
+        return max(
+            _swr(_z(Builder(dict(Builder.default_params, freq=f, term_r=r))), z0)
+            for f in _T2FD_BAND
+        )
+
+    assert band_max(820.0) < 2.5
+    assert band_max(1e9) > 10.0  # huge anti-resonant spike without the load
+
+
+def test_t2fd_gain_is_reduced_by_loss():
+    """Power burned in the terminating resistor drops gain below a resonant
+    dipole's ~2.1 dBi -- the bandwidth/efficiency trade."""
+    from antenna_designer.designs.cebik.t2fd import Builder
+
+    ff = _far_field(Builder())
+    assert ff.max_gain < 2.0
+
+
+def test_t2fd_folded_with_termination():
+    """Folded pair (two end shorts), one driven feed, one resistive Load."""
+    from antenna_designer.designs.cebik.t2fd import Builder
+    from antenna_designer.network import Driven, Load
+
+    tups = Builder().build_wires()
+    feeds = [t for t in tups if len(t) == 5 and t[4] == "feed"]
+    terms = [t for t in tups if len(t) == 5 and t[4] == "term"]
+    assert len(feeds) == 1 and len(terms) == 1
+    net = Builder().build_network()
+    (load,) = [br for br in net.branches if isinstance(br, Load)]
+    assert load.port == "term"
+    (src,) = net.sources
+    assert isinstance(src, Driven) and src.port == "feed"

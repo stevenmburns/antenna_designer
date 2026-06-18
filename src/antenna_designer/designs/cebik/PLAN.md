@@ -70,4 +70,24 @@ types are feasible:
 
 ## Status
 
-Scaffold only. Models to be implemented after priority is confirmed.
+All eight implemented, verified against the MKL-backed PyNEC solver, and
+covered by physics regression tests in `tests/test_cebik_designs.py`. Each
+auto-registers in the web examples registry (so it also picks up the generic
+schema tests) and is reachable from the CLI as `cebik.<name>`. Verified
+free-space figures at the 28.57 MHz family default:
+
+| design        | headline result                                            |
+|---------------|------------------------------------------------------------|
+| half_square   | 4.7 dBi, ~62 ohm corner feed, VP bidirectional broadside   |
+| bobtail       | 6.4 dBi peak, ~30 dB end nulls, high-Z base feed           |
+| quad          | 7.0 dBi forward, resonant driver ~132 ohm                  |
+| lazy_h        | 8.1 dBi (stacking gain), HP broadside, high-Z tuner feed   |
+| lpda          | ~6-9 dBi forward across ~24-32 MHz (feed-Z caveat in file) |
+| hb9cv         | ~6.8 dBi endfire, ~50 ohm inductive (F/B caveat in file)   |
+| rhombic       | 8 dBi, ~18 dB F/B, unidirectional; Z ~ termination         |
+| t2fd          | SWR < 1.8 over 14-56 MHz; broadband, low gain by design    |
+
+Two models carry documented modeling caveats (see their module docstrings):
+the LPDA's ideal lossless crossed feeder gives an unreliable feedpoint
+impedance, and the HB9CV's single-ended crossed TL reaches only ~8 dB F/B
+(the deep ZL null wants a true differential transposed line / pysim DiffTL).
