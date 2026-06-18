@@ -36,7 +36,7 @@
 | src/antenna\_designer/designs/freq\_based/invvee.py                      |       30 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/short\_dipole\_loaded.py       |       11 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/sterba.py                      |       59 |        1 |     98% |       168 |
-| src/antenna\_designer/designs/freq\_based/sterba\_difftl.py              |       84 |        9 |     89% |   159-182 |
+| src/antenna\_designer/designs/freq\_based/sterba\_difftl.py              |       84 |        9 |     89% |   176-199 |
 | src/antenna\_designer/designs/freq\_based/sterba\_tl.py                  |       63 |       14 |     78% |110, 138-155 |
 | src/antenna\_designer/designs/freq\_based/trap\_dipole.py                |       30 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/trap\_fan\_dipole.py           |       89 |       16 |     82% |240, 297, 303, 365-380 |
