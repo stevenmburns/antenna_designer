@@ -932,38 +932,35 @@ def test_network_spec_rejects_port_at_edge_with_no_named_edge():
         PysimEngine(BadBuilder())
 
 
-def test_pynec_network_dispatch_runs_delta_looparray_network():
-    """delta_looparray_network on PyNECEngine. With build_network() now
-    consumed, the engine synthesises a stub wire for the central virtual
-    driver, emits tl_cards from network.branches, ex_card from sources.
-
-    No strict numerical match to the legacy `delta_looparray_with_tls` is
-    expected — the segment-vs-basis port convention issue from #63 makes
-    both PyNEC variants of this design produce wonky impedances at default
-    params. The point is to verify the network-spec dispatch ran and the
-    network and legacy PyNEC results are in the same ballpark (same
-    physical antenna, modulo a tiny stub-wire difference)."""
+def test_pynec_network_matches_pysim_on_delta_looparray():
+    """delta_looparray_network on PyNECEngine now goes through multiport-Y
+    extraction + the shared NetworkReducer (the EZNEC approach), NOT NEC2's
+    tl_card with a synthesised dummy stub. That dummy stub used to inject a
+    huge parasitic reactance the line failed to transform away, giving a
+    wildly wrong impedance (~100 - j33000); the reducer path instead agrees
+    with PysimEngine to within the two MoM formulations' inherent few-percent
+    difference, for both impedance and far-field gain."""
     from antenna_designer.designs.freq_based.delta_looparray_network import (
         Builder as NetBuilder,
     )
-    from antenna_designer.designs.freq_based.delta_looparray_with_tls import (
-        Builder as LegacyBuilder,
-    )
 
-    (z_net,) = PyNECEngine(NetBuilder(), ground=None).impedance()
-    (z_leg,) = PyNECEngine(LegacyBuilder(), ground=None).impedance()
-    assert np.isfinite(z_net.real) and np.isfinite(z_net.imag), z_net
-    # Same antenna, just different stub-wire placement: order-of-magnitude
-    # agreement is enough to confirm the dispatch wired through correctly.
-    ratio = abs(z_net) / abs(z_leg)
-    assert 0.3 < ratio < 3.0, (
-        f"network and legacy PyNEC results diverged too far: "
-        f"net={z_net}, legacy={z_leg}, |ratio|={ratio:.2f}"
-    )
+    (z_nec,) = PyNECEngine(NetBuilder(), ground=None).impedance()
+    (z_ps,) = PysimEngine(NetBuilder(), ground=None).impedance()
+    assert np.isfinite(z_nec.real) and np.isfinite(z_nec.imag), z_nec
+    assert abs(z_nec - z_ps) / abs(z_ps) < 0.05, f"nec={z_nec}, pysim={z_ps}"
+
+    kw = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+    g_nec = PyNECEngine(NetBuilder(), ground=None).far_field(**kw).max_gain
+    g_ps = PysimEngine(NetBuilder(), ground=None).far_field(**kw).max_gain
+    assert abs(g_nec - g_ps) < 0.3, (g_nec, g_ps)
 
 
-def test_pynec_network_rejects_virtual_to_virtual_tl():
-    """TL between two PortVirtuals has no NEC2 mapping — reject at construction."""
+def test_pynec_virtual_to_virtual_tl_supported():
+    """A TL between two PortVirtuals has no NEC2 tl_card mapping, but the
+    multiport-Y + NetworkReducer path handles it fine — intermediate virtual
+    nodes are just rows in the network Y matrix. It yields a finite impedance
+    agreeing with PysimEngine (was a hard ValueError under the old tl_card
+    dispatch)."""
     from antenna_designer import AntennaBuilder
     from antenna_designer.network import Driven, Network, PortAtEdge, PortVirtual, TL
     from types import MappingProxyType
@@ -988,8 +985,10 @@ def test_pynec_network_rejects_virtual_to_virtual_tl():
                 sources=[Driven(port="a")],
             )
 
-    with pytest.raises(ValueError, match="TL between two virtual ports"):
-        PyNECEngine(Builder(), ground=None)
+    z_nec = PyNECEngine(Builder(), ground=None).impedance()[0]
+    z_ps = PysimEngine(Builder(), ground=None).impedance()[0]
+    assert np.isfinite(z_nec.real) and np.isfinite(z_nec.imag), z_nec
+    assert abs(z_nec - z_ps) / abs(z_ps) < 0.05, (z_nec, z_ps)
 
 
 def test_pynec_load_branch_resistor_adds_to_impedance():
@@ -1117,8 +1116,9 @@ def test_pynec_load_branch_rejects_virtual_port():
                 sources=[Driven(port="drv")],
             )
 
+    eng = PyNECEngine(Builder(), ground=None)
     with pytest.raises(ValueError, match="Load on virtual port"):
-        PyNECEngine(Builder(), ground=None)
+        eng.impedance()
 
 
 def test_pynec_network_rejects_port_at_edge_with_no_named_edge():

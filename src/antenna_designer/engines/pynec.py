@@ -9,20 +9,14 @@ from ..network import (
     PortAtEdge,
     PortVirtual,
     TL,
-    TwoPort,
 )
+from ..network_reduce import C_LIGHT, NetworkReducer
+
+WIRE_RADIUS = 0.0005
+COPPER_CONDUCTIVITY = 5.8e7
 
 
 DEFAULT_GROUND = ("finite", 10.0, 0.002)  # (kind, dielectric, conductivity)
-
-
-def _seg_midpoint(p0, p1, n_seg, sub_idx):
-    """Centre of segment `sub_idx` (1-based) on the wire from p0 to p1
-    discretised into n_seg uniform segments. NEC2's tl_card / ex_card
-    refer to sub-segments by this index."""
-    p0 = np.asarray(p0, dtype=float)
-    p1 = np.asarray(p1, dtype=float)
-    return p0 + ((sub_idx - 0.5) / n_seg) * (p1 - p0)
 
 
 class PyNECEngine(SimulationEngine):
@@ -49,7 +43,17 @@ class PyNECEngine(SimulationEngine):
         self.tls = [] if self._network is not None else builder.build_tls()
         self.ground = ground
         self.excitation_pairs = None
-        self._build_geometry()
+        # Loads alone are handled natively (ld_card) and accurately by NEC, so
+        # only divert to the multiport-Y + NetworkReducer path for what NEC
+        # *can't* do natively: transmission lines (TL/DiffTL) and virtual
+        # drivers. Those skip the baked NEC context entirely — impedance uses
+        # per-port solves and far-field/current build an excitation-resolved
+        # context on demand. Load-only and plain designs keep the native path.
+        self._use_reducer = self._network is not None and self._network_uses_reducer()
+        if self._use_reducer:
+            self._init_network()
+        else:
+            self._build_geometry()
 
     def __del__(self):
         # Release the nec_context handle if construction got that far.
@@ -83,16 +87,15 @@ class PyNECEngine(SimulationEngine):
             if ev is not None and self._network is None:
                 self.excitation_pairs.append((idx, mid_seg, ev))
 
-        # Synthesise stub wires for virtual ports (extends self.tups so the
-        # tag space picks up where the user-supplied wires left off). Must
-        # happen before geometry_complete().
         self._network_port_loc = {}
-        if self._network is not None:
-            self._synthesise_virtual_stubs(geo)
 
         self.c.geometry_complete(0)
 
         if self._network is not None:
+            # Only Load-only networks reach here; TL/DiffTL/virtual-driver
+            # networks take the NetworkReducer path and never build this
+            # context.
+            self._resolve_network_ports()
             self._emit_network_cards()
         else:
             for idx1, seg1, idx2, seg2, impedance, length in self.tls:
@@ -104,19 +107,11 @@ class PyNECEngine(SimulationEngine):
         for tag, sub_index, voltage in self.excitation_pairs:
             self.c.ex_card(0, tag, sub_index, 0, voltage.real, voltage.imag, 0, 0, 0, 0)
 
-    def _synthesise_virtual_stubs(self, geo):
-        """For each PortVirtual referenced by a TL branch, add a short stub
-        wire (~λ/100, single segment) anchored above the centroid of its
-        TL-connected real-port feed points. NEC2's tl_card needs both
-        endpoints on real segments; the stub is the minimum geometry that
-        carries the driver node without polluting radiation.
-
-        Resolves every PortAtEdge to its (tag, sub_seg) in the same pass so
-        downstream branch/source emission only consults self._network_port_loc.
-        """
-        net = self._network
-        # Real ports: resolve via the name → (tag, mid_seg) map built above.
-        for name, port in net.ports.items():
+    def _resolve_network_ports(self):
+        """Resolve every PortAtEdge to its (tag, sub_seg) for native ld_card /
+        ex_card emission. Only reached for Load-only networks; TL/DiffTL and
+        virtual-driver networks take the NetworkReducer path instead."""
+        for name, port in self._network.ports.items():
             if isinstance(port, PortAtEdge):
                 if name not in self._feed_name_to_loc:
                     raise ValueError(
@@ -127,124 +122,37 @@ class PyNECEngine(SimulationEngine):
                 tag, mid_seg, _p0, _p1, _ns = self._feed_name_to_loc[name]
                 self._network_port_loc[name] = (tag, mid_seg)
 
-        # Collect, per virtual port, the set of real ports it's TL-connected to.
-        virtual_neighbours = {
-            name: [] for name, p in net.ports.items() if isinstance(p, PortVirtual)
-        }
-        for br in net.branches:
-            if not isinstance(br, TL):
-                continue
-            ends = (br.a, br.b)
-            virt_ends = [e for e in ends if isinstance(net.ports[e], PortVirtual)]
-            real_ends = [e for e in ends if isinstance(net.ports[e], PortAtEdge)]
-            if len(virt_ends) == 2:
-                raise ValueError(
-                    f"TL between two virtual ports ({br.a!r}, {br.b!r}) has no "
-                    "real-segment endpoints; cannot map to NEC2 tl_card"
-                )
-            for v in virt_ends:
-                virtual_neighbours[v].extend(real_ends)
-
-        # Only compute stub geometry if we actually have virtual ports to
-        # synthesise stubs for. Designs with only PortAtEdge ports (e.g.
-        # trap_fan_dipole) shouldn't be required to declare a design_freq
-        # they don't otherwise use.
-        if not virtual_neighbours:
-            return
-
-        wavelength = 299.792458 / self.builder.design_freq
-        stub_len = wavelength / 100.0
-        next_tag = len(self.tups) + 1
-
-        for name, neighbours in virtual_neighbours.items():
-            if not neighbours:
-                raise ValueError(
-                    f"virtual port {name!r} has no TL branches; can't synthesise "
-                    "a stub wire without at least one real-port neighbour"
-                )
-            # Centroid of neighbour feed midpoints.
-            mids = np.stack(
-                [
-                    _seg_midpoint(
-                        *self._feed_name_to_loc[r][2:5],
-                        sub_idx=self._feed_name_to_loc[r][1],
-                    )
-                    for r in neighbours
-                ]
-            )
-            c = mids.mean(axis=0)
-            # Offset 2 stub-lengths above the highest neighbour midpoint in z,
-            # so the stub doesn't collide with the antenna geometry.
-            z_top = mids[:, 2].max()
-            base = np.array([c[0], c[1], z_top + 2.0 * stub_len])
-            tip = base + np.array([0.0, 0.0, stub_len])
-            # Single-segment stub (parity "odd" is already satisfied).
-            geo.wire(
-                next_tag,
-                1,
-                base[0],
-                base[1],
-                base[2],
-                tip[0],
-                tip[1],
-                tip[2],
-                0.0005,
-                1.0,
-                1.0,
-            )
-            self._network_port_loc[name] = (next_tag, 1)
-            next_tag += 1
-
     def _emit_network_cards(self):
-        """Translate Network branches into tl_card / ld_card calls and Network
-        sources into ex_card calls. Called after geometry_complete().
+        """Emit a Load-only network as native NEC2 ld_cards + ex_cards. Called
+        after geometry_complete(). (TL/DiffTL/virtual-driver networks never
+        reach here — they go through the multiport-Y NetworkReducer path.)
 
-        Load branches are emitted as NEC2 type-0 ld_cards (short series RLC
-        on a single segment). NEC2's convention: a zero value for R, L, or C
-        means that element isn't present in the load — same semantics as the
-        Load dataclass's optional fields.
+        Load branches become ld_cards (type 0 = series RLC, type 1 = parallel
+        RLC) on a single segment; a zero R/L/C means that element is absent,
+        matching the Load dataclass's optional fields.
         """
         net = self._network
-        # ld_cards first — conventional ordering; loading affects the MoM
-        # solution that the TL/EX stages then read from.
         for br in net.branches:
-            if isinstance(br, Load):
-                port = net.ports[br.port]
-                if not isinstance(port, PortAtEdge):
-                    raise ValueError(
-                        f"Load on virtual port {br.port!r}: a Load is a series "
-                        "impedance on an antenna segment, which only PortAtEdge has"
-                    )
-                tag, seg = self._network_port_loc[br.port]
-                r = float(br.r) if br.r is not None else 0.0
-                l = float(br.l) if br.l is not None else 0.0
-                c = float(br.c) if br.c is not None else 0.0
-                if r == 0.0 and l == 0.0 and c == 0.0:
-                    continue
-                # NEC2 ld_card type 0 = series RLC, type 1 = parallel RLC.
-                # Both apply on a single segment [seg, seg] on `tag`.
-                ldtyp = 1 if br.parallel else 0
-                self.c.ld_card(ldtyp, tag, seg, seg, r, l, c)
-        for br in net.branches:
-            if isinstance(br, TL):
-                tag_a, seg_a = self._network_port_loc[br.a]
-                tag_b, seg_b = self._network_port_loc[br.b]
-                self.c.tl_card(tag_a, seg_a, tag_b, seg_b, br.z0, br.length, 0, 0, 0, 0)
-            elif isinstance(br, Load):
-                continue  # already emitted above
-            elif isinstance(br, DiffTL):
+            if not isinstance(br, Load):
                 raise NotImplementedError(
-                    "DiffTL (4-terminal differential transmission line) is not "
-                    "expressible as a NEC2 tl_card, whose ports are pinned to "
-                    "single segments. Use PysimEngine for differential lines."
+                    f"{type(br).__name__} reached PyNEC's native network path; "
+                    "only Load is handled natively (TL/DiffTL/virtual-driver "
+                    "networks use the NetworkReducer path)"
                 )
-            elif isinstance(br, TwoPort):
-                raise NotImplementedError(
-                    "TwoPort on PyNECEngine: sketched but not cross-engine "
-                    "validated. See issue #65 piece (B)."
+            port = net.ports[br.port]
+            if not isinstance(port, PortAtEdge):
+                raise ValueError(
+                    f"Load on virtual port {br.port!r}: a Load is a series "
+                    "impedance on an antenna segment, which only PortAtEdge has"
                 )
-            else:
-                raise NotImplementedError(f"branch type {type(br).__name__}")
+            tag, seg = self._network_port_loc[br.port]
+            r = float(br.r) if br.r is not None else 0.0
+            l = float(br.l) if br.l is not None else 0.0
+            c = float(br.c) if br.c is not None else 0.0
+            if r == 0.0 and l == 0.0 and c == 0.0:
+                continue
+            ldtyp = 1 if br.parallel else 0
+            self.c.ld_card(ldtyp, tag, seg, seg, r, l, c)
         for src in net.sources:
             if not isinstance(src, Driven):
                 raise NotImplementedError(f"unknown source type: {src!r}")
@@ -252,18 +160,142 @@ class PyNECEngine(SimulationEngine):
             v = complex(src.voltage)
             self.excitation_pairs.append((tag, seg, v))
 
-    def _apply_ground_card(self):
+    def _apply_ground_card(self, c=None):
+        c = c if c is not None else self.c
         g = self.ground
         if g is None or g == "free":
             return  # no gn_card -> free space
         if g == "pec":
-            self.c.gn_card(1, 0, 0, 0, 0, 0, 0, 0)
+            c.gn_card(1, 0, 0, 0, 0, 0, 0, 0)
             return
         if isinstance(g, tuple) and len(g) == 3 and g[0] == "finite":
             _, eps_r, sigma = g
-            self.c.gn_card(0, 0, eps_r, sigma, 0, 0, 0, 0)
+            c.gn_card(0, 0, eps_r, sigma, 0, 0, 0, 0)
             return
         raise ValueError(f"unrecognised ground spec: {g!r}")
+
+    # ----- network-spec path: multiport Y + shared NetworkReducer -----
+    #
+    # NEC2's tl_card can't represent a virtual driver behind a line (it needs
+    # both endpoints on real segments, and a synthesised dummy stub injects a
+    # huge parasitic reactance that the line fails to transform away). So for
+    # `build_network()` designs we don't emit tl_cards at all: we extract the
+    # antenna's multiport short-circuit Y at the real ports and hand it to the
+    # engine-agnostic NetworkReducer (the EZNEC approach — transmission lines
+    # as a circuit post-process on the field solution). Shared with pysim.
+
+    def _network_uses_reducer(self):
+        """True iff the network needs the Y-matrix reduction path — i.e. it
+        has a transmission line (TL/DiffTL) or a virtual driver. Load-only
+        networks are handled natively by NEC's ld_card."""
+        net = self._network
+        if any(isinstance(b, (TL, DiffTL)) for b in net.branches):
+            return True
+        return any(isinstance(p, PortVirtual) for p in net.ports.values())
+
+    def _init_network(self):
+        """Build the port-index map (real PortAtEdge ports first, virtual
+        ports after) and the NetworkReducer. Validates that every PortAtEdge
+        names an edge in build_wires()."""
+        net = self._network
+        if any(isinstance(b, DiffTL) for b in net.branches):
+            # The multiport-Y + NetworkReducer path *can* express a DiffTL
+            # (NEC2's tl_card cannot), but DiffTL on PyNEC isn't cross-
+            # validated yet — keep it PysimEngine-only for now.
+            raise NotImplementedError(
+                "DiffTL (4-terminal differential transmission line) on "
+                "PyNECEngine is not enabled; use PysimEngine for differential "
+                "lines."
+            )
+        named = {t[4] for t in self.tups if len(t) >= 5 and t[4] is not None}
+        self._real_port_names = [
+            n for n, p in net.ports.items() if isinstance(p, PortAtEdge)
+        ]
+        for name in self._real_port_names:
+            if name not in named:
+                raise ValueError(
+                    f"network port {name!r} is a PortAtEdge but no edge in "
+                    f"build_wires() carries that name; named edges: {sorted(named)}"
+                )
+        port_to_idx = {n: i for i, n in enumerate(self._real_port_names)}
+        next_idx = len(self._real_port_names)
+        for name, port in net.ports.items():
+            if isinstance(port, PortVirtual):
+                port_to_idx[name] = next_idx
+                next_idx += 1
+        self._reducer = NetworkReducer(net, port_to_idx, next_idx)
+
+    def _make_real_context(self):
+        """A fresh nec_context with only the real build_wires() geometry, wire
+        conductivity, and ground — no virtual stubs, no tl_cards. Returns
+        (context, {edge_name: (tag, mid_seg)})."""
+        c = nec.nec_context()
+        geo = c.get_geometry()
+        loc = {}
+        for idx, t in enumerate(self.tups, start=1):
+            p0, p1, n_seg = t[0], t[1], t[2]
+            name = t[4] if len(t) >= 5 else None
+            geo.wire(
+                idx,
+                n_seg,
+                p0[0],
+                p0[1],
+                p0[2],
+                p1[0],
+                p1[1],
+                p1[2],
+                WIRE_RADIUS,
+                1.0,
+                1.0,
+            )
+            if name is not None:
+                loc[name] = (idx, (n_seg + 1) // 2)
+        c.geometry_complete(0)
+        c.ld_card(5, 0, 0, 0, COPPER_CONDUCTIVITY, 0.0, 0.0)
+        self._apply_ground_card(c)
+        return c, loc
+
+    @staticmethod
+    def _port_current(sc, tag, seg):
+        """Complex current in sub-segment `seg` (1-based) of wire `tag`."""
+        matches = [k for k, t in enumerate(sc.get_current_segment_tag()) if t == tag]
+        return sc.get_current()[matches[seg - 1]]
+
+    def _compute_y_matrix(self, wavelength):
+        """Multiport short-circuit Y at the real ports, via one NEC solve per
+        port: drive that port's gap at 1 V (the other named ports stay
+        continuous = shorted) and read the resulting current at every port —
+        column j of Y. The geometry's interaction matrix is refactored once
+        per solve; small antennas make the N solves cheap."""
+        freq = C_LIGHT / wavelength / 1e6
+        names = self._real_port_names
+        n = len(names)
+        Y = np.zeros((n, n), dtype=np.complex128)
+        for j, drv in enumerate(names):
+            c, loc = self._make_real_context()
+            tag, seg = loc[drv]
+            c.ex_card(0, tag, seg, 0, 1.0, 0.0, 0, 0, 0, 0)
+            c.fr_card(0, 1, freq, 0)
+            c.xq_card(0)
+            sc = c.get_structure_currents(0)
+            for i, name in enumerate(names):
+                Y[i, j] = self._port_current(sc, *loc[name])
+            del c
+        return Y
+
+    def _excited_real_context(self, wavelength):
+        """Fresh real-geometry context driven at the network-resolved real-
+        port voltages (each real port a delta-gap at its resolved V), so
+        far-field / current readouts reflect the network. fr_card is left to
+        the caller."""
+        Y = self._compute_y_matrix(wavelength)
+        V = self._reducer.resolve_voltages(self._reducer.apply_branches(Y, wavelength))
+        c, loc = self._make_real_context()
+        for i, name in enumerate(self._real_port_names):
+            tag, seg = loc[name]
+            v = complex(V[i])
+            c.ex_card(0, tag, seg, 0, v.real, v.imag, 0, 0, 0, 0)
+        return c
 
     def _set_freq_and_execute(self):
         self.c.fr_card(0, 1, self.builder.freq, 0)
@@ -289,6 +321,9 @@ class PyNECEngine(SimulationEngine):
         return zs
 
     def impedance(self, sum_currents=False):
+        if self._use_reducer:
+            wl = C_LIGHT / (self.builder.freq * 1e6)
+            return self._reducer.driven_impedance(self._compute_y_matrix(wl), wl)
         self._set_freq_and_execute()
         return self._impedances_at(0, sum_currents=sum_currents)
 
@@ -296,6 +331,12 @@ class PyNECEngine(SimulationEngine):
         freqs = np.asarray(freqs, dtype=float)
         if freqs.ndim != 1 or freqs.size == 0:
             raise ValueError("freqs must be a 1-D non-empty array")
+        if self._use_reducer:
+            zs = np.empty((freqs.size, self._reducer.n_driven), dtype=np.complex128)
+            for k, f in enumerate(freqs):
+                wl = C_LIGHT / (float(f) * 1e6)
+                zs[k] = self._reducer.driven_impedance(self._compute_y_matrix(wl), wl)
+            return zs
         if freqs.size == 1:
             del_freq = 0.0
         else:
@@ -320,6 +361,8 @@ class PyNECEngine(SimulationEngine):
         currents are the average of the two adjacent NEC segment-centre
         currents, with boundary knots zeroed (open-wire BC). The pysim web
         backend uses the same averaging convention."""
+        if self._use_reducer:
+            self.c = self._excited_real_context(C_LIGHT / (self.builder.freq * 1e6))
         self._set_freq_and_execute()
         sc = self.c.get_structure_currents(0)
         all_tags = list(sc.get_current_segment_tag())
@@ -346,6 +389,8 @@ class PyNECEngine(SimulationEngine):
         return out
 
     def far_field(self, *, n_theta=90, n_phi=360, del_theta=1, del_phi=1):
+        if self._use_reducer:
+            self.c = self._excited_real_context(C_LIGHT / (self.builder.freq * 1e6))
         self._set_freq_and_execute()
         return self._collect_pattern(
             n_theta=n_theta, n_phi=n_phi, del_theta=del_theta, del_phi=del_phi
