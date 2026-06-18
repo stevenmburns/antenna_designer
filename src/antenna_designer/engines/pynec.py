@@ -3,6 +3,7 @@ import PyNEC as nec
 
 from ..engine import FarField, SimulationEngine, WireCurrents
 from ..network import (
+    DiffTL,
     Driven,
     Load,
     PortAtEdge,
@@ -231,6 +232,12 @@ class PyNECEngine(SimulationEngine):
                 self.c.tl_card(tag_a, seg_a, tag_b, seg_b, br.z0, br.length, 0, 0, 0, 0)
             elif isinstance(br, Load):
                 continue  # already emitted above
+            elif isinstance(br, DiffTL):
+                raise NotImplementedError(
+                    "DiffTL (4-terminal differential transmission line) is not "
+                    "expressible as a NEC2 tl_card, whose ports are pinned to "
+                    "single segments. Use PysimEngine for differential lines."
+                )
             elif isinstance(br, TwoPort):
                 raise NotImplementedError(
                     "TwoPort on PyNECEngine: sketched but not cross-engine "

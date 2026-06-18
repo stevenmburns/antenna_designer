@@ -64,6 +64,40 @@ class TL:
     length: float
 
 
+@dataclass(frozen=True)
+class DiffTL:
+    """Differential (twisted-pair) lossless transmission line.
+
+    Where `TL` couples two single-ended ports (each pinned to one antenna
+    segment), `DiffTL` is a genuine 2-conductor line whose two ports are
+    each a *differential pair* of independent real ports:
+        port A = (a_pos, a_neg),  port B = (b_pos, b_neg).
+    This is the 4-terminal element NEC2's `tl_card` cannot express, so it
+    is pysim-only (PyNECEngine raises on it).
+
+    transposed=True applies the physical half-twist of the pair (swap the
+    b-port terminals), flipping the A<->B coupling sign — the phase
+    inversion that keeps a Sterba curtain's sections co-phased.
+
+    z0 is the differential-mode impedance. z0_cm, if given, adds the
+    common-mode line (the two conductors in parallel) — the through-current
+    a real wire pair carries that a pure-differential line omits. Leave it
+    None for the pure-differential element.
+
+    Inherits the half-wave singularity of the ideal line; pick `length`
+    slightly off kλ/2.
+    """
+
+    a_pos: str
+    a_neg: str
+    b_pos: str
+    b_neg: str
+    z0: float
+    length: float
+    transposed: bool = False
+    z0_cm: float | None = None
+
+
 # Reserved for follow-up PR — sketched here so the discriminated-union
 # pattern is established but not consumed yet by any engine.
 @dataclass(frozen=True)
@@ -114,7 +148,16 @@ class TwoPort:
     c: float | None = None
 
 
-Branch = Union[TL, Load, TwoPort]
+Branch = Union[TL, DiffTL, Load, TwoPort]
+
+
+def _branch_port_refs(br):
+    """Port names a branch references, regardless of branch type."""
+    if isinstance(br, DiffTL):
+        return (br.a_pos, br.a_neg, br.b_pos, br.b_neg)
+    if hasattr(br, "a"):  # TL, TwoPort
+        return (br.a, br.b)
+    return (br.port,)  # Load
 
 
 def _series_rlc_impedance(r, l, c, omega):
@@ -223,8 +266,7 @@ class Network:
                 )
         port_names = set(self.ports)
         for br in self.branches:
-            refs = (br.a, br.b) if hasattr(br, "a") else (br.port,)
-            for ref in refs:
+            for ref in _branch_port_refs(br):
                 if ref not in port_names:
                     raise ValueError(f"branch {br!r} references unknown port {ref!r}")
         for src in self.sources:
