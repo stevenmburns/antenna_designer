@@ -116,3 +116,47 @@ def test_bobtail_only_centre_element_is_fed():
     # The fed gap sits on the centre vertical (y = 0).
     (x0, y0, _), (x1, y1, _), _, _ = feeds[0]
     assert y0 == 0.0 and y1 == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Cubical quad beam
+# ---------------------------------------------------------------------------
+
+
+def test_quad_forward_gain():
+    """~7 dBi forward (Cebik: 6.6-7.5 dBi for the wideband 2-el quad)."""
+    from antenna_designer.designs.cebik.quad import Builder
+
+    ff = _far_field(Builder())
+    assert ff.max_gain > 6.5
+
+
+def test_quad_driver_near_resonant():
+    """Driver loop ~1.01 wl is near resonance at the default scale."""
+    from antenna_designer.designs.cebik.quad import Builder
+
+    z = _z(Builder())
+    assert abs(z.imag) < 35.0
+
+
+def test_quad_fires_toward_driver_with_front_to_back():
+    """Beam fires +x (toward the driver, away from the reflector at -x)."""
+    from antenna_designer.designs.cebik.quad import Builder
+
+    ff = _far_field(Builder())
+    rings = np.array(ff.rings)
+    front = rings[:, 0].max()  # +x
+    back = rings[:, 180].max()  # -x
+    assert front - back > 6.0
+
+
+def test_quad_has_two_loops_one_fed():
+    """Reflector (passive) + driver (one fed gap) = 2 four-sided loops."""
+    from antenna_designer.designs.cebik.quad import Builder
+
+    tups = Builder().build_wires()
+    feeds = [t for t in tups if t[3] is not None]
+    assert len(feeds) == 1
+    # Reflector sits behind the driver (more negative x).
+    xs = sorted({round(t[0][0], 6) for t in tups})
+    assert len(xs) == 2 and xs[0] < xs[1]
