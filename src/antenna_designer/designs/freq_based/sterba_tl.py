@@ -33,7 +33,6 @@ exactly will raise in `_tl_admittance_2x2`; keep lf away from 1.0.
 
 from ... import AntennaBuilder
 from ...network import Driven, Network, PortAtEdge, TL
-import math
 from types import MappingProxyType
 
 
@@ -93,7 +92,6 @@ class Builder(AntennaBuilder):
         # y breakpoints and per-section heights (alternate, start on bottom
         # so both ends and the centre sit on the lower rail).
         yb = [0.0] + [q + k * h for k in range(n + 1)] + [2 * q + n * h]
-        Ltot = yb[-1]
         n_sections = n + 2
         center_sec = (n_sections - 1) // 2
 
