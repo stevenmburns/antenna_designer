@@ -91,3 +91,43 @@ Two models carry documented modeling caveats (see their module docstrings):
 the LPDA's ideal lossless crossed feeder gives an unreliable feedpoint
 impedance, and the HB9CV's single-ended crossed TL reaches only ~8 dB F/B
 (the deep ZL null wants a true differential transposed line / pysim DiffTL).
+
+## Batch 2 (PR #91)
+
+A second eight-model set, again chosen to hit categories the catalog (now
+including batch 1) still lacked. All free-space, self-contained, MKL-PyNEC
+verified, with regression tests in `tests/test_cebik_designs.py`:
+
+| design            | gap filled / headline result                              |
+|-------------------|-----------------------------------------------------------|
+| w8jk              | 180-deg all-driven flat-top: ~5.8 dBi bidirectional       |
+|                   | endfire, deep broadside + overhead nulls (array action)   |
+| phased_verticals  | 90-deg cardioid: feed-phase steering, ~5.2 dBi, ~6-7 dB   |
+|                   | F/B (current-forcing network deepens it; see caveat)      |
+| inverted_l        | bent/top-loaded vertical on elevated radials: resonant    |
+|                   | ~18 ohm, VP low-angle                                     |
+| ocf_dipole        | off-centre (Windom) feed: R rises ~3x off centre to       |
+|                   | ~230 ohm (the defining OCF physics)                       |
+| vbeam             | resonant long-wire V: ~5 dBi along the bisector, deep     |
+|                   | broadside null (standing-wave sibling of the rhombic)     |
+| bisquare          | 2 wl VP loop curtain: VP broadside, ~3.4 dBi free-space   |
+|                   | (the gain reputation is a low-mount over-ground effect)   |
+| jpole             | stub-matched end-fed half-wave: omni VP ~2 dBi, SWR < 2   |
+| discone           | broadband vertical (disc+cone wire cage): SWR < 3 over    |
+|                   | ~34-65 MHz above the cone cutoff, low-angle omni          |
+
+Design-method notes learned this round:
+- VP/ground-mounted antennas (inverted_l, the verticals) are best modelled
+  with a small ELEVATED-RADIAL counterpoise in free space (cf.
+  `designs/vertical.py`) rather than a PEC/finite ground card: a wire whose
+  base sits exactly on a PEC plane gave a pathological ~-10 kohm feed
+  reactance, whereas radials give a clean, deterministic feedpoint.
+- A two-element cardioid fed by VOLTAGE sources only reaches ~5-7 dB F/B
+  because the two driving-point impedances differ, so equal voltages give
+  unequal currents; `phased_verticals` exposes a tuned complex `front_voltage`
+  (~-1.2j) to partly compensate. A genuinely deep null needs a current-forcing
+  feed network (Christman/Lewallen) — same family of caveat as hb9cv.
+- A single-wire Franklin collinear was prototyped and dropped: with only two
+  half-wave sections a centre feed already makes them in-phase (it degenerates
+  to lazy_h's 1 wl element), and the multi-section phase-reversed curtain is
+  already covered by `freq_based/sterba`. The discone took its slot instead.
