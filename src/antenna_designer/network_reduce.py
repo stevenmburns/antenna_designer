@@ -31,13 +31,20 @@ from .network import (
 C_LIGHT = 299_792_458.0
 
 
-def tl_admittance_2x2(z0, length, wavelength):
+def tl_admittance_2x2(z0, length, wavelength, transposed=False):
     """Lossless ideal-TL nodal admittance between its two terminals.
 
     For electrical length θ = 2π·length/λ:
         Y_TL = 1/(j Z0 sin θ) · [[cos θ, -1], [-1, cos θ]]
     Singular at sin θ = 0 (TL is a half-wavelength multiple); raise
     rather than return garbage so callers can pick a different length.
+
+    `transposed=True` models a crossed ("half-twist") line: port B's
+    polarity is inverted, which flips the sign of the off-diagonal
+    (transfer) terms only. This is the nodal-model equivalent of NEC2's
+    negative-Z0 tl_card crossing, used by transposed-feeder arrays (LPDA,
+    ZL-Special). Note it is NOT the same as a negative z0, which would
+    (wrongly) negate the diagonal self terms too.
     """
     theta = 2.0 * np.pi * length / wavelength
     s, c = np.sin(theta), np.cos(theta)
@@ -47,7 +54,8 @@ def tl_admittance_2x2(z0, length, wavelength):
             "(sin βl ≈ 0); admittance is singular"
         )
     scale = 1.0 / (1j * z0 * s)
-    return scale * np.array([[c, -1.0], [-1.0, c]], dtype=np.complex128)
+    off = 1.0 if transposed else -1.0
+    return scale * np.array([[c, off], [off, c]], dtype=np.complex128)
 
 
 def difftl_admittance_4x4(z0, length, wavelength, transposed=False, z0_cm=None):
@@ -222,7 +230,9 @@ class NetworkReducer:
         for br in self.network.branches:
             if isinstance(br, TL):
                 a, b = self.port_to_idx[br.a], self.port_to_idx[br.b]
-                y_tl = tl_admittance_2x2(br.z0, br.length, wavelength)
+                y_tl = tl_admittance_2x2(
+                    br.z0, br.length, wavelength, transposed=br.transposed
+                )
                 Y_full[np.ix_([a, b], [a, b])] += y_tl
             elif isinstance(br, DiffTL):
                 idx = [
