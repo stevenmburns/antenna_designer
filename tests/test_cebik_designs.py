@@ -262,3 +262,45 @@ def test_lpda_feeder_is_crossed_and_front_driven():
     (src,) = net.sources
     assert isinstance(src, Driven)
     assert src.port == f"d{b.n_elements - 1}"  # frontmost / shortest
+
+
+# ---------------------------------------------------------------------------
+# HB9CV / ZL-Special (2-element all-driven phased beam)
+# ---------------------------------------------------------------------------
+
+
+def test_hb9cv_forward_gain_and_endfire():
+    """~6-7 dBi (like a 2-el Yagi) firing toward the front (+x). F/B is real
+    but shallow in this ideal-crossed-TL model -- see module docstring."""
+    from antenna_designer.designs.cebik.hb9cv import Builder
+
+    ff = _far_field(Builder())
+    rings = np.array(ff.rings)
+    front = rings[:, 0].max()
+    back = rings[:, 180].max()
+    assert ff.max_gain > 6.0
+    assert front - back > 5.0
+
+
+def test_hb9cv_feed_resistive_inductive():
+    """Cebik: feed ~40-55 ohm resistive with inductive reactance. Both
+    elements are driven through a single crossed phasing line."""
+    from antenna_designer.designs.cebik.hb9cv import Builder
+
+    z = _z(Builder())
+    assert z.real > 15.0  # positive, real driving-point R
+    assert z.imag > 0.0  # inductive (needs series-cap cancellation)
+
+
+def test_hb9cv_both_driven_via_one_crossed_line():
+    """No parasite: a single crossed (negative-z0) phasing line couples the
+    two driven element centres; the source sits on the front element."""
+    from antenna_designer.designs.cebik.hb9cv import Builder
+    from antenna_designer.network import TL, Driven
+
+    net = Builder().build_network()
+    tls = [br for br in net.branches if isinstance(br, TL)]
+    assert len(tls) == 1 and tls[0].z0 < 0
+    assert {tls[0].a, tls[0].b} == {"rear", "front"}
+    (src,) = net.sources
+    assert isinstance(src, Driven) and src.port == "front"
