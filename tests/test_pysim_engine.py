@@ -215,6 +215,154 @@ def test_pysim_tl_admittance_half_wave_singular():
         e._tl_admittance_2x2(z0=50.0, length=2.0, wavelength=4.0)
 
 
+def test_pysim_difftl_admittance_quarter_wave():
+    """4-terminal stamp of a *differential* quarter-wave line, Z0=50.
+
+    Terminals are ordered (a_pos, a_neg, b_pos, b_neg). The two differential
+    ports are A = V(a_pos)-V(a_neg) and B = V(b_pos)-V(b_neg); the line's 2x2
+    differential admittance is the same lossless-line Y as the single-ended
+    TL, lifted to four terminals by M = [[1,-1,0,0],[0,0,1,-1]] as
+    Stamp = Mᵀ · Y2 · M. For a quarter-wave Z0=50 line, Y2 = [[0, j/50],
+    [j/50, 0]], so the cross-coupling constant is c = j/50."""
+    from antenna_designer.designs.freq_based.invvee import (
+        Builder as InvBuilder,
+    )
+
+    e = PysimEngine(InvBuilder())
+    wl = 4.0  # length = wl/4 -> theta = pi/2
+    Y4 = e._difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl, transposed=False)
+    c = 1j / 50
+    expected = np.array(
+        [
+            [0, 0, c, -c],
+            [0, 0, -c, c],
+            [c, -c, 0, 0],
+            [-c, c, 0, 0],
+        ],
+        dtype=np.complex128,
+    )
+    assert np.allclose(Y4, expected, atol=1e-12), Y4
+
+
+def test_pysim_difftl_transposed_flips_cross_coupling():
+    """Transposing one port swaps its two terminals — that's the half-twist.
+    It flips the sign of the A<->B cross-coupling blocks while leaving the
+    self blocks (each port's own admittance) unchanged."""
+    from antenna_designer.designs.freq_based.invvee import (
+        Builder as InvBuilder,
+    )
+
+    e = PysimEngine(InvBuilder())
+    wl = 4.0
+    Y = e._difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl, transposed=False)
+    Yt = e._difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl, transposed=True)
+    assert np.allclose(Yt[:2, 2:], -Y[:2, 2:], atol=1e-12)
+    assert np.allclose(Yt[2:, :2], -Y[2:, :2], atol=1e-12)
+    assert np.allclose(Yt[:2, :2], Y[:2, :2], atol=1e-12)
+    assert np.allclose(Yt[2:, 2:], Y[2:, 2:], atol=1e-12)
+
+
+def test_pysim_difftl_common_mode_stamp_quarter_wave():
+    """Adding z0_cm adds the common-mode line on top of the differential
+    one. For a quarter-wave common line, Y_c = [[0, j/Zc],[j/Zc,0]], lifted
+    by P_c=[[½,½,0,0],[0,0,½,½]] as P_cᵀ·Y_c·P_c — a hand value of
+    (j/4Zc)·[[0,0,1,1],[0,0,1,1],[1,1,0,0],[1,1,0,0]]."""
+    from antenna_designer.designs.freq_based.invvee import (
+        Builder as InvBuilder,
+    )
+
+    e = PysimEngine(InvBuilder())
+    wl = 4.0
+    Y_diff = e._difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl)
+    Y_full = e._difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl, z0_cm=200.0)
+    cm = Y_full - Y_diff
+    c = 1j / (4 * 200.0)
+    expected = c * np.array(
+        [[0, 0, 1, 1], [0, 0, 1, 1], [1, 1, 0, 0], [1, 1, 0, 0]],
+        dtype=np.complex128,
+    )
+    assert np.allclose(cm, expected, atol=1e-12), cm
+
+
+def _difftl_demo_builder(transposed=False):
+    """Minimal antenna exercising the full DiffTL network path: a driven
+    dipole plus a coupled 2-wire vertical pair whose top and bottom ends form
+    two differential ports joined by a DiffTL (length off λ/2 to avoid the
+    line singularity)."""
+    from types import MappingProxyType
+
+    from antenna_designer import AntennaBuilder
+    from antenna_designer.network import DiffTL, Driven, Network, PortAtEdge
+
+    h = 0.5 * (299.792458 / 28.47) * 0.95
+    eps = 0.1
+    tups = [
+        ((0, -2.6, 7), (0, -eps, 7), 21, None, None),
+        ((0, -eps, 7), (0, eps, 7), 3, None, "feed"),
+        ((0, eps, 7), (0, 2.6, 7), 21, None, None),
+    ]
+    for yy, nt, nb in [(-0.1, "a_pos", "b_pos"), (0.1, "a_neg", "b_neg")]:
+        tups.append(((1, yy, 7.0), (1, yy, 7.15), 1, None, nb))
+        tups.append(((1, yy, 7.15), (1, yy, 7.0 + h - 0.15), 11, None, None))
+        tups.append(((1, yy, 7.0 + h - 0.15), (1, yy, 7.0 + h), 1, None, nt))
+    net = Network(
+        ports={n: PortAtEdge(n) for n in ("feed", "a_pos", "a_neg", "b_pos", "b_neg")},
+        branches=[
+            DiffTL(
+                "a_pos",
+                "a_neg",
+                "b_pos",
+                "b_neg",
+                z0=400.0,
+                length=h,
+                transposed=transposed,
+            )
+        ],
+        sources=[Driven("feed")],
+    )
+
+    class B(AntennaBuilder):
+        default_params = MappingProxyType({"design_freq": 28.47, "freq": 28.47})
+
+        def build_wires(self):
+            return tups
+
+        def build_network(self):
+            return net
+
+    return B()
+
+
+def test_difftl_network_rejects_unknown_ref():
+    from antenna_designer.network import DiffTL, Driven, Network, PortAtEdge
+
+    with pytest.raises(ValueError, match="unknown port"):
+        Network(
+            ports={k: PortAtEdge(k) for k in ("feed", "a", "b", "c")},
+            branches=[DiffTL("a", "b", "c", "missing", z0=50.0, length=1.0)],
+            sources=[Driven("feed")],
+        )
+
+
+def test_difftl_solves_end_to_end_on_pysim():
+    z = PysimEngine(_difftl_demo_builder(), ground=None).impedance()[0]
+    assert np.isfinite(z.real) and np.isfinite(z.imag)
+    assert 10 < z.real < 200, z
+
+
+def test_difftl_transposed_changes_the_solve():
+    z = PysimEngine(_difftl_demo_builder(transposed=False), ground=None).impedance()[0]
+    zt = PysimEngine(_difftl_demo_builder(transposed=True), ground=None).impedance()[0]
+    assert not np.isclose(z, zt), (z, zt)
+
+
+def test_difftl_raises_on_pynec():
+    """NEC2's tl_card pins each port to one segment, so a 4-terminal
+    differential line is inexpressible — PyNECEngine must say so clearly."""
+    with pytest.raises(NotImplementedError, match="DiffTL"):
+        PyNECEngine(_difftl_demo_builder(), ground=None)
+
+
 def test_pysim_engine_declares_far_field_support():
     assert PysimEngine.supports_far_field is True
 

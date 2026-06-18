@@ -11,6 +11,7 @@ from ..engine import FarField, SimulationEngine, WireCurrents
 from ..geometry import flat_wires_to_polylines
 from ..network import (
     TL,
+    DiffTL,
     Driven,
     Load,
     PortAtEdge,
@@ -232,6 +233,56 @@ class PysimEngine(SimulationEngine):
         scale = 1.0 / (1j * z0 * s)
         return scale * np.array([[c, -1.0], [-1.0, c]], dtype=np.complex128)
 
+    def _difftl_admittance_4x4(
+        self, z0, length, wavelength, transposed=False, z0_cm=None
+    ):
+        """4-terminal nodal admittance of a 2-conductor lossless line.
+
+        Unlike `_tl_admittance_2x2`, whose two ports are each pinned to a
+        single antenna segment, this models a genuine 2-conductor (twisted-
+        pair) line whose two ports are each a pair of independent terminals
+        — the thing NEC2's `tl_card` cannot express.
+
+        Terminals are ordered (a_pos, a_neg, b_pos, b_neg). A real 2-wire
+        line carries two independent modes, decomposed by the power-
+        preserving mixed-mode transform:
+
+            differential:  V_d = V_pos - V_neg,      I_d = (I_pos - I_neg)/2
+            common:        V_c = (V_pos + V_neg)/2,  I_c =  I_pos + I_neg
+
+        Each mode is its own lossless line. The differential mode (impedance
+        `z0`) carries the phasing current that cancels in the far field; it
+        is lifted to four terminals by M_d (rows V_d at ports A,B) as
+        Mᵀ·Y_d·M. The common mode (impedance `z0_cm`) is the through-current
+        the two conductors carry in parallel — what keeps a galvanic wire's
+        current continuous across a junction; it is lifted by
+        P_c = [[½,½,0,0],[0,0,½,½]] as P_cᵀ·Y_c·P_c. The full stamp is the
+        sum, so the element reproduces both currents a real conductor pair
+        carries — not just the differential one.
+
+        `z0_cm=None` gives the pure-differential element (rank-2 stamp; the
+        common mode floats). `transposed=True` swaps the b-port terminals —
+        the half-twist — which flips the differential A<->B coupling sign;
+        the common mode is symmetric under that swap and is unaffected.
+
+        The half-wave singularity of `_tl_admittance_2x2` is inherited by
+        both modes (same physical length); callers carry a small offset.
+        """
+        y_d = self._tl_admittance_2x2(z0, length, wavelength)
+        m_d = np.array(
+            [[1.0, -1.0, 0.0, 0.0], [0.0, 0.0, 1.0, -1.0]], dtype=np.complex128
+        )
+        if transposed:
+            m_d[1] = np.array([0.0, 0.0, -1.0, 1.0], dtype=np.complex128)
+        y4 = m_d.T @ y_d @ m_d
+        if z0_cm is not None:
+            y_c = self._tl_admittance_2x2(z0_cm, length, wavelength)
+            p_c = np.array(
+                [[0.5, 0.5, 0.0, 0.0], [0.0, 0.0, 0.5, 0.5]], dtype=np.complex128
+            )
+            y4 = y4 + p_c.T @ y_c @ p_c
+        return y4
+
     def _apply_tls(self, Y, wavelength):
         """Y + per-TL stamps at the corresponding feed-index pairs."""
         Y = Y.copy()
@@ -358,6 +409,19 @@ class PysimEngine(SimulationEngine):
                 a, b = self._port_to_idx[br.a], self._port_to_idx[br.b]
                 y_tl = self._tl_admittance_2x2(br.z0, br.length, wavelength)
                 Y_full[np.ix_([a, b], [a, b])] += y_tl
+            elif isinstance(br, DiffTL):
+                idx = [
+                    self._port_to_idx[p]
+                    for p in (br.a_pos, br.a_neg, br.b_pos, br.b_neg)
+                ]
+                y4 = self._difftl_admittance_4x4(
+                    br.z0,
+                    br.length,
+                    wavelength,
+                    transposed=br.transposed,
+                    z0_cm=br.z0_cm,
+                )
+                Y_full[np.ix_(idx, idx)] += y4
             elif isinstance(br, Load):
                 continue  # already applied to the real-port Y
             elif isinstance(br, TwoPort):
