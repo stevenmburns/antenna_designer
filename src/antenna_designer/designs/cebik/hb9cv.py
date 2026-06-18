@@ -13,8 +13,8 @@ Cebik's proportions (straight dipoles, 10 m): spacing ~0.12-0.15 wl, phasing
 line length ~= the spacing (~45 deg electrical), characteristic impedance
 ~67 ohm. Equal-length elements work and make the beam reversible; the front
 element is made slightly short here so the feed lands near 50 ohm. The line
-is modeled as an ideal crossed TL (negative z0, NEC2 convention); at VF = 1
-its physical length equals the spacing, which is the wanted ~45 deg.
+is modeled as an ideal crossed TL (the TL `transposed` flag); at VF = 1 its
+physical length equals the spacing, which is the wanted ~45 deg.
 
 Geometry, in the framework's (x, y, z) convention:
   - x : boom axis; rear element at x = -spacing, front at x = 0; beam --> +x
@@ -125,7 +125,9 @@ class Builder(AntennaBuilder):
         length = self.phasing_frac * wavelength
         return Network(
             ports={"rear": PortAtEdge("rear"), "front": PortAtEdge("front")},
-            # Crossed (negative z0) phasing line between the two driven elements.
-            branches=[TL(a="rear", b="front", z0=-self.z0, length=length)],
+            # Crossed ("half-twist") phasing line between the two driven elements.
+            branches=[
+                TL(a="rear", b="front", z0=self.z0, length=length, transposed=True)
+            ],
             sources=[Driven(port="front", voltage=1 + 0j)],
         )

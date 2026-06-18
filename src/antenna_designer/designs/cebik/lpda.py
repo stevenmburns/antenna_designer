@@ -17,11 +17,10 @@ Two constants describe the array (with the band edges):
 with the optimum sigma_opt = 0.243*tau - 0.051. The half apex angle follows
 from cot(alpha) = 4*sigma/(1 - tau).
 
-The transposed feeder is modeled the canonical NEC way: ideal transmission
-lines join adjacent element centres, every one CROSSED (negative
-characteristic impedance in NEC2's tl_card convention) to supply the
-180-degree section-to-section phase reversal. The array is driven at the
-front (shortest) element.
+The transposed feeder is modeled with ideal transmission lines joining
+adjacent element centres, every one CROSSED (the TL `transposed` flag -- a
+port-B polarity inversion) to supply the 180-degree section-to-section
+phase reversal. The array is driven at the front (shortest) element.
 
 CAVEAT -- feedpoint impedance: the feeder is modeled as a cascade of IDEAL,
 LOSSLESS crossed transmission lines. That cascade has internal resonances
@@ -148,10 +147,17 @@ class Builder(AntennaBuilder):
         ports = {f"d{k}": PortAtEdge(f"d{k}") for k in range(n)}
         branches = []
         # Crossed feeder section between adjacent element centres. Length =
-        # physical boom spacing; negative z0 = transposed (NEC2 convention).
+        # physical boom spacing; transposed=True gives the 180-degree
+        # section-to-section phase reversal of the transposed feeder.
         for k in range(n - 1):
             branches.append(
-                TL(a=f"d{k}", b=f"d{k + 1}", z0=-z0, length=x[k + 1] - x[k])
+                TL(
+                    a=f"d{k}",
+                    b=f"d{k + 1}",
+                    z0=z0,
+                    length=x[k + 1] - x[k],
+                    transposed=True,
+                )
             )
         # Driven at the front (shortest) element.
         return Network(

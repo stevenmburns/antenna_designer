@@ -258,7 +258,7 @@ def test_lpda_feeder_is_crossed_and_front_driven():
     net = b.build_network()
     tls = [br for br in net.branches if isinstance(br, TL)]
     assert len(tls) == b.n_elements - 1
-    assert all(tl.z0 < 0 for tl in tls)  # all transposed
+    assert all(tl.transposed and tl.z0 > 0 for tl in tls)  # all crossed
     (src,) = net.sources
     assert isinstance(src, Driven)
     assert src.port == f"d{b.n_elements - 1}"  # frontmost / shortest
@@ -293,14 +293,14 @@ def test_hb9cv_feed_resistive_inductive():
 
 
 def test_hb9cv_both_driven_via_one_crossed_line():
-    """No parasite: a single crossed (negative-z0) phasing line couples the
+    """No parasite: a single crossed (transposed) phasing line couples the
     two driven element centres; the source sits on the front element."""
     from antenna_designer.designs.cebik.hb9cv import Builder
     from antenna_designer.network import TL, Driven
 
     net = Builder().build_network()
     tls = [br for br in net.branches if isinstance(br, TL)]
-    assert len(tls) == 1 and tls[0].z0 < 0
+    assert len(tls) == 1 and tls[0].transposed and tls[0].z0 > 0
     assert {tls[0].a, tls[0].b} == {"rear", "front"}
     (src,) = net.sources
     assert isinstance(src, Driven) and src.port == "front"
