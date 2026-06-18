@@ -22,3 +22,4 @@ node_modules/
 web/frontend/dist/
 web/frontend/.vite/
 .claude/
+scripts/sterba_center_driven_pattern.png
