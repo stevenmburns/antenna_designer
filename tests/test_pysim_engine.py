@@ -363,6 +363,110 @@ def test_difftl_raises_on_pynec():
         PyNECEngine(_difftl_demo_builder(), ground=None)
 
 
+def _delta_looparray_difftl_builder():
+    """delta_looparray_network with each single-ended TL re-expressed as a
+    DiffTL on the *same* radiating geometry.
+
+    A DiffTL's differential mode is the same lossless line as a single TL:
+    with both negative terminals pinned to V=0, the positive-terminal 2x2
+    block of the 4x4 stamp collapses to exactly the TL stamp. So replacing
+        TL(driver, loopN, z0, len)
+    with
+        DiffTL(driver, gN_a, loopN, gN_b, z0, len)  + Driven(gN_*, 0)
+    must reproduce delta_looparray_network bit-for-bit — a full end-to-end
+    check of the 4-terminal DiffTL path (geometry translation, port
+    indexing, 4x4 stamp, nodal reduction) against an independently-validated
+    reference array.
+    """
+    from antenna_designer.designs.freq_based.delta_looparray_network import (
+        Builder as NetBuilder,
+    )
+    from antenna_designer.network import (
+        DiffTL,
+        Driven,
+        Network,
+        PortAtEdge,
+        PortVirtual,
+    )
+
+    class DiffTLBuilder(NetBuilder):
+        def build_network(self):
+            wavelength = 299.792458 / self.design_freq
+            tl_lengths = (
+                self.del_y - wavelength * self.twist,
+                self.del_y + wavelength * self.twist,
+            )
+            grounds = ("g1a", "g1b", "g2a", "g2b")
+            ports = {
+                "loop1": PortAtEdge("loop1"),
+                "loop2": PortAtEdge("loop2"),
+                "driver": PortVirtual("driver"),
+                **{g: PortVirtual(g) for g in grounds},
+            }
+            branches = [
+                DiffTL(
+                    "driver", "g1a", "loop1", "g1b",
+                    z0=100.0, length=tl_lengths[0],
+                ),
+                DiffTL(
+                    "driver", "g2a", "loop2", "g2b",
+                    z0=100.0, length=tl_lengths[1],
+                ),
+            ]
+            sources = [Driven("driver", 1 + 0j)] + [Driven(g, 0) for g in grounds]
+            return Network(ports=ports, branches=branches, sources=sources)
+
+    return DiffTLBuilder()
+
+
+def test_difftl_reproduces_tl_array_impedance():
+    """DiffTL (differential mode, negatives grounded) reproduces the
+    TL-driven delta_looparray impedance to numerical precision — a real
+    radiating-array validation of the 4-terminal element, not just the
+    bare admittance matrix."""
+    from antenna_designer.designs.freq_based.delta_looparray_network import (
+        Builder as NetBuilder,
+    )
+
+    z_tl = PysimEngine(NetBuilder(), ground=None).impedance()[0]
+    z_diff = PysimEngine(_delta_looparray_difftl_builder(), ground=None).impedance()[0]
+    assert abs(z_tl - z_diff) < 1e-9, f"TL {z_tl}, DiffTL {z_diff}"
+
+
+def test_difftl_reproduces_tl_array_far_field():
+    """Same geometry + electrically-identical feed network -> identical
+    radiated pattern. Confirms the DiffTL path drives the same current
+    distribution, not merely the same driving-point Z."""
+    from antenna_designer.designs.freq_based.delta_looparray_network import (
+        Builder as NetBuilder,
+    )
+
+    kw = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+    ff_tl = PysimEngine(NetBuilder(), ground=None).far_field(**kw)
+    ff_diff = PysimEngine(
+        _delta_looparray_difftl_builder(), ground=None
+    ).far_field(**kw)
+    assert abs(ff_tl.max_gain - ff_diff.max_gain) < 1e-6, (
+        ff_tl.max_gain,
+        ff_diff.max_gain,
+    )
+
+
+def test_difftl_reproduces_tl_array_impedance_sweep():
+    """Exercises the frequency-dependent (swept Y + per-k 4x4 stamp) DiffTL
+    path against the TL reference across the band."""
+    from antenna_designer.designs.freq_based.delta_looparray_network import (
+        Builder as NetBuilder,
+    )
+
+    freqs = np.array([28.0, 28.47, 29.0])
+    zs_tl = PysimEngine(NetBuilder(), ground=None).impedance_sweep(freqs)
+    zs_diff = PysimEngine(
+        _delta_looparray_difftl_builder(), ground=None
+    ).impedance_sweep(freqs)
+    assert np.allclose(zs_tl[:, 0], zs_diff[:, 0], atol=1e-9), (zs_tl, zs_diff)
+
+
 def test_pysim_engine_declares_far_field_support():
     assert PysimEngine.supports_far_field is True
 
