@@ -304,3 +304,59 @@ def test_hb9cv_both_driven_via_one_crossed_line():
     assert {tls[0].a, tls[0].b} == {"rear", "front"}
     (src,) = net.sources
     assert isinstance(src, Driven) and src.port == "front"
+
+
+# ---------------------------------------------------------------------------
+# Terminated rhombic
+# ---------------------------------------------------------------------------
+
+
+def test_rhombic_unidirectional_when_terminated():
+    """The terminating resistor makes the traveling-wave pattern
+    unidirectional toward the terminated apex (+x)."""
+    from antenna_designer.designs.cebik.rhombic import Builder
+
+    ff = _far_field(Builder())
+    rings = np.array(ff.rings)
+    front = rings[:, 0].max()  # +x toward termination
+    back = rings[:, 180].max()
+    assert ff.max_gain > 6.0
+    assert front - back > 12.0
+
+
+def test_rhombic_termination_creates_the_directivity():
+    """Remove the termination (R -> huge) and the F/B collapses: the
+    progressive wave is gone and the pattern goes ~bidirectional."""
+    from antenna_designer.designs.cebik.rhombic import Builder
+
+    def fb(r):
+        b = Builder(dict(Builder.default_params, term_r=r))
+        rings = np.array(_far_field(b).rings)
+        return rings[:, 0].max() - rings[:, 180].max()
+
+    assert fb(700.0) > 12.0
+    assert fb(1e9) < 5.0
+
+
+def test_rhombic_impedance_tracks_termination():
+    """Traveling-wave antenna: the driving-point R sits near the
+    termination value, and it scales with it (broadband behaviour)."""
+    from antenna_designer.designs.cebik.rhombic import Builder
+
+    z600 = _z(Builder(dict(Builder.default_params, term_r=600.0)))
+    z800 = _z(Builder(dict(Builder.default_params, term_r=800.0)))
+    assert 450.0 < z600.real < 750.0
+    assert z800.real > z600.real  # tracks the termination upward
+
+
+def test_rhombic_has_terminating_load_and_feed():
+    """One driven feed apex and one resistive Load at the far apex."""
+    from antenna_designer.designs.cebik.rhombic import Builder
+    from antenna_designer.network import Driven, Load
+
+    net = Builder().build_network()
+    loads = [br for br in net.branches if isinstance(br, Load)]
+    assert len(loads) == 1
+    assert loads[0].port == "term" and loads[0].r == 700.0
+    (src,) = net.sources
+    assert isinstance(src, Driven) and src.port == "feed"
