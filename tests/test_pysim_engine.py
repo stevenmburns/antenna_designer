@@ -475,6 +475,28 @@ def test_difftl_reproduces_tl_array_impedance_sweep():
     assert np.allclose(zs_tl[:, 0], zs_diff[:, 0], atol=1e-9), (zs_tl, zs_diff)
 
 
+def test_doublet_ideal_tl_vs_real_2wire_feeder_agree():
+    """A non-resonant doublet fed by an ideal TL (doublet_tl) and by a real
+    parallel-wire feeder of the same ~600Ω / 0.3λ (doublet_2wire) should give
+    nearly the same tuner-side impedance — the ideal line is a good model of
+    the real feeder. The residual difference is the real feeder's radiation /
+    near-field coupling, which also makes its gain marginally higher."""
+    from antenna_designer.designs.freq_based import doublet_2wire, doublet_tl
+
+    z_tl = PysimEngine(doublet_tl.Builder(), ground=None).impedance()[0]
+    z_2w = PysimEngine(doublet_2wire.Builder(), ground=None).impedance()[0]
+    # Both transform the same high/reactive feedpoint down ~0.3λ of 600Ω line.
+    assert abs(z_tl - z_2w) / abs(z_tl) < 0.10, (z_tl, z_2w)
+    assert z_tl.real > 50 and z_2w.real > 50, (z_tl, z_2w)
+
+    kw = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+    g_tl = PysimEngine(doublet_tl.Builder(), ground=None).far_field(**kw).max_gain
+    g_2w = PysimEngine(doublet_2wire.Builder(), ground=None).far_field(**kw).max_gain
+    # Same radiator, similar pattern; the real feeder radiates a touch more.
+    assert abs(g_tl - g_2w) < 0.5, (g_tl, g_2w)
+    assert g_2w >= g_tl, (g_tl, g_2w)
+
+
 def test_pysim_engine_declares_far_field_support():
     assert PysimEngine.supports_far_field is True
 
