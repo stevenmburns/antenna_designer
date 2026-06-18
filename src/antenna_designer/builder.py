@@ -66,8 +66,10 @@ class AntennaBuilder:
     @staticmethod
     def draw(tups, fn=None):
 
-        pairs = [(p0, p1) for p0, p1, _, _ in tups]
-        print(pairs)
+        # Edges are 4-tuples (p0, p1, nsegs, excitation) or 5-tuples with a
+        # trailing port name (named-edge designs like sterba_tl and the
+        # network builders); take the endpoints regardless of arity.
+        pairs = [(t[0], t[1]) for t in tups]
 
         lc = Line3DCollection(pairs, colors=(1, 0, 0, 1), linewidths=1)
 
