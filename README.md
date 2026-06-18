@@ -13,6 +13,15 @@
 | src/antenna\_designer/designs/bowtiearray1x2.py                          |        7 |        0 |    100% |           |
 | src/antenna\_designer/designs/bowtiearray2x4.py                          |        7 |        0 |    100% |           |
 | src/antenna\_designer/designs/bowtiearray.py                             |        7 |        0 |    100% |           |
+| src/antenna\_designer/designs/cebik/\_\_init\_\_.py                      |        0 |        0 |    100% |           |
+| src/antenna\_designer/designs/cebik/bobtail.py                           |       24 |        0 |    100% |           |
+| src/antenna\_designer/designs/cebik/half\_square.py                      |       28 |        0 |    100% |           |
+| src/antenna\_designer/designs/cebik/hb9cv.py                             |       31 |        0 |    100% |           |
+| src/antenna\_designer/designs/cebik/lazy\_h.py                           |       24 |        0 |    100% |           |
+| src/antenna\_designer/designs/cebik/lpda.py                              |       50 |        0 |    100% |           |
+| src/antenna\_designer/designs/cebik/quad.py                              |       38 |        0 |    100% |           |
+| src/antenna\_designer/designs/cebik/rhombic.py                           |       28 |        0 |    100% |           |
+| src/antenna\_designer/designs/cebik/t2fd.py                              |       28 |        0 |    100% |           |
 | src/antenna\_designer/designs/delta\_looparray.py                        |       10 |        0 |    100% |           |
 | src/antenna\_designer/designs/delta\_looparray\_1x4.py                   |        7 |        0 |    100% |           |
 | src/antenna\_designer/designs/delta\_looparray\_1x4\_grouped.py          |        7 |        0 |    100% |           |
@@ -63,7 +72,7 @@
 | src/antenna\_designer/sim.py                                             |        2 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                                           |      123 |        7 |     94% |   105-116 |
 | src/antenna\_designer/transform.py                                       |       42 |        1 |     98% |        62 |
-| **TOTAL**                                                                | **3055** |  **137** | **96%** |           |
+| **TOTAL**                                                                | **3306** |  **137** | **96%** |           |
 
 
 ## Setup coverage badge
