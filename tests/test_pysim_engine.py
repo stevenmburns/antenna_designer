@@ -192,13 +192,10 @@ def test_pysim_tl_admittance_quarter_wave():
     """Hand-checked Y_TL for a quarter-wave TL with Z0=50: at θ=π/2,
     Y_TL = (1/(j50)) [[0,-1],[-1,0]] = [[0, j/50], [j/50, 0]].
     A unit-length TL of length λ/4 satisfies sin(βl)=1, cos(βl)=0."""
-    from antenna_designer.designs.freq_based.invvee import (
-        Builder as InvBuilder,
-    )
+    from antenna_designer.network_reduce import tl_admittance_2x2
 
-    e = PysimEngine(InvBuilder())
     wl = 4.0  # arbitrary; TL length = wl/4 gives θ=π/2
-    Y_tl = e._tl_admittance_2x2(z0=50.0, length=1.0, wavelength=wl)
+    Y_tl = tl_admittance_2x2(z0=50.0, length=1.0, wavelength=wl)
     expected = np.array([[0, 1j / 50], [1j / 50, 0]], dtype=np.complex128)
     assert np.allclose(Y_tl, expected, atol=1e-12), Y_tl
 
@@ -206,13 +203,10 @@ def test_pysim_tl_admittance_quarter_wave():
 def test_pysim_tl_admittance_half_wave_singular():
     """A half-wavelength TL gives sin(βl)=0 — the admittance is singular.
     Raise instead of returning nans so callers can adjust geometry."""
-    from antenna_designer.designs.freq_based.invvee import (
-        Builder as InvBuilder,
-    )
+    from antenna_designer.network_reduce import tl_admittance_2x2
 
-    e = PysimEngine(InvBuilder())
     with pytest.raises(ValueError, match="singular"):
-        e._tl_admittance_2x2(z0=50.0, length=2.0, wavelength=4.0)
+        tl_admittance_2x2(z0=50.0, length=2.0, wavelength=4.0)
 
 
 def test_pysim_difftl_admittance_quarter_wave():
@@ -224,13 +218,10 @@ def test_pysim_difftl_admittance_quarter_wave():
     TL, lifted to four terminals by M = [[1,-1,0,0],[0,0,1,-1]] as
     Stamp = Mᵀ · Y2 · M. For a quarter-wave Z0=50 line, Y2 = [[0, j/50],
     [j/50, 0]], so the cross-coupling constant is c = j/50."""
-    from antenna_designer.designs.freq_based.invvee import (
-        Builder as InvBuilder,
-    )
+    from antenna_designer.network_reduce import difftl_admittance_4x4
 
-    e = PysimEngine(InvBuilder())
     wl = 4.0  # length = wl/4 -> theta = pi/2
-    Y4 = e._difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl, transposed=False)
+    Y4 = difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl, transposed=False)
     c = 1j / 50
     expected = np.array(
         [
@@ -248,14 +239,11 @@ def test_pysim_difftl_transposed_flips_cross_coupling():
     """Transposing one port swaps its two terminals — that's the half-twist.
     It flips the sign of the A<->B cross-coupling blocks while leaving the
     self blocks (each port's own admittance) unchanged."""
-    from antenna_designer.designs.freq_based.invvee import (
-        Builder as InvBuilder,
-    )
+    from antenna_designer.network_reduce import difftl_admittance_4x4
 
-    e = PysimEngine(InvBuilder())
     wl = 4.0
-    Y = e._difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl, transposed=False)
-    Yt = e._difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl, transposed=True)
+    Y = difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl, transposed=False)
+    Yt = difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl, transposed=True)
     assert np.allclose(Yt[:2, 2:], -Y[:2, 2:], atol=1e-12)
     assert np.allclose(Yt[2:, :2], -Y[2:, :2], atol=1e-12)
     assert np.allclose(Yt[:2, :2], Y[:2, :2], atol=1e-12)
@@ -267,14 +255,11 @@ def test_pysim_difftl_common_mode_stamp_quarter_wave():
     one. For a quarter-wave common line, Y_c = [[0, j/Zc],[j/Zc,0]], lifted
     by P_c=[[½,½,0,0],[0,0,½,½]] as P_cᵀ·Y_c·P_c — a hand value of
     (j/4Zc)·[[0,0,1,1],[0,0,1,1],[1,1,0,0],[1,1,0,0]]."""
-    from antenna_designer.designs.freq_based.invvee import (
-        Builder as InvBuilder,
-    )
+    from antenna_designer.network_reduce import difftl_admittance_4x4
 
-    e = PysimEngine(InvBuilder())
     wl = 4.0
-    Y_diff = e._difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl)
-    Y_full = e._difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl, z0_cm=200.0)
+    Y_diff = difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl)
+    Y_full = difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl, z0_cm=200.0)
     cm = Y_full - Y_diff
     c = 1j / (4 * 200.0)
     expected = c * np.array(
