@@ -405,12 +405,20 @@ def _delta_looparray_difftl_builder():
             }
             branches = [
                 DiffTL(
-                    "driver", "g1a", "loop1", "g1b",
-                    z0=100.0, length=tl_lengths[0],
+                    "driver",
+                    "g1a",
+                    "loop1",
+                    "g1b",
+                    z0=100.0,
+                    length=tl_lengths[0],
                 ),
                 DiffTL(
-                    "driver", "g2a", "loop2", "g2b",
-                    z0=100.0, length=tl_lengths[1],
+                    "driver",
+                    "g2a",
+                    "loop2",
+                    "g2b",
+                    z0=100.0,
+                    length=tl_lengths[1],
                 ),
             ]
             sources = [Driven("driver", 1 + 0j)] + [Driven(g, 0) for g in grounds]
@@ -443,9 +451,9 @@ def test_difftl_reproduces_tl_array_far_field():
 
     kw = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
     ff_tl = PysimEngine(NetBuilder(), ground=None).far_field(**kw)
-    ff_diff = PysimEngine(
-        _delta_looparray_difftl_builder(), ground=None
-    ).far_field(**kw)
+    ff_diff = PysimEngine(_delta_looparray_difftl_builder(), ground=None).far_field(
+        **kw
+    )
     assert abs(ff_tl.max_gain - ff_diff.max_gain) < 1e-6, (
         ff_tl.max_gain,
         ff_diff.max_gain,
