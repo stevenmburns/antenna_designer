@@ -160,3 +160,55 @@ def test_quad_has_two_loops_one_fed():
     # Reflector sits behind the driver (more negative x).
     xs = sorted({round(t[0][0], 6) for t in tups})
     assert len(xs) == 2 and xs[0] < xs[1]
+
+
+# ---------------------------------------------------------------------------
+# Lazy-H
+# ---------------------------------------------------------------------------
+
+
+def test_lazy_h_stacking_gain():
+    """Two stacked in-phase 1 wl elements give ~8 dBi free-space -- well
+    above a single ~1 wl element's ~4 dBi (the vertical-stacking gain)."""
+    from antenna_designer.designs.cebik.lazy_h import Builder
+
+    ff = _far_field(Builder())
+    assert ff.max_gain > 7.0
+
+
+def test_lazy_h_broadside_horizontal():
+    """Bidirectional broadside off +/-x with deep end nulls."""
+    from antenna_designer.designs.cebik.lazy_h import Builder
+
+    ff = _far_field(Builder())
+    rings = np.array(ff.rings)
+    row = rings[60]
+    broadside = max(row[0], row[180])
+    end_on = max(row[90], row[270])
+    assert broadside - end_on > 15.0
+
+
+def test_lazy_h_two_in_phase_feeds():
+    """Two centre feeds, both at y=0, both driven in phase (1+0j); by
+    symmetry they present equal feed impedance."""
+    from antenna_designer.designs.cebik.lazy_h import Builder
+
+    feeds = [t for t in Builder().build_wires() if t[3] is not None]
+    assert len(feeds) == 2
+    assert all(f[3] == 1 + 0j for f in feeds)
+    assert all(f[0][1] == -0.05 and f[1][1] == 0.05 for f in feeds)
+    zs = PyNECEngine(Builder(), ground=None).impedance()
+    assert abs(zs[0] - zs[1]) < 1.0  # symmetric -> equal
+
+
+def test_lazy_h_wider_spacing_adds_gain():
+    """Expanding the stack toward ~5/8 wl raises gain (W2EEY expansion)."""
+    from antenna_designer.designs.cebik.lazy_h import Builder
+
+    g_half = _far_field(
+        Builder(dict(Builder.default_params, spacing_frac=0.5))
+    ).max_gain
+    g_wide = _far_field(
+        Builder(dict(Builder.default_params, spacing_frac=0.625))
+    ).max_gain
+    assert g_wide > g_half
