@@ -200,6 +200,21 @@ def test_pysim_tl_admittance_quarter_wave():
     assert np.allclose(Y_tl, expected, atol=1e-12), Y_tl
 
 
+def test_pysim_tl_admittance_transposed_flips_offdiagonal_only():
+    """A crossed/transposed line inverts port B's polarity: only the
+    off-diagonal (transfer) terms flip sign; the diagonal (self) terms are
+    unchanged. (NOT the same as a negative z0, which negates everything.)"""
+    from antenna_designer.network_reduce import tl_admittance_2x2
+
+    # θ = π/3 so cos≠0 and the diagonal is non-trivial to compare.
+    wl, length, z0 = 6.0, 1.0, 50.0
+    y = tl_admittance_2x2(z0, length, wl)
+    yt = tl_admittance_2x2(z0, length, wl, transposed=True)
+    assert np.allclose(np.diag(yt), np.diag(y), atol=1e-12)  # self terms same
+    assert np.allclose(yt[0, 1], -y[0, 1], atol=1e-12)  # transfer flipped
+    assert np.allclose(yt[1, 0], -y[1, 0], atol=1e-12)
+
+
 def test_pysim_tl_admittance_half_wave_singular():
     """A half-wavelength TL gives sin(βl)=0 — the admittance is singular.
     Raise instead of returning nans so callers can adjust geometry."""

@@ -56,12 +56,19 @@ class TL:
 
     The electrical length βl is computed at solve time from the antenna's
     operating wavelength. Both endpoints can be either real or virtual.
+
+    transposed: crossed ("half-twist") line — inverts port B's polarity,
+    flipping the sign of the off-diagonal transfer terms. This is the
+    phase reversal a transposed-feeder array (LPDA, ZL-Special) needs.
+    Prefer it over a negative z0, which would wrongly negate the diagonal
+    self terms too.
     """
 
     a: str  # port name
     b: str
     z0: float
     length: float
+    transposed: bool = False
 
 
 @dataclass(frozen=True)
