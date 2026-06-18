@@ -28,7 +28,7 @@ Note on the half-wave TL: this engine's nodal TL admittance
 1/(jZ0 sin βl)·[[cos βl,-1],[-1,cos βl]] is SINGULAR at βl = π (length =
 λ/2). The phasing lines are nominally λ/2, so `length_factor` defaults to
 0.99 (TL length ≈ 0.495 λ) to sit just off the singularity. lf = 1.0
-exactly will raise in `_tl_admittance_2x2`; keep lf away from 1.0.
+exactly will raise in `network_reduce.tl_admittance_2x2`; keep lf away from 1.0.
 """
 
 from ... import AntennaBuilder

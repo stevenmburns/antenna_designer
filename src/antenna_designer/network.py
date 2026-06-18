@@ -190,7 +190,7 @@ def load_series_admittance(br, omega):
     """Series-branch admittance y_load = 1/Z_load of a Load branch at ω.
 
     This is the natural quantity for the Sherman-Morrison port-Y stamp
-    (see PysimEngine._apply_loads): the stamp coefficient is
+    (see network_reduce.NetworkReducer.apply_loads): the stamp coefficient is
     1/(y_load + Y_kk), which stays finite exactly where Z_load blows up.
 
     Parallel mode: y_load IS the parallel-LC tank admittance,

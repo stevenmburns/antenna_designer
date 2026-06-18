@@ -9,17 +9,8 @@ from pysim import TriangularPySim
 
 from ..engine import FarField, SimulationEngine, WireCurrents
 from ..geometry import flat_wires_to_polylines
-from ..network import (
-    TL,
-    DiffTL,
-    Driven,
-    Load,
-    PortAtEdge,
-    PortVirtual,
-    TwoPort,
-    load_impedance,
-    load_series_admittance,
-)
+from ..network import PortAtEdge, PortVirtual
+from ..network_reduce import NetworkReducer, tl_admittance_2x2
 
 
 def _parity_for_solver(solver, solver_kwargs):
@@ -150,13 +141,14 @@ class PysimEngine(SimulationEngine):
             self._init_network()
 
     def _init_network(self):
-        """Build port-index maps and validate that every PortAtEdge resolves
-        to a translated feed name. Real ports come first (matching pysim's
-        feed list); virtual ports are appended after."""
+        """Build the port-index map (real feeds first, virtual ports after)
+        and the engine-agnostic NetworkReducer that stamps the branches and
+        reduces to driven-port impedance. Validates that every PortAtEdge
+        resolves to a translated feed name."""
         net = self._network
         feed_name_to_idx = {n: i for i, n in enumerate(self._feed_names) if n}
 
-        self._port_to_idx = {}
+        port_to_idx = {}
         for name, port in net.ports.items():
             if isinstance(port, PortAtEdge):
                 if name not in feed_name_to_idx:
@@ -165,39 +157,16 @@ class PysimEngine(SimulationEngine):
                         f"build_wires() carries that name; named edges: "
                         f"{sorted(feed_name_to_idx)}"
                     )
-                self._port_to_idx[name] = feed_name_to_idx[name]
+                port_to_idx[name] = feed_name_to_idx[name]
 
         # Virtual ports are indexed after the real feeds.
         next_idx = len(self._feeds)
         for name, port in net.ports.items():
             if isinstance(port, PortVirtual):
-                self._port_to_idx[name] = next_idx
+                port_to_idx[name] = next_idx
                 next_idx += 1
-        self._n_total_ports = next_idx
 
-        # 0-based driven port indices and their applied voltages.
-        self._driven_port_idx = []
-        self._driven_voltages = []
-        for src in net.sources:
-            if not isinstance(src, Driven):
-                raise NotImplementedError(f"unknown source type: {src!r}")
-            self._driven_port_idx.append(self._port_to_idx[src.port])
-            self._driven_voltages.append(complex(src.voltage))
-
-        # A Load on a port modifies the MoM Z-diagonal of that segment via
-        # Sherman-Morrison (equivalent to NEC2's ld_card on segment k). The
-        # right boundary condition at a loaded port is V_external = 0 (no
-        # source attached to the segment's external terminal) — NOT
-        # I_external = 0, which is the right BC for TL passive ports. With
-        # I_ext = 0 forced, the Sherman-Morrison update's effect on the
-        # driven-port impedance cancels out algebraically (you can derive
-        # it: V_passive picks up a factor (1 − α·Y_kk) that divides out).
-        # So track loaded ports separately and pin their V = 0 in the
-        # reduction. They take precedence over the floating-passive default.
-        self._loaded_port_idx = set()
-        for br in net.branches:
-            if isinstance(br, Load):
-                self._loaded_port_idx.add(self._port_to_idx[br.port])
+        self._reducer = NetworkReducer(net, port_to_idx, next_idx)
 
     def _make_solver(self, *, wavelength):
         return self._solver(
@@ -215,81 +184,14 @@ class PysimEngine(SimulationEngine):
     def _wavelength_for(freq_mhz):
         return C_LIGHT / (freq_mhz * 1e6)
 
-    def _tl_admittance_2x2(self, z0, length, wavelength):
-        """Lossless ideal-TL nodal admittance between its two terminals.
-
-        For electrical length θ = 2π·length/λ:
-            Y_TL = 1/(j Z0 sin θ) · [[cos θ, -1], [-1, cos θ]]
-        Singular at sin θ = 0 (TL is a half-wavelength multiple); raise
-        rather than return garbage so callers can pick a different length.
-        """
-        theta = 2.0 * np.pi * length / wavelength
-        s, c = np.sin(theta), np.cos(theta)
-        if abs(s) < 1e-12:
-            raise ValueError(
-                f"TL length {length} is ~kλ/2 at f={C_LIGHT / wavelength / 1e6:.4f} MHz "
-                "(sin βl ≈ 0); admittance is singular"
-            )
-        scale = 1.0 / (1j * z0 * s)
-        return scale * np.array([[c, -1.0], [-1.0, c]], dtype=np.complex128)
-
-    def _difftl_admittance_4x4(
-        self, z0, length, wavelength, transposed=False, z0_cm=None
-    ):
-        """4-terminal nodal admittance of a 2-conductor lossless line.
-
-        Unlike `_tl_admittance_2x2`, whose two ports are each pinned to a
-        single antenna segment, this models a genuine 2-conductor (twisted-
-        pair) line whose two ports are each a pair of independent terminals
-        — the thing NEC2's `tl_card` cannot express.
-
-        Terminals are ordered (a_pos, a_neg, b_pos, b_neg). A real 2-wire
-        line carries two independent modes, decomposed by the power-
-        preserving mixed-mode transform:
-
-            differential:  V_d = V_pos - V_neg,      I_d = (I_pos - I_neg)/2
-            common:        V_c = (V_pos + V_neg)/2,  I_c =  I_pos + I_neg
-
-        Each mode is its own lossless line. The differential mode (impedance
-        `z0`) carries the phasing current that cancels in the far field; it
-        is lifted to four terminals by M_d (rows V_d at ports A,B) as
-        Mᵀ·Y_d·M. The common mode (impedance `z0_cm`) is the through-current
-        the two conductors carry in parallel — what keeps a galvanic wire's
-        current continuous across a junction; it is lifted by
-        P_c = [[½,½,0,0],[0,0,½,½]] as P_cᵀ·Y_c·P_c. The full stamp is the
-        sum, so the element reproduces both currents a real conductor pair
-        carries — not just the differential one.
-
-        `z0_cm=None` gives the pure-differential element (rank-2 stamp; the
-        common mode floats). `transposed=True` swaps the b-port terminals —
-        the half-twist — which flips the differential A<->B coupling sign;
-        the common mode is symmetric under that swap and is unaffected.
-
-        The half-wave singularity of `_tl_admittance_2x2` is inherited by
-        both modes (same physical length); callers carry a small offset.
-        """
-        y_d = self._tl_admittance_2x2(z0, length, wavelength)
-        m_d = np.array(
-            [[1.0, -1.0, 0.0, 0.0], [0.0, 0.0, 1.0, -1.0]], dtype=np.complex128
-        )
-        if transposed:
-            m_d[1] = np.array([0.0, 0.0, -1.0, 1.0], dtype=np.complex128)
-        y4 = m_d.T @ y_d @ m_d
-        if z0_cm is not None:
-            y_c = self._tl_admittance_2x2(z0_cm, length, wavelength)
-            p_c = np.array(
-                [[0.5, 0.5, 0.0, 0.0], [0.0, 0.0, 0.5, 0.5]], dtype=np.complex128
-            )
-            y4 = y4 + p_c.T @ y_c @ p_c
-        return y4
-
     def _apply_tls(self, Y, wavelength):
-        """Y + per-TL stamps at the corresponding feed-index pairs."""
+        """Y + per-TL stamps at the corresponding feed-index pairs (legacy
+        build_tls() path; the network-spec path goes through NetworkReducer)."""
         Y = Y.copy()
         for tag1, _s1, tag2, _s2, z0, length in self._tls:
             a = self._tag_to_feed[tag1]
             b = self._tag_to_feed[tag2]
-            y_tl = self._tl_admittance_2x2(z0, length, wavelength)
+            y_tl = tl_admittance_2x2(z0, length, wavelength)
             Y[np.ix_([a, b], [a, b])] += y_tl
         return Y
 
@@ -326,144 +228,6 @@ class PysimEngine(SimulationEngine):
             dtype=np.complex128,
         )
 
-    def _apply_loads(self, Y, omega):
-        """Apply every Load branch as a Sherman-Morrison rank-1 update on
-        the real-port Y — the network-level equivalent of NEC2's `ld_card`
-        modifying the segment's MoM Z[k,k].
-
-        The update has two algebraically-identical forms, dual under
-        Z_L ↔ y_L = 1/Z_L:
-
-            impedance:   Y − Z_L/(1 + Z_L·Y_kk) · outer(Y[:,k], Y[k,:])
-            admittance:  Y − 1/(y_L + Y_kk)     · outer(Y[:,k], Y[k,:])
-
-        Each Load mode has a resonance where one form divides by an
-        intermediate infinity while the other stays finite, so we pick the
-        form whose denominator is bounded at that mode's resonance:
-
-          - Parallel-LC trap: Z_L→∞ at ω₀ (open circuit). Use the
-            ADMITTANCE form — y_L is the tank admittance, →0 at ω₀, giving
-            coefficient 1/Y_kk (the open-circuit Schur complement).
-          - Series-LC: Z_L→0 at ω₀ (short circuit = unbroken wire). Use the
-            IMPEDANCE form — coefficient →0, i.e. no stamp.
-
-        This way neither path ever forms or tests for infinity.
-        """
-        Y = Y.copy()
-        for br in self._network.branches:
-            if not isinstance(br, Load):
-                continue
-            port = self._network.ports[br.port]
-            if not isinstance(port, PortAtEdge):
-                raise ValueError(
-                    f"Load on virtual port {br.port!r}: a Load is a series "
-                    "impedance on an antenna segment, which only PortAtEdge has"
-                )
-            k = self._port_to_idx[br.port]
-            y_col = Y[:, k].copy()
-
-            if br.parallel:
-                # Admittance form: y_L is the parallel-LC tank admittance,
-                # cleanly 0 at trap resonance (the open-circuit point).
-                y_l = load_series_admittance(br, omega)
-                denom = y_l + Y[k, k]
-                if abs(denom) < 1e-15:
-                    raise ValueError(
-                        f"Load on port {br.port!r}: y_L + Y[k,k] ≈ 0 (singular)"
-                    )
-                Y -= np.outer(y_col, y_col) / denom
-            else:
-                # Impedance form: Z_L is 0 at series-LC resonance (a short
-                # = unbroken wire), where the coefficient vanishes anyway.
-                z_l = load_impedance(br, omega)
-                if z_l == 0:
-                    continue
-                denom = 1.0 + z_l * Y[k, k]
-                if abs(denom) < 1e-15:
-                    raise ValueError(
-                        f"Load on port {br.port!r}: 1 + Z_L·Y[k,k] ≈ 0 (singular)"
-                    )
-                Y -= (z_l / denom) * np.outer(y_col, y_col)
-        return Y
-
-    def _apply_branches(self, Y, wavelength):
-        """Pad Y to include virtual ports, then stamp every network branch.
-
-        Y comes from pysim with shape (n_real, n_real); we return a
-        (n_total, n_total) augmented matrix with zeros in the virtual-port
-        rows/cols (no antenna admittance) plus the branch contributions.
-
-        Order matters: Load branches modify the antenna's real-port Y first
-        (matching ld_card's effect inside the MoM), then TL branches stamp
-        on the loaded Y. A TL connected to a loaded port sees the external
-        side of the load.
-        """
-        omega = 2.0 * np.pi * C_LIGHT / wavelength
-        Y = self._apply_loads(Y, omega)
-        n_total = self._n_total_ports
-        Y_full = np.zeros((n_total, n_total), dtype=np.complex128)
-        n_real = Y.shape[0]
-        Y_full[:n_real, :n_real] = Y
-        for br in self._network.branches:
-            if isinstance(br, TL):
-                a, b = self._port_to_idx[br.a], self._port_to_idx[br.b]
-                y_tl = self._tl_admittance_2x2(br.z0, br.length, wavelength)
-                Y_full[np.ix_([a, b], [a, b])] += y_tl
-            elif isinstance(br, DiffTL):
-                idx = [
-                    self._port_to_idx[p]
-                    for p in (br.a_pos, br.a_neg, br.b_pos, br.b_neg)
-                ]
-                y4 = self._difftl_admittance_4x4(
-                    br.z0,
-                    br.length,
-                    wavelength,
-                    transposed=br.transposed,
-                    z0_cm=br.z0_cm,
-                )
-                Y_full[np.ix_(idx, idx)] += y4
-            elif isinstance(br, Load):
-                continue  # already applied to the real-port Y
-            elif isinstance(br, TwoPort):
-                raise NotImplementedError(
-                    "TwoPort on PysimEngine: sketched but not cross-engine "
-                    "validated. See issue #65 piece (B)."
-                )
-            else:
-                raise NotImplementedError(f"branch type {type(br).__name__}")
-        return Y_full
-
-    def _resolve_network_voltages(self, Y_total):
-        """Return the (n_total,) voltage vector after solving the network:
-        driven ports at their applied voltages, every other port floating
-        with I_ext = 0."""
-        n = Y_total.shape[0]
-        driven = list(self._driven_port_idx)
-        # Loaded ports get V = 0 forced (correct BC for "no external source
-        # on a wire-interior segment"; see _init_network for the derivation).
-        floating = [
-            i for i in range(n) if i not in driven and i not in self._loaded_port_idx
-        ]
-        v_driven = np.array(self._driven_voltages, dtype=np.complex128)
-        V = np.zeros(n, dtype=np.complex128)
-        V[driven] = v_driven
-        # V[loaded] = 0 by zeros init.
-        if floating:
-            # I_ext = 0 at floating ports: Y_ff V_f = -Y_fd V_d - Y_fl V_l.
-            # V_l = 0 so the last term drops; same form as before.
-            Y_ff = Y_total[np.ix_(floating, floating)]
-            Y_fd = Y_total[np.ix_(floating, driven)]
-            V[floating] = np.linalg.solve(Y_ff, -Y_fd @ v_driven)
-        return V
-
-    def _impedance_from_network_y(self, Y_total):
-        """Driven-port impedance: solve the network for V (loaded ports
-        pinned at V=0, floating ports satisfying I_ext=0, driven ports at
-        their applied V), then read I_driven = (Y_total @ V)_driven."""
-        V = self._resolve_network_voltages(Y_total)
-        I = Y_total @ V
-        return [complex(V[i] / I[i]) for i in self._driven_port_idx]
-
     def _solved_excited(self, wavelength):
         """Build the excitation-resolved solver and run compute_impedance
         once per (wavelength, feed-voltage) tuple, caching on the engine
@@ -487,8 +251,7 @@ class PysimEngine(SimulationEngine):
         wavelength = self._wavelength_for(self.builder.freq)
         if self._network is not None:
             Y = self._compute_y_matrix(wavelength)
-            Y_total = self._apply_branches(Y, wavelength)
-            return self._impedance_from_network_y(Y_total)
+            return self._reducer.driven_impedance(Y, wavelength)
         if self._tls:
             Y = self._compute_y_matrix(wavelength)
             Y_total = self._apply_tls(Y, wavelength)
@@ -509,11 +272,12 @@ class PysimEngine(SimulationEngine):
             Y_swept = np.asarray(
                 s.compute_y_matrix_swept(k_array), dtype=np.complex128
             )  # (n_k, n_real, n_real)
-            n_driven = len(self._driven_port_idx)
-            zs = np.empty((freqs.size, n_driven), dtype=np.complex128)
+            zs = np.empty((freqs.size, self._reducer.n_driven), dtype=np.complex128)
             for ki, freq in enumerate(freqs):
-                Y_total = self._apply_branches(Y_swept[ki], self._wavelength_for(freq))
-                zs[ki] = self._impedance_from_network_y(Y_total)
+                Y_total = self._reducer.apply_branches(
+                    Y_swept[ki], self._wavelength_for(freq)
+                )
+                zs[ki] = self._reducer.impedance_from_y(Y_total)
             return zs
         if self._tls:
             # Batched Y at every frequency, then per-k TL stamping (βL is
@@ -549,8 +313,8 @@ class PysimEngine(SimulationEngine):
         coefficient is zero and `compute_impedance`'s V/I returns NaN."""
         if self._network is not None:
             Y = self._compute_y_matrix(wavelength)
-            Y_total = self._apply_branches(Y, wavelength)
-            V_full = self._resolve_network_voltages(Y_total)
+            Y_total = self._reducer.apply_branches(Y, wavelength)
+            V_full = self._reducer.resolve_voltages(Y_total)
             feeds_resolved = [
                 (w, arc, complex(V_full[i]))
                 for i, (w, arc, _v) in enumerate(self._feeds)
