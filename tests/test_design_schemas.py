@@ -69,6 +69,13 @@ def test_schema_covers_every_non_freq_default_param(name):
         if isinstance(val, str):
             # String defaults need an enum_options override to surface.
             continue
+        if val is None:
+            # None carries no type info, so the adapter emits no auto-UI
+            # (web/adapter.py _param_spec_from_default returns None for
+            # complex/None/exotic). Used by programmatic-only params such as
+            # sterba_driven.feed_voltages / active_junctions, set via the
+            # request body rather than a slider.
+            continue
         assert key in slider_names, f"{name}: missing slider for {key!r}"
 
 
