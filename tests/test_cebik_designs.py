@@ -428,3 +428,372 @@ def test_t2fd_folded_with_termination():
     assert load.port == "term"
     (src,) = net.sources
     assert isinstance(src, Driven) and src.port == "feed"
+
+
+# ---------------------------------------------------------------------------
+# Batch 2 — W8JK, phased verticals, inverted-L, OCF, V-beam, bi-square,
+# J-pole, discone (a second Cebik/W4RNL set filling further catalog gaps).
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# W8JK flat-top beam (180-degree all-driven array)
+# ---------------------------------------------------------------------------
+
+
+def test_w8jk_bidirectional_endfire_gain():
+    """~5.8 dBi firing equally off both +/- x ends (Kraus extended elements);
+    the two anti-phase, close-spaced elements make a bidirectional endfire
+    beam, not a unidirectional one."""
+    from antenna_designer.designs.cebik.w8jk import Builder
+
+    ff = _far_field(Builder())
+    rings = np.array(ff.rings)
+    front = rings[:, 0].max()  # +x
+    back = rings[:, 180].max()  # -x
+    assert ff.max_gain > 5.5
+    assert abs(front - back) < 1.0  # bidirectional
+
+
+def test_w8jk_broadside_and_overhead_nulls():
+    """The array signature: deep nulls off the ends (+/- y, broadside to the
+    boom) AND overhead (theta = 0, broadside to the array axis) -- the latter
+    is what a single dipole would NOT have, proving the 180-deg array action."""
+    from antenna_designer.designs.cebik.w8jk import Builder
+
+    ff = _far_field(Builder())
+    rings = np.array(ff.rings)
+    lobe = rings[:, 0].max()  # the +x endfire lobe
+    side = rings[:, 90].max()  # +y broadside
+    overhead = rings[0].max()  # straight up
+    assert lobe - side > 15.0
+    assert lobe - overhead > 15.0
+
+
+def test_w8jk_two_antiphase_feeds():
+    """Exactly two centre feeds, driven 180 degrees out of phase (+1 and -1),
+    one per element -- the defining all-driven, out-of-phase topology."""
+    from antenna_designer.designs.cebik.w8jk import Builder
+
+    feeds = [t for t in Builder().build_wires() if t[3] is not None]
+    assert len(feeds) == 2
+    volts = sorted(complex(f[3]).real for f in feeds)
+    assert volts[0] == -1.0 and volts[1] == 1.0  # anti-phase
+
+
+# ---------------------------------------------------------------------------
+# Two-element phased vertical array (90-degree cardioid)
+# ---------------------------------------------------------------------------
+
+
+def test_phased_verticals_cardioid_front_to_back():
+    """The 90-deg feed phasing steers the pattern unidirectionally toward +x
+    with a deep rearward null (~6-7 dB F/B here; a current-forcing network
+    deepens it further) -- not the figure-8 of a single vertical."""
+    from antenna_designer.designs.cebik.phased_verticals import Builder
+
+    ff = _far_field(Builder())
+    rings = np.array(ff.rings)
+    front = rings[:, 0].max()
+    back = rings[:, 180].max()
+    assert ff.max_gain > 4.5
+    assert front - back > 5.0
+
+
+def test_phased_verticals_phase_does_the_steering():
+    """Drive the two verticals IN phase instead and the unidirectional cardioid
+    collapses -- proving the directivity comes from the FEED PHASE, not the
+    geometry."""
+    from antenna_designer.designs.cebik.phased_verticals import Builder
+
+    in_phase = Builder(dict(Builder.default_params, front_voltage=1 + 0j))
+    rings = np.array(_far_field(in_phase).rings)
+    fb = rings[:, 0].max() - rings[:, 180].max()
+    assert abs(fb) < 2.0  # symmetric again
+
+
+def test_phased_verticals_two_feeds_front_quadrature():
+    """Two vertical (z-axis) feeds; the rear is the +1 reference and the front
+    is driven near 90 degrees out of phase (a dominant imaginary part)."""
+    from antenna_designer.designs.cebik.phased_verticals import Builder
+
+    feeds = [t for t in Builder().build_wires() if t[3] is not None]
+    assert len(feeds) == 2
+    # vertical elements: both feed gaps run along z
+    assert all(f[0][2] != f[1][2] for f in feeds)
+    rear, front = (complex(f[3]) for f in feeds)
+    assert rear == 1 + 0j
+    assert abs(front.imag) > abs(front.real)  # near quadrature
+
+
+# ---------------------------------------------------------------------------
+# Inverted-L (bent, top-loaded vertical)
+# ---------------------------------------------------------------------------
+
+
+def test_inverted_l_resonant_low_impedance():
+    """Top-loaded short vertical: near-resonant (small X) at a low feed
+    resistance over its radial counterpoise."""
+    from antenna_designer.designs.cebik.inverted_l import Builder
+
+    z = _z(Builder())
+    assert 8.0 < z.real < 45.0
+    assert abs(z.imag) < 25.0
+
+
+def test_inverted_l_vertical_low_angle_radiation():
+    """Mostly vertically polarised: the pattern peaks toward the horizon and
+    is deeply nulled overhead -- the signature of a vertical, not a horizontal
+    wire."""
+    from antenna_designer.designs.cebik.inverted_l import Builder
+
+    rings = np.array(_far_field(Builder()).rings)
+    horizon = rings[80:].max()  # near the horizon (theta ~ 90)
+    overhead = rings[:5].max()  # near zenith (theta ~ 0)
+    assert horizon - overhead > 5.0
+
+
+def test_inverted_l_has_riser_top_and_radials():
+    """One base feed, a vertical riser, a horizontal top section (the bend),
+    and a radial counterpoise."""
+    from antenna_designer.designs.cebik.inverted_l import Builder
+
+    tups = Builder().build_wires()
+    feeds = [t for t in tups if t[3] is not None]
+    assert len(feeds) == 1
+    # a horizontal top wire (constant z, runs along y) exists
+    horiz = [
+        t
+        for t in tups
+        if abs(t[0][2] - t[1][2]) < 1e-9 and abs(t[0][1] - t[1][1]) > 1e-6
+    ]
+    assert horiz, "expected a horizontal top section"
+
+
+# ---------------------------------------------------------------------------
+# Off-Center-Fed dipole (Windom)
+# ---------------------------------------------------------------------------
+
+
+def test_ocf_impedance_rises_off_center():
+    """The defining OCF physics: sliding the feed off-centre raises the
+    (resistive) feed impedance well above the ~70 ohm centre value."""
+    from antenna_designer.designs.cebik.ocf_dipole import Builder
+
+    r_off = _z(Builder()).real
+    r_ctr = _z(Builder(dict(Builder.default_params, feed_frac=0.5))).real
+    assert r_off > 1.8 * r_ctr
+    assert 150.0 < r_off < 350.0  # near the classic ~200-300 ohm Windom point
+
+
+def test_ocf_near_resonant():
+    """At the design length the off-centre feed is near resonance (small X),
+    so the elevated impedance is essentially resistive."""
+    from antenna_designer.designs.cebik.ocf_dipole import Builder
+
+    assert abs(_z(Builder()).imag) < 60.0
+
+
+def test_ocf_feed_is_off_center():
+    """Geometry: a single feed with unequal arms (short arm toward -y end)."""
+    from antenna_designer.designs.cebik.ocf_dipole import Builder
+
+    tups = Builder().build_wires()
+    feeds = [t for t in tups if t[3] is not None]
+    assert len(feeds) == 1
+    y_feed = feeds[0][0][1]
+    assert y_feed < -0.05  # offset from the centre (y = 0) toward -y
+
+
+# ---------------------------------------------------------------------------
+# Resonant V-beam
+# ---------------------------------------------------------------------------
+
+
+def test_vbeam_fires_along_the_bisector():
+    """Two ~1 wl legs splayed at the apex put gain (~5 dBi) along the
+    bisector (+/- x) with a deep null off the broadside (+/- y) -- the
+    long-wire lobes of the two legs aligning."""
+    from antenna_designer.designs.cebik.vbeam import Builder
+
+    rings = np.array(_far_field(Builder()).rings)
+    fwd = rings[:, 0].max()  # +x bisector
+    back = rings[:, 180].max()  # -x bisector
+    side = rings[:, 90].max()  # +y broadside
+    assert _far_field(Builder()).max_gain > 4.5
+    assert fwd - side > 4.0
+    assert back - side > 3.0
+
+
+def test_vbeam_high_reactive_apex_feed():
+    """Long-wire apex feed: high resistance and strongly reactive (open-wire
+    fed in practice), unlike a resonant dipole."""
+    from antenna_designer.designs.cebik.vbeam import Builder
+
+    z = _z(Builder())
+    assert z.real > 500.0
+    assert abs(z.imag) > 500.0
+
+
+def test_vbeam_two_legs_one_apex_feed():
+    """One driven apex gap and two legs of equal length opening symmetrically
+    in +/- y."""
+    from antenna_designer.designs.cebik.vbeam import Builder
+
+    tups = Builder().build_wires()
+    feeds = [t for t in tups if t[3] is not None]
+    assert len(feeds) == 1
+    ends = [t[1] for t in tups if t[3] is None]
+    ys = sorted(e[1] for e in ends)
+    assert ys[0] < 0 < ys[-1]  # legs splay to both +/- y
+    assert abs(abs(ys[0]) - abs(ys[-1])) < 1e-6  # symmetric
+
+
+# ---------------------------------------------------------------------------
+# Bi-square (2 wl vertical loop curtain)
+# ---------------------------------------------------------------------------
+
+
+def test_bisquare_vertical_broadside():
+    """Vertically polarised, fires broadside to the loop plane (off +/- x) with
+    the in-plane (+/- y) endfire suppressed -- the in-phase vertical components
+    adding while the horizontals cancel."""
+    from antenna_designer.designs.cebik.bisquare import Builder
+
+    ff = _far_field(Builder())
+    rings = np.array(ff.rings)
+    broadside = rings[:, 0].max()  # +x
+    end_on = rings[:, 90].max()  # +y
+    assert ff.max_gain > 3.0
+    assert broadside - end_on > 2.0
+
+
+def test_bisquare_high_reactive_corner_feed():
+    """A 2 wl loop fed at a corner is a high, reactive feedpoint (open-wire +
+    tuner), not a 50 ohm match."""
+    from antenna_designer.designs.cebik.bisquare import Builder
+
+    z = _z(Builder())
+    assert abs(z.imag) > 200.0
+
+
+def test_bisquare_is_a_four_sided_loop_one_feed():
+    """Four half-wave sides forming one closed loop, with a single driven gap
+    at the bottom corner (z minimum)."""
+    from antenna_designer.designs.cebik.bisquare import Builder
+
+    tups = Builder().build_wires()
+    feeds = [t for t in tups if t[3] is not None]
+    assert len(feeds) == 1
+    zmin = min(min(t[0][2], t[1][2]) for t in tups)
+    assert abs(feeds[0][0][2] - zmin) < 1e-6  # fed at the bottom corner
+
+
+# ---------------------------------------------------------------------------
+# J-pole (end-fed half-wave + quarter-wave matching stub)
+# ---------------------------------------------------------------------------
+
+
+def test_jpole_omnidirectional_vertical():
+    """A vertical end-fed half-wave: ~2 dBi, omnidirectional in azimuth (small
+    ripple around the peak-elevation ring)."""
+    from antenna_designer.designs.cebik.jpole import Builder
+
+    ff = _far_field(Builder())
+    rings = np.array(ff.rings)
+    ti = int(np.argmax(rings.max(axis=1)))  # elevation ring of peak gain
+    az = rings[ti]
+    assert 1.5 < ff.max_gain < 2.6
+    assert az.max() - az.min() < 1.5  # omnidirectional in azimuth
+
+
+def test_jpole_stub_matches_to_coax():
+    """The quarter-wave stub transforms the very high end-fed impedance down to
+    a coax-friendly match (SWR < 2.5 to 50 ohm at the tuned tap)."""
+    from antenna_designer.designs.cebik.jpole import Builder
+
+    assert _swr(_z(Builder()), 50.0) < 2.5
+
+
+def test_jpole_radiator_continues_above_the_stub():
+    """Topology: the half-wave radiator stands on top of one stub leg, so the
+    structure's top is a half-wave above the stub top; the feed bridges the two
+    close stub legs (different x)."""
+    from antenna_designer.designs.cebik.jpole import Builder
+
+    tups = Builder().build_wires()
+    feeds = [t for t in tups if t[3] is not None]
+    assert len(feeds) == 1
+    # feed bridges the two legs -> its endpoints differ in x
+    assert abs(feeds[0][0][0] - feeds[0][1][0]) > 1e-6
+    # the radiator reaches well above the stub top
+    wl = 299.792458 / Builder().design_freq
+    ztop = max(max(t[0][2], t[1][2]) for t in tups)
+    zbot = min(min(t[0][2], t[1][2]) for t in tups)
+    assert (ztop - zbot) > 0.6 * wl  # stub (~1/4) + radiator (~1/2)
+
+
+# ---------------------------------------------------------------------------
+# Discone (broadband vertical)
+# ---------------------------------------------------------------------------
+
+
+_DISCONE_BAND = (34.0, 40.0, 50.0, 65.0)  # above the ~28.6 MHz cone cutoff
+
+
+def test_discone_broadband_match():
+    """The defining discone behaviour: a usable match held across a wide band
+    ABOVE the cone's quarter-wave cutoff (here ~2:1, 34-65 MHz), unlike a
+    resonant vertical."""
+    from antenna_designer.designs.cebik.discone import Builder
+
+    swrs = [
+        _swr(_z(Builder(dict(Builder.default_params, freq=f))), 50.0)
+        for f in _DISCONE_BAND
+    ]
+    assert max(swrs) < 3.0, dict(zip(_DISCONE_BAND, swrs))
+
+
+def test_discone_match_beats_a_resonant_vertical_off_band():
+    """A resonant antenna's SWR explodes when you move ~2:1 in frequency; the
+    discone's barely moves. Compare the band-edge spread."""
+    from antenna_designer.designs.cebik.discone import Builder
+    from antenna_designer.designs.cebik.jpole import Builder as JBuilder
+
+    def spread(B, lo, hi, z0):
+        return _swr(_z(B(dict(B.default_params, freq=hi))), z0) - _swr(
+            _z(B(dict(B.default_params, freq=lo))), z0
+        )
+
+    # the resonant J-pole degrades far more across a 34->65 MHz move than the
+    # broadband discone does.
+    assert abs(spread(Builder, 34.0, 65.0, 50.0)) < abs(
+        spread(JBuilder, 34.0, 65.0, 50.0)
+    )
+
+
+def test_discone_omni_low_angle_in_band():
+    """In-band it is a vertical: omnidirectional in azimuth and low takeoff
+    (peak gain near the horizon)."""
+    from antenna_designer.designs.cebik.discone import Builder
+
+    b = Builder(dict(Builder.default_params, freq=50.0))
+    rings = np.array(_far_field(b).rings)
+    ti = int(np.argmax(rings.max(axis=1)))
+    az = rings[ti]
+    assert ti > 75  # peak near the horizon (theta ~ 90)
+    assert az.max() - az.min() < 1.0  # omnidirectional
+
+
+def test_discone_has_disc_and_cone_one_feed():
+    """A disc cage (horizontal radials) above a cone cage (downward radials),
+    fed across the apex gap -- exactly one driven segment."""
+    from antenna_designer.designs.cebik.discone import Builder
+
+    tups = Builder().build_wires()
+    feeds = [t for t in tups if t[3] is not None]
+    assert len(feeds) == 1
+    n = int(Builder().n_wires)
+    # m disc radials (horizontal) + m cone wires (sloping down) + 1 feed
+    horiz = [t for t in tups if abs(t[0][2] - t[1][2]) < 1e-9 and t[3] is None]
+    assert len(horiz) == n  # the disc radials
