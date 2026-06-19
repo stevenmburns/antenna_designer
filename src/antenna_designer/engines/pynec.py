@@ -9,6 +9,7 @@ from ..network import (
     PortAtEdge,
     PortVirtual,
     TL,
+    load_impedance,
 )
 from ..network_reduce import C_LIGHT, NetworkReducer
 
@@ -43,6 +44,12 @@ class PyNECEngine(SimulationEngine):
         self.tls = [] if self._network is not None else builder.build_tls()
         self.ground = ground
         self.excitation_pairs = None
+        # Fraction of input power radiated; set by current_distribution() when
+        # the design carries resistive loads (e.g. a terminated rhombic). The
+        # web far-field normaliser reads it to plot GAIN, matching pysim and
+        # NEC's own get_gain so engine-switching keeps the pattern meaning
+        # the same thing. 1.0 = no resistive loss.
+        self._excited_efficiency = 1.0
         # Loads alone are handled natively (ld_card) and accurately by NEC, so
         # only divert to the multiport-Y + NetworkReducer path for what NEC
         # *can't* do natively: transmission lines (TL/DiffTL) and virtual
@@ -261,6 +268,45 @@ class PyNECEngine(SimulationEngine):
         matches = [k for k, t in enumerate(sc.get_current_segment_tag()) if t == tag]
         return sc.get_current()[matches[seg - 1]]
 
+    def _radiation_efficiency(self, sc, wavelength):
+        """P_radiated / P_input = 1 - P_dissipated / P_input over the explicit
+        resistive Load branches; 1.0 when there are none.
+
+        This mirrors PysimEngine's efficiency so the web UI can fold the same
+        directivity->gain correction on either engine (the JS far-field cut is
+        otherwise raw directivity). It matches NEC's own get_gain overlay to a
+        tenth of a dB -- NEC additionally counts the small global copper-loss
+        ld_card, which a PEC-wire analysis omits.
+
+        `sc` is the already-solved structure-currents object; `wavelength` sets
+        the load reactances. Reactive loads (a loading coil) burn nothing and
+        leave efficiency at 1.0.
+        """
+        if self._network is None:
+            return 1.0
+        loads = [b for b in self._network.branches if isinstance(b, Load)]
+        if not loads:
+            return 1.0
+        omega = 2.0 * np.pi * C_LIGHT / wavelength
+        # TL/DiffTL/virtual-driver networks carrying a load reduce through the
+        # shared reducer; reuse its port-level efficiency for them.
+        if self._use_reducer:
+            Y = self._compute_y_matrix(wavelength)
+            return self._reducer.excited_state(Y, wavelength)[1]
+        # Native ld_card path: read the solved feed and load currents.
+        p_in = 0.0
+        for tag, seg, v in self.excitation_pairs:
+            cur = self._port_current(sc, tag, seg)
+            p_in += 0.5 * (complex(v) * np.conj(cur)).real
+        p_diss = 0.0
+        for br in loads:
+            tag, seg = self._network_port_loc[br.port]
+            cur = self._port_current(sc, tag, seg)
+            p_diss += 0.5 * load_impedance(br, omega).real * abs(cur) ** 2
+        if p_in <= 0.0:
+            return 1.0
+        return max(0.0, min(1.0, 1.0 - p_diss / p_in))
+
     def _compute_y_matrix(self, wavelength):
         """Multiport short-circuit Y at the real ports, via one NEC solve per
         port: drive that port's gap at 1 V (the other named ports stay
@@ -365,6 +411,9 @@ class PyNECEngine(SimulationEngine):
             self.c = self._excited_real_context(C_LIGHT / (self.builder.freq * 1e6))
         self._set_freq_and_execute()
         sc = self.c.get_structure_currents(0)
+        self._excited_efficiency = self._radiation_efficiency(
+            sc, C_LIGHT / (self.builder.freq * 1e6)
+        )
         all_tags = list(sc.get_current_segment_tag())
         all_cur = sc.get_current()
 
