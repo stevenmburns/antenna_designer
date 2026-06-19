@@ -16,6 +16,15 @@ from ..network_reduce import C_LIGHT, NetworkReducer
 WIRE_RADIUS = 0.0005
 COPPER_CONDUCTIVITY = 5.8e7
 
+# Conductivity (S/m) of the wire-loss ld_card, or None for PERFECT conductors.
+# Default None = PEC, matching pysim's lossless-wire model. This is what makes
+# PyNEC a clean cross-engine reference: with copper loss off, PyNEC and pysim's
+# sinusoidal basis (the same NEC2 basis family) agree on impedance to ~0.1 Ω
+# and on gain/efficiency to ~0.1 dB. Set to COPPER_CONDUCTIVITY to model real
+# copper loss instead (a few tenths of a dB on a resonant antenna; more on a
+# high-current structure), at the cost of that clean agreement.
+WIRE_CONDUCTIVITY = None
+
 
 DEFAULT_GROUND = ("finite", 10.0, 0.002)  # (kind, dielectric, conductivity)
 
@@ -69,8 +78,6 @@ class PyNECEngine(SimulationEngine):
             del self.c
 
     def _build_geometry(self):
-        conductivity = 5.8e7  # Copper
-
         self.c = nec.nec_context()
         geo = self.c.get_geometry()
 
@@ -108,7 +115,8 @@ class PyNECEngine(SimulationEngine):
             for idx1, seg1, idx2, seg2, impedance, length in self.tls:
                 self.c.tl_card(idx1, seg1, idx2, seg2, impedance, length, 0, 0, 0, 0)
 
-        self.c.ld_card(5, 0, 0, 0, conductivity, 0.0, 0.0)
+        if WIRE_CONDUCTIVITY is not None:
+            self.c.ld_card(5, 0, 0, 0, WIRE_CONDUCTIVITY, 0.0, 0.0)
         self._apply_ground_card()
 
         for tag, sub_index, voltage in self.excitation_pairs:
@@ -258,7 +266,8 @@ class PyNECEngine(SimulationEngine):
             if name is not None:
                 loc[name] = (idx, (n_seg + 1) // 2)
         c.geometry_complete(0)
-        c.ld_card(5, 0, 0, 0, COPPER_CONDUCTIVITY, 0.0, 0.0)
+        if WIRE_CONDUCTIVITY is not None:
+            c.ld_card(5, 0, 0, 0, WIRE_CONDUCTIVITY, 0.0, 0.0)
         self._apply_ground_card(c)
         return c, loc
 
