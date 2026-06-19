@@ -1150,20 +1150,30 @@ def test_zepp_series_feeder_cannot_match_to_coax():
 # ===========================================================================
 
 
-def test_parasitic_loop_quad_is_unsupported_in_pysim():
+def test_parasitic_loop_quad_agrees_across_engines():
     """A parasitic (no-port) closed loop -- the cubical quad's reflector -- is
-    not yet handled by any pysim basis; PyNEC models it fine. This pins the
-    single biggest pysim gap so a future fix flips a known-failing test."""
-    import pytest
-
+    now handled on every pysim basis (the geometry translator cuts the loop at
+    an arbitrary edge and lets pysim's junction KCL carry the current around
+    it). All four bases agree with the PyNEC reference. This was the single
+    biggest pysim gap; the test that used to assert it RAISED now asserts it
+    SOLVES."""
     from antenna_designer.designs.cebik.quad import Builder
     from antenna_designer.engines import PysimEngine
-    from pysim import TriangularPySim
+    from pysim import BSplinePySim, SinusoidalPySim, TriangularPySim
 
-    # PyNEC reference works.
-    assert _z(Builder()).real > 0.0
-    with pytest.raises(NotImplementedError):
-        PysimEngine(Builder(), ground=None, solver=TriangularPySim).impedance()
+    z_ref = _z(Builder())  # PyNEC reference
+    assert z_ref.real > 0.0
+    for solver, kw in [
+        (TriangularPySim, {}),
+        (SinusoidalPySim, {}),
+        (BSplinePySim, {"degree": 2}),
+    ]:
+        z = PysimEngine(
+            Builder(), ground=None, solver=solver, solver_kwargs=kw
+        ).impedance()[0]
+        # within a few percent of PyNEC on R, and near-resonant like PyNEC
+        assert abs(z.real - z_ref.real) / z_ref.real < 0.05
+        assert abs(z.imag) < 15.0
 
 
 def test_g5rv_ideal_halfwave_line_is_singular_on_every_engine():

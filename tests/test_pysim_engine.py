@@ -1401,16 +1401,40 @@ def test_load_branch_rejects_virtual_port():
         eng.impedance()
 
 
-def test_translator_rejects_loop_without_feed():
-    """A pure cycle with no excited segment can't be handled (parasitic
-    coupling not yet implemented). Should raise a clear NotImplementedError
-    rather than crashing inside pysim."""
-    # Synthesise a 4-tuple cycle around a square, no excitation.
+def test_translator_cuts_parasitic_loop_alongside_a_driver():
+    """A parasitic (no-port) cycle is now supported: it is cut at an arbitrary
+    edge into two polylines joined at two cut-node junctions, so pysim's KCL
+    carries current around it. Here a driven dipole sits next to a passive
+    square loop; the translator yields the dipole's single feed plus the loop's
+    cut junctions, no exception."""
+    tups = [
+        # Driven dipole (open chain with one feed gap) at z = 5.
+        ((-1, 0, 5), (-0.01, 0, 5), 5, None),
+        ((-0.01, 0, 5), (0.01, 0, 5), 1, 1 + 0j),
+        ((0.01, 0, 5), (1, 0, 5), 5, None),
+        # Parasitic square loop at z = 0 (no excitation of its own).
+        ((0, 0, 0), (1, 0, 0), 5, None),
+        ((1, 0, 0), (1, 1, 0), 5, None),
+        ((1, 1, 0), (0, 1, 0), 5, None),
+        ((0, 1, 0), (0, 0, 0), 5, None),
+    ]
+    out = flat_wires_to_polylines(tups)
+    assert len(out["feeds"]) == 1  # only the dipole is driven
+    # dipole -> 1 polyline; the loop is cut into 2 -> 3 polylines total.
+    assert len(out["polylines"]) == 3
+    # the loop's two cut nodes are registered as junctions.
+    assert len(out["junctions"]) >= 2
+
+
+def test_translator_rejects_geometry_with_no_excitation():
+    """A geometry that carries no excitation ANYWHERE (e.g. a lone parasitic
+    loop) is unsolvable and must raise a clear error -- now from the global
+    'no excitation' guard rather than the loop cutter."""
     tups = [
         ((0, 0, 0), (1, 0, 0), 5, None),
         ((1, 0, 0), (1, 1, 0), 5, None),
         ((1, 1, 0), (0, 1, 0), 5, None),
         ((0, 1, 0), (0, 0, 0), 5, None),
     ]
-    with pytest.raises(NotImplementedError, match="closed loop"):
+    with pytest.raises(ValueError, match="no excitation"):
         flat_wires_to_polylines(tups)
