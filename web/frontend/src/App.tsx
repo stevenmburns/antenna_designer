@@ -2656,7 +2656,9 @@ function FarFieldChart({
     canvas.style.height = `${size}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    ctx.fillStyle = "#0d1015";
+    const PC = plotColors();
+
+    ctx.fillStyle = PC.bg;
     ctx.fillRect(0, 0, size, size);
 
     const cx = size / 2;
@@ -2684,9 +2686,9 @@ function FarFieldChart({
     const DBI_TOP = 10;
     const DB_SPAN = 30;
     const dbiToFrac = (db: number) => Math.max(0, (db - (DBI_TOP - DB_SPAN)) / DB_SPAN);
-    ctx.strokeStyle = "#2a313d";
+    ctx.strokeStyle = PC.grid;
     ctx.lineWidth = 0.6;
-    ctx.fillStyle = "#4a5160";
+    ctx.fillStyle = PC.labelDim;
     ctx.font = "9px ui-monospace, monospace";
     for (const db of [6, 0, -6, -12, -18]) {
       const f = dbiToFrac(db);
@@ -2704,14 +2706,14 @@ function FarFieldChart({
 
     // Axis labels: xy cut uses world x/y around the rim; yz cut shows the
     // azimuth bearing on the horizontal pair and zenith/nadir on vertical.
-    ctx.fillStyle = "#4a5160";
+    ctx.fillStyle = PC.labelDim;
     ctx.font = "10px ui-monospace, monospace";
     const cutLabel =
       cut === "xy"
         ? `az @ ${azElevDeg}° elev (dBi)`
         : `elev @ ${elevAzDeg}° az (dBi)`;
     ctx.fillText(cutLabel, 6, 14);
-    ctx.fillStyle = "#7b8493";
+    ctx.fillStyle = PC.label;
     if (cut === "xy") {
       ctx.fillText("+x", cx + R - 14, cy + 11);
       ctx.fillText("−x", cx - R + 2, cy + 11);
@@ -2724,7 +2726,7 @@ function FarFieldChart({
 
     // Cross-reference: a single dashed spoke showing where the *other* cut
     // slices this plot. The opposite side is implied by symmetry.
-    const markerStyle = "rgba(180, 140, 250, 0.7)";
+    const markerStyle = PC.spoke;
     {
       const canvasAngleRad =
         cut === "xy"
@@ -2961,9 +2963,9 @@ function FarFieldChart({
       else ctx.lineTo(px, py);
     }
     ctx.closePath();
-    ctx.fillStyle = "rgba(255, 209, 102, 0.12)";
+    ctx.fillStyle = `rgba(${PC.lobeRgb}, 0.12)`;
     ctx.fill();
-    ctx.strokeStyle = "rgba(255, 209, 102, 0.9)";
+    ctx.strokeStyle = `rgba(${PC.lobeRgb}, 0.9)`;
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
@@ -3014,14 +3016,14 @@ function FarFieldChart({
         if (!started) { ctx.moveTo(px, py); started = true; }
         else ctx.lineTo(px, py);
       }
-      ctx.strokeStyle = "rgba(110, 220, 255, 0.85)";
+      ctx.strokeStyle = `rgba(${PC.necRgb}, 0.85)`;
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 3]);
       ctx.stroke();
       ctx.setLineDash([]);
 
       // Legend swatch + label, bottom-right.
-      ctx.fillStyle = "rgba(110, 220, 255, 0.9)";
+      ctx.fillStyle = `rgba(${PC.necRgb}, 0.9)`;
       ctx.font = "10px ui-monospace, monospace";
       const necText = "NEC rp_card";
       const necTw = ctx.measureText(necText).width;
@@ -3030,7 +3032,7 @@ function FarFieldChart({
 
     // Peak dBi annotation (top-right corner).
     const peakDbi = 10 * Math.log10(norm * maxMag2);
-    ctx.fillStyle = "#cdd5e0";
+    ctx.fillStyle = PC.labelStrong;
     ctx.font = "10px ui-monospace, monospace";
     const peakText = `peak ${peakDbi >= 0 ? "+" : ""}${peakDbi.toFixed(1)} dBi`;
     const tw = ctx.measureText(peakText).width;
@@ -3113,11 +3115,13 @@ function SmithChart({
     canvas.style.height = `${size}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+    const PC = plotColors();
+
     const cx = size / 2;
     const cy = size / 2;
     const R = size / 2 - 10;
 
-    ctx.fillStyle = "#0d1015";
+    ctx.fillStyle = PC.bg;
     ctx.fillRect(0, 0, size, size);
 
     // Constant-r circles in the Γ plane.
@@ -3129,7 +3133,7 @@ function SmithChart({
       { r: 2, label: "2" },
       { r: 5 },
     ];
-    ctx.strokeStyle = "#2a313d";
+    ctx.strokeStyle = PC.grid;
     ctx.lineWidth = 0.6;
     for (const { r: rn } of rCircles) {
       const cxN = rn / (rn + 1);
@@ -3160,7 +3164,7 @@ function SmithChart({
     ctx.restore();
 
     // Real axis
-    ctx.strokeStyle = "#3a4150";
+    ctx.strokeStyle = PC.axis;
     ctx.lineWidth = 0.8;
     ctx.beginPath();
     ctx.moveTo(cx - R, cy);
@@ -3168,19 +3172,19 @@ function SmithChart({
     ctx.stroke();
 
     // Outer boundary (|Γ| = 1)
-    ctx.strokeStyle = "#3a4150";
+    ctx.strokeStyle = PC.axis;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(cx, cy, R, 0, 2 * Math.PI);
     ctx.stroke();
 
     // Z0 label at center
-    ctx.fillStyle = "#4a5160";
+    ctx.fillStyle = PC.labelDim;
     ctx.font = "10px ui-monospace, monospace";
     ctx.fillText(`Z₀ = ${z0}`, 6, 14);
 
     // Reactance sign labels.
-    ctx.fillStyle = "#4a5160";
+    ctx.fillStyle = PC.labelDim;
     ctx.fillText("+jX", cx + R - 24, cy - R + 14);
     ctx.fillText("−jX", cx + R - 24, cy + R - 4);
 
@@ -3238,7 +3242,7 @@ function SmithChart({
         const col = feedSweepColor(fi);
         ctx.lineWidth = 1.2;
         ctx.strokeStyle = col;
-        ctx.fillStyle = filled ? col : "rgba(13, 16, 21, 0.95)";
+        ctx.fillStyle = filled ? col : `rgba(${PC.bgRgb}, 0.95)`;
         ctx.beginPath();
         ctx.arc(px, py, 3, 0, 2 * Math.PI);
         ctx.fill();
@@ -3250,7 +3254,7 @@ function SmithChart({
       }
 
       // Freq range label across the bottom of the panel.
-      ctx.fillStyle = "#9aa3b2";
+      ctx.fillStyle = PC.labelBright;
       ctx.font = "10px ui-monospace, monospace";
       const fLoTxt = sweep.freqs_mhz[0].toFixed(2);
       const fHiTxt = sweep.freqs_mhz[sweep.freqs_mhz.length - 1].toFixed(2);
@@ -3260,7 +3264,7 @@ function SmithChart({
     }
 
     if (running) {
-      ctx.fillStyle = "#7b8493";
+      ctx.fillStyle = PC.label;
       ctx.font = "10px ui-monospace, monospace";
       ctx.fillText("sweeping…", 6, size - 6);
     }
@@ -3327,7 +3331,7 @@ function SmithChart({
         const col = feedColor(fi);
         ctx.lineWidth = 1.2;
         ctx.strokeStyle = col;
-        ctx.fillStyle = filled ? col : "rgba(13, 16, 21, 0.95)";
+        ctx.fillStyle = filled ? col : `rgba(${PC.bgRgb}, 0.95)`;
         ctx.beginPath();
         ctx.arc(px, py, 3, 0, 2 * Math.PI);
         ctx.fill();
@@ -3382,7 +3386,7 @@ function SmithChart({
 
     }
     if (convergeRunning) {
-      ctx.fillStyle = "#7b8493";
+      ctx.fillStyle = PC.label;
       ctx.font = "10px ui-monospace, monospace";
       // Stack under the freq-sweep status if both are running.
       const yOff = running ? 18 : 6;
@@ -3411,7 +3415,7 @@ function SmithChart({
       ctx.beginPath();
       ctx.arc(px, py, 4, 0, 2 * Math.PI);
       ctx.fill();
-      ctx.strokeStyle = "rgba(13, 16, 21, 0.85)";
+      ctx.strokeStyle = `rgba(${PC.bgRgb}, 0.85)`;
       ctx.lineWidth = 1;
       ctx.stroke();
     }
@@ -3482,7 +3486,7 @@ function SmithChart({
     if (converge && converge.n_values.length >= 1) {
       const nLo = converge.n_values[0];
       const nHi = converge.n_values[converge.n_values.length - 1];
-      ctx.fillStyle = "#9aa3b2";
+      ctx.fillStyle = PC.labelBright;
       ctx.font = "10px ui-monospace, monospace";
       const baseY = running && convergeRunning ? size - 30
         : running || convergeRunning ? size - 18
@@ -3491,7 +3495,7 @@ function SmithChart({
     }
 
     // Center match marker
-    ctx.strokeStyle = "#5a6170";
+    ctx.strokeStyle = PC.centerMark;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(cx - 4, cy);
@@ -3529,6 +3533,7 @@ function CurrentCanvas({
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
+    const PC = plotColors();
     const onResize = () => {
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.floor(rect.width * dpr);
@@ -3544,7 +3549,7 @@ function CurrentCanvas({
       ctx!.clearRect(0, 0, w, h);
 
       // Vertical axis guide.
-      ctx!.strokeStyle = "#23272f";
+      ctx!.strokeStyle = PC.axisFaint;
       ctx!.lineWidth = 1;
       ctx!.beginPath();
       ctx!.moveTo(w / 2, 20);
@@ -3627,7 +3632,7 @@ function CurrentCanvas({
       // keep this on-canvas, so no bounds check needed here.
       if (result.ground && vertAxis === 2) {
         const groundY = cy + vC * scale;
-        ctx!.strokeStyle = "rgba(140, 110, 70, 0.55)";
+        ctx!.strokeStyle = `rgba(${PC.groundRgb}, 0.55)`;
         ctx!.lineWidth = 1;
         ctx!.setLineDash([6, 4]);
         ctx!.beginPath();
@@ -3635,7 +3640,7 @@ function CurrentCanvas({
         ctx!.lineTo(w, groundY);
         ctx!.stroke();
         ctx!.setLineDash([]);
-        ctx!.fillStyle = "rgba(140, 110, 70, 0.85)";
+        ctx!.fillStyle = `rgba(${PC.groundRgb}, 0.85)`;
         ctx!.font = `${Math.max(8, Math.round(10 * s))}px ui-monospace, monospace`;
         ctx!.fillText("ground (z = 0)", 8 * s, groundY - 4 * s);
       }
@@ -3679,7 +3684,7 @@ function CurrentCanvas({
             ctx!.lineWidth = (2 + 6 * m) * s;
           } else {
             // Plain wires: uniform color/width, no current-magnitude modulation.
-            ctx!.strokeStyle = "#9aa3b2";
+            ctx!.strokeStyle = PC.labelBright;
             ctx!.lineWidth = 2 * s;
           }
           ctx!.beginPath();
@@ -3694,7 +3699,7 @@ function CurrentCanvas({
         // feed_knot_index lives in knot-array space; in sample space (knots
         // interleaved with midpoints) it maps to 2*feed_knot_index.
         if (showEnvelope) {
-          ctx!.strokeStyle = "rgba(118, 208, 255, 0.7)";
+          ctx!.strokeStyle = `rgba(${PC.envelopeRgb}, 0.7)`;
           ctx!.lineWidth = 1.5 * s;
           const lastIdx = pts.length - 1;
           const hasSamples = wire.sample_positions != null;
@@ -3710,7 +3715,7 @@ function CurrentCanvas({
         // Wire label near the leftmost knot for multi-wire geometries.
         if (result.wires.length > 1) {
           const lp = project(wire.knot_positions[0]);
-          ctx!.fillStyle = "#7b8493";
+          ctx!.fillStyle = PC.label;
           ctx!.font = `${labelFontPx}px ui-monospace, monospace`;
           ctx!.fillText(wire.label, lp.x - 8 * s - ctx!.measureText(wire.label).width, lp.y + 3 * s);
         }
@@ -3736,7 +3741,7 @@ function CurrentCanvas({
         const pos3d = f.feed_position ?? (w_ ? w_.knot_positions[f.knot_index] : undefined);
         if (!pos3d) continue;
         const feed = project(pos3d);
-        ctx!.fillStyle = "#ffd166";
+        ctx!.fillStyle = PC.feed;
         ctx!.beginPath();
         ctx!.arc(feed.x, feed.y, 5 * s, 0, Math.PI * 2);
         ctx!.fill();
@@ -3751,7 +3756,7 @@ function CurrentCanvas({
       const barLenPx = (lambdaDesign / 4) * scale;
       const barX0 = (w - barLenPx) / 2;
       const barY = h - 24 * s;
-      ctx!.strokeStyle = "#7b8493";
+      ctx!.strokeStyle = PC.label;
       ctx!.lineWidth = 1;
       ctx!.beginPath();
       ctx!.moveTo(barX0, barY);
@@ -3761,7 +3766,7 @@ function CurrentCanvas({
       ctx!.moveTo(barX0 + barLenPx, barY - 4 * s);
       ctx!.lineTo(barX0 + barLenPx, barY + 4 * s);
       ctx!.stroke();
-      ctx!.fillStyle = "#9aa3b2";
+      ctx!.fillStyle = PC.labelBright;
       ctx!.font = `${labelFontPx}px ui-monospace, monospace`;
       const barLabel = `λ/4 = ${(lambdaDesign / 4).toFixed(2)} m`;
       const labelW = ctx!.measureText(barLabel).width;
@@ -3840,15 +3845,61 @@ function drawArmEnvelope(
   ctx.stroke();
 }
 
+// Plot colors are pulled from CSS custom properties so the <canvas>
+// views theme from the same tokens as the DOM chrome. Fallbacks
+// reproduce the original dark palette, so missing vars are harmless.
+function plotColors() {
+  const cs = getComputedStyle(document.documentElement);
+  const v = (name: string, fb: string): string => {
+    const val = cs.getPropertyValue(name).trim();
+    return val || fb;
+  };
+  return {
+    bg: v("--plot-bg", "#0d1015"),
+    bgRgb: v("--plot-bg-rgb", "13, 16, 21"),
+    grid: v("--plot-grid", "#2a313d"),
+    axis: v("--plot-axis", "#3a4150"),
+    axisFaint: v("--plot-axis-faint", "#23272f"),
+    labelDim: v("--plot-label-dim", "#4a5160"),
+    label: v("--plot-label", "#7b8493"),
+    labelBright: v("--plot-label-bright", "#9aa3b2"),
+    labelStrong: v("--plot-label-strong", "#cdd5e0"),
+    centerMark: v("--plot-center-mark", "#5a6170"),
+    spoke: v("--plot-spoke", "rgba(180, 140, 250, 0.7)"),
+    lobeRgb: v("--plot-lobe-rgb", "255, 209, 102"),
+    necRgb: v("--plot-nec-rgb", "110, 220, 255"),
+    groundRgb: v("--plot-ground-rgb", "140, 110, 70"),
+    envelopeRgb: v("--plot-envelope-rgb", "118, 208, 255"),
+    feed: v("--plot-feed", "#ffd166"),
+  };
+}
+
+// Current-magnitude heatmap ramp, also CSS-driven. Read once and cached
+// (currentColor runs per wire segment, so getComputedStyle must not be
+// called in the loop). Fallbacks are the original cool->warm stops.
+let _currentRampCache: [number, [number, number, number]][] | null = null;
+function currentRamp(): [number, [number, number, number]][] {
+  if (_currentRampCache) return _currentRampCache;
+  const cs = getComputedStyle(document.documentElement);
+  const tri = (name: string, fb: [number, number, number]): [number, number, number] => {
+    const s = cs.getPropertyValue(name).trim();
+    if (!s) return fb;
+    const p = s.split(",").map((n) => parseInt(n.trim(), 10));
+    return p.length === 3 && p.every((n) => !Number.isNaN(n)) ? [p[0], p[1], p[2]] : fb;
+  };
+  _currentRampCache = [
+    [0.0, tri("--plot-current-0", [40, 64, 96])],
+    [0.25, tri("--plot-current-1", [60, 140, 200])],
+    [0.5, tri("--plot-current-2", [118, 208, 255])],
+    [0.75, tri("--plot-current-3", [255, 209, 102])],
+    [1.0, tri("--plot-current-4", [255, 130, 80])],
+  ];
+  return _currentRampCache;
+}
+
 function currentColor(t: number): string {
   // Cool → warm ramp: dim blue → cyan → yellow → orange.
-  const stops = [
-    [0.0, [40, 64, 96]],
-    [0.25, [60, 140, 200]],
-    [0.5, [118, 208, 255]],
-    [0.75, [255, 209, 102]],
-    [1.0, [255, 130, 80]],
-  ] as const;
+  const stops = currentRamp();
   for (let i = 1; i < stops.length; i++) {
     const [t0, c0] = stops[i - 1];
     const [t1, c1] = stops[i];
