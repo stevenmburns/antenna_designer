@@ -200,10 +200,19 @@ Holes found by this batch (PyNEC models them; pysim raised):
   `delta_loop` always worked). The fix cuts a parasitic loop at an arbitrary
   edge and registers the two cut nodes as junctions; the cubical `quad` now
   solves on all four bases within a few percent of PyNEC, with no pysim change.
-- Closed loops with two port edges (a feed + a termination) -> `NotImplementedError:
-  closed loop with 2 port edges`. Bounds terminated loops (the catalog's
-  `rhombic`, `t2fd`). Still open -- liftable the same way (cut at one port edge,
-  leave the second as a mid-polyline feed); a separate follow-up.
+- Closed loops with two port edges (a feed + a termination) -- bounded
+  terminated loops (the catalog's `rhombic`, `t2fd`). **RESOLVED (follow-up):**
+  the cutter now cuts at one port edge and lets the second ride the long-way
+  polyline as a mid-polyline feed. This also exposed (and fixed) a deeper,
+  pre-existing Load issue: the excited/far-field solve pinned loaded ports at
+  V=0 (a SHORT), so a resistive termination never shaped the current and the
+  rhombic came out bidirectional with ~3 dB-too-high gain. The fix imposes the
+  physical series-load BC (V_k = V_src - Z_L*I_k, a Thevenin condition that
+  also covers a driven+loaded feed segment) so the load shapes the current,
+  and folds the resulting radiation efficiency (1 - P_diss/P_in) into the gain.
+  `rhombic` and `t2fd` now match PyNEC on impedance, gain, AND the
+  unidirectional pattern; the pre-existing centre-loaded `short_dipole_loaded`
+  improved too (gain error 0.7 -> 0.1 dB).
 
 Shared limitations (NOT pysim-specific -- PyNEC hits them too):
 - An ideal lossless TL is singular at exactly k*lambda/2 (sin betaL -> 0); the
