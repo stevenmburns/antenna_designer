@@ -80,17 +80,17 @@
 | src/antenna\_designer/designs/yagiarray.py                               |        7 |        0 |    100% |           |
 | src/antenna\_designer/engine.py                                          |       43 |        3 |     93% |65, 94, 100 |
 | src/antenna\_designer/engines/\_\_init\_\_.py                            |        3 |        0 |    100% |           |
-| src/antenna\_designer/engines/pynec.py                                   |      231 |       17 |     93% |102, 117, 137, 144, 158, 175, 333, 335-339, 341, 346, 365, 380-382 |
-| src/antenna\_designer/engines/pysim.py                                   |      272 |        7 |     97% |28-31, 55, 268, 472 |
+| src/antenna\_designer/engines/pynec.py                                   |      257 |       19 |     93% |116, 119, 132, 152, 159, 173, 190, 270, 303-304, 316, 388, 390-394, 396, 401 |
+| src/antenna\_designer/engines/pysim.py                                   |      274 |        4 |     99% |31, 55, 268, 479 |
 | src/antenna\_designer/far\_field.py                                      |       94 |        0 |    100% |           |
-| src/antenna\_designer/geometry.py                                        |      141 |        6 |     96% |54, 79, 83, 95, 190, 271 |
+| src/antenna\_designer/geometry.py                                        |      137 |        4 |     97% |60, 85, 89, 101 |
 | src/antenna\_designer/network.py                                         |      104 |        6 |     94% |188, 217, 234, 271, 281, 283 |
-| src/antenna\_designer/network\_reduce.py                                 |      106 |        6 |     94% |128, 193, 205, 252-258 |
+| src/antenna\_designer/network\_reduce.py                                 |      138 |        6 |     96% |128, 193, 205, 245-251 |
 | src/antenna\_designer/opt.py                                             |       90 |       14 |     84% |54-55, 57-60, 65-66, 72-76, 148 |
 | src/antenna\_designer/sim.py                                             |        2 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                                           |      123 |        7 |     94% |   105-116 |
 | src/antenna\_designer/transform.py                                       |       42 |        1 |     98% |        62 |
-| **TOTAL**                                                                | **3890** |  **139** | **96%** |           |
+| **TOTAL**                                                                | **3946** |  **136** | **97%** |           |
 
 
 ## Setup coverage badge
