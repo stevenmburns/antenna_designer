@@ -210,6 +210,24 @@ def test_solve_dispatches_to_pysim_for_dipole():
     assert out["z_in_re"] > 0
 
 
+def test_solve_reports_radiation_efficiency_for_terminated_antenna():
+    """A terminated antenna (the rhombic's load resistor) burns most of its
+    input power, so the server reports radiation_efficiency < 1 and folds it
+    into directivity_norm — the UI then plots GAIN, not directivity. A lossless
+    design reports 1.0 and its normaliser is unchanged."""
+    term = server.solve({"geometry": "cebik.rhombic", "pysim_model": "triangular"})
+    assert 0.1 < term["radiation_efficiency"] < 0.6  # ~0.29: most power in the load
+
+    lossless = server.solve({"geometry": "cebik.g5rv", "pysim_model": "triangular"})
+    assert lossless["radiation_efficiency"] == 1.0
+
+    # The efficiency actually scales the normaliser: dividing it back out
+    # recovers the bare directivity, which is strictly larger.
+    assert term["directivity_norm"] > 0
+    bare_directivity = term["directivity_norm"] / term["radiation_efficiency"]
+    assert bare_directivity > term["directivity_norm"]
+
+
 def test_solve_falls_back_when_geometry_unknown():
     # An unknown geometry should silently fall back to the first registered
     # example rather than 500 — the frontend can briefly send a stale name

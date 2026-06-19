@@ -256,7 +256,14 @@ def _compute_directivity_norm(out: dict, n_theta: int = 45, n_phi: int = 90) -> 
 
     dphi = 2 * np.pi / n_phi
     p_rad = float(np.sum(mag2 * sin_t[:, None]) * dtheta * dphi)
-    out["directivity_norm"] = (4 * np.pi / p_rad) if p_rad > 0 else 0.0
+    # Fold in the radiation efficiency (P_radiated / P_input) so a terminated /
+    # loaded antenna plots GAIN, not directivity: 4π/p_rad is the directivity
+    # normaliser, and multiplying by efficiency drops the peak by the fraction
+    # of power burned in resistive loads. Defaults to 1.0 (lossless / no loads,
+    # and the PyNEC path which doesn't report it), leaving every other design
+    # unchanged.
+    efficiency = float(out.get("radiation_efficiency", 1.0))
+    out["directivity_norm"] = (4 * np.pi / p_rad * efficiency) if p_rad > 0 else 0.0
 
 
 def _wire_record(
