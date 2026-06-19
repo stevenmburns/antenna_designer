@@ -228,6 +228,32 @@ def test_solve_reports_radiation_efficiency_for_terminated_antenna():
     assert bare_directivity > term["directivity_norm"]
 
 
+def test_pynec_path_also_reports_radiation_efficiency():
+    """Switching engines must keep the far-field plot meaning GAIN: the PyNEC
+    path reports a radiation_efficiency < 1 for the terminated rhombic too
+    (close to pysim's, both well under 1), and 1.0 for a lossless design --
+    so the JS far-field cut is gain on either engine, not directivity on one
+    and gain on the other."""
+    from web import pynec_backend
+
+    if not pynec_backend.HAVE_PYNEC:
+        import pytest
+
+        pytest.skip("PyNEC backend not available")
+
+    term_pysim = server.solve({"geometry": "cebik.rhombic", "solver": "pysim"})
+    term_pynec = server.solve({"geometry": "cebik.rhombic", "solver": "pynec"})
+    assert term_pynec["radiation_efficiency"] < 0.6
+    # the two engines agree on the efficiency to better than ~1.5 dB (basis
+    # difference + NEC's copper-loss card), far inside the old ~5 dB
+    # directivity-vs-gain gap.
+    ratio = term_pynec["radiation_efficiency"] / term_pysim["radiation_efficiency"]
+    assert 0.7 < ratio < 1.4
+
+    lossless_pynec = server.solve({"geometry": "cebik.g5rv", "solver": "pynec"})
+    assert lossless_pynec["radiation_efficiency"] == 1.0
+
+
 def test_solve_falls_back_when_geometry_unknown():
     # An unknown geometry should silently fall back to the first registered
     # example rather than 500 — the frontend can briefly send a stale name

@@ -825,6 +825,10 @@ def _make_example(name: str, cls) -> AntennaExample:
             "ground_eps_r": _PEC_GROUND_EPS_R,
             "ground_sigma": _PEC_GROUND_SIGMA,
             "z0_ohms": target_z0,
+            # Same directivity->gain factor as the pysim path, so switching
+            # engines in the UI keeps the far-field plot meaning GAIN.
+            # current_distribution() set it from the solved load currents.
+            "radiation_efficiency": float(getattr(eng, "_excited_efficiency", 1.0)),
         }
         if multi_feed and len(zs) > 1:
             # PyNECEngine.excitation_pairs is [(tag, sub_seg, voltage)];
