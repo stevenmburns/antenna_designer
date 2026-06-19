@@ -6,15 +6,26 @@ The bobtail is the electrical big brother of the half-square: THREE roughly
 along the top by a continuous ~1-wavelength phasing wire. All three verticals
 end up driven in phase, so the array is VERTICALLY POLARISED and fires
 bidirectionally broadside to the plane of the wires, with a tighter pattern
-and a few dB more gain than the half-square (~5.1 dBi, max at a low ~19 deg
+and a few dB more gain than the half-square (~6.4 dBi here, max at a low
 elevation over ground).
 
-Only the centre vertical is physically fed -- at its base, the classic
-"matching tank at the bottom of the centre wire" point. This is a high,
-reactive impedance (hundreds of ohms and up), which is why the real antenna
-uses a parallel-tuned tank rather than a direct coax feed. The two OUTER
-verticals are passive, open at the bottom, and excited entirely through the
-top phasing wire.
+Only the centre vertical is fed; the two OUTER verticals are passive, open at
+the bottom, and excited entirely through the top phasing wire.
+
+FEEDPOINT -- where we tap the centre vertical. The classic bobtail is fed at
+the BASE of the centre wire ("the matching tank at the bottom"), which sits at
+a current NULL: the impedance there is high (thousands of ohms) and strongly
+reactive, so the real antenna resonates it out with a parallel-tuned tank, not
+a broadband unun. That base point is also a poor MODELLING point -- being a
+current minimum, the computed Z is ill-conditioned (it neither converges with
+segmentation nor agrees between solver bases), exactly the high-impedance-
+feedpoint hazard Cebik warned about. So, like the catalog's `half_square`
+(which feeds its top corner rather than a leg end), we instead tap the centre
+vertical partway up, at a CURRENT MAXIMUM: `feed_height_frac` of the way from
+the base to the top. At the default mid-element tap the driving point is a low,
+near-resonant ~50 ohm -- coax-direct, well-conditioned, and identical in gain
+and pattern to the base-fed version (the feed only taps the standing wave; it
+does not change the radiation). A real shunt/gamma-fed coax bobtail does this.
 
 Cebik's 40 m proportions: verticals ~0.243 wl, half-span (centre-to-outer)
 ~0.541 wl, so the full top wire is ~1.083 wl.
@@ -27,9 +38,9 @@ The structure is planar in x = 0.
 
     C1=========C2=========C3    z = base + vert   (top wire, ~1.08 wl)
     |          |          |
-    |          |          |     three verticals, ~0.243 wl
-    |          F          |
-    A1         A2         A3     z = base   (outer ends open; centre base-fed)
+    |          F          |     three verticals, ~0.243 wl; centre tapped
+    |          |          |     at a current max (feed_height_frac up)
+    A1         A2         A3     z = base   (outer ends open; A2 = open base)
 """
 
 from ... import AntennaBuilder
@@ -49,20 +60,30 @@ class Builder(AntennaBuilder):
             # Half-span: centre-to-outer horizontal spacing as a fraction of
             # a wavelength (~0.541 wl) -> full top wire ~1.083 wl.
             "span_frac": 0.541,
-            # Overall scale knob. Unlike the half-square, the base feed is
-            # inherently high-Z and reactive (tank-matched), so this is not
-            # tuned for resonance -- length_factor ~1.0 is Cebik's max-gain
-            # proportion; peak gain/pattern, not X->0, is the design target.
+            # Tap height of the feed on the centre vertical, as a fraction of
+            # its length from the base (0 = base/current-null/high-Z tank
+            # point, 1 = top/junction). ~0.5 taps a current maximum -> ~50 ohm.
+            "feed_height_frac": 0.5,
+            # Overall scale knob. length_factor ~1.0 is Cebik's max-gain
+            # proportion; near the mid tap it is also near-resonant (X -> 0).
             "length_factor": 1.0,
             "ui_params": MappingProxyType(
                 {
-                    # High, reactive feed (tank-matched in practice); reference
-                    # SWR to a representative open-wire/tank impedance.
-                    "target_z0": 300.0,
+                    # Mid-element current-max tap -> low, near-resonant feed;
+                    # reference SWR to 50 ohm coax.
+                    "target_z0": 50.0,
                     "default_view": "yz",
                     "length_factor": {
                         "min": 0.9,
                         "max": 1.1,
+                        "step": 0.001,
+                        "precision": 4,
+                    },
+                    # Tap position: stay off the ill-conditioned base (0) and
+                    # top-junction (1) extremes.
+                    "feed_height_frac": {
+                        "min": 0.25,
+                        "max": 0.85,
                         "step": 0.001,
                         "precision": 4,
                     },
@@ -98,12 +119,15 @@ class Builder(AntennaBuilder):
         tups.append(((0.0, -span, z_top), (0.0, -span, z_bot), nsegs(vert), None))
         tups.append(((0.0, span, z_top), (0.0, span, z_bot), nsegs(vert), None))
 
-        # Centre vertical: passive from the top down to just above the base,
-        # then a one-segment driven gap at the base (the matching-tank point).
+        # Centre vertical: a one-segment driven gap tapped `feed_height_frac`
+        # of the way up (a current maximum), with passive wire above and below.
+        # zf is the lower edge of the gap.
         feed = 2 * eps
+        zf = z_bot + self.feed_height_frac * (vert - feed)
         tups.append(
-            ((0.0, 0.0, z_top), (0.0, 0.0, z_bot + feed), nsegs(vert - feed), None)
+            ((0.0, 0.0, z_top), (0.0, 0.0, zf + feed), nsegs(z_top - (zf + feed)), None)
         )
-        tups.append(((0.0, 0.0, z_bot + feed), (0.0, 0.0, z_bot), 1, 1 + 0j))
+        tups.append(((0.0, 0.0, zf + feed), (0.0, 0.0, zf), 1, 1 + 0j))
+        tups.append(((0.0, 0.0, zf), (0.0, 0.0, z_bot), nsegs(zf - z_bot), None))
 
         return tups

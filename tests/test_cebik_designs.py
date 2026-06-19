@@ -97,14 +97,26 @@ def test_bobtail_broadside_directivity():
     assert broadside - end_on > 20.0
 
 
-def test_bobtail_feed_is_high_impedance():
-    """Base feed of the centre element is a high, reactive point (Cebik:
-    hundreds to thousands of ohms, tank-matched)."""
+def test_bobtail_feed_is_coax_friendly():
+    """Tapped at a current maximum on the centre vertical (not the classic
+    high-Z base/tank point), the driving point is a low, near-resonant ~50 ohm
+    that takes coax directly."""
     from antenna_designer.designs.cebik.bobtail import Builder
 
     z = _z(Builder())
-    assert z.real > 500.0
-    assert abs(z.imag) > 1000.0
+    assert 35.0 < z.real < 70.0
+    assert abs(z.imag) < 30.0
+
+
+def test_bobtail_tap_position_sets_impedance():
+    """Sliding the tap toward the base (a current null) raises the feed
+    resistance -- the standing-wave transformation that lets feed_height_frac
+    pick the match, the same trick a shunt/gamma feed uses."""
+    from antenna_designer.designs.cebik.bobtail import Builder
+
+    r_mid = _z(Builder()).real  # default tap (~0.5) -> ~50 ohm
+    r_low = _z(Builder(dict(Builder.default_params, feed_height_frac=0.3))).real
+    assert r_low > r_mid + 20.0
 
 
 def test_bobtail_only_centre_element_is_fed():
