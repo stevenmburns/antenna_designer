@@ -3,6 +3,64 @@
 Date: 2026-06-17
 Author: smburns47
 
+## Implementation update (2026-06-19)
+
+Implemented in the `pysim` submodule on branch `bspline-swept-k-batching`
+(commits: leggauss memoization → same-edge hoist → swept-k reg batching).
+
+**Re-measured first — and it changed the approach.** Open question #1 ("is
+the per-k path accelerator-bound?") resolved to **no**: on a 41-point
+trap_fan sweep the C++ off-edge kernel was only ~8% of the time and the C++
+`assemble_Z_bspline` ~3%; the swept bottleneck was **Python** — recomputed
+`leggauss` nodes (738 calls, ~159 ms cum) and per-k same-edge static + reg
+work. So the plan's literal **(n_k, N, N) pure-Python batched assembly was
+NOT implemented**: it would be 9.5 GB at bowtie N=41 *and* regress, since it
+replaces the cheap per-k C++ assembly with slower numpy. Instead the
+k-independent work was hoisted out of the per-k loop and only the cheap
+Python reg-kernel einsum was batched over k (chunked for memory); the C++
+off-edge/assembly and the LU solves stay per-k (Step 4 option 1, as the plan
+recommended).
+
+What landed, against the plan's steps:
+- **Step 1 (batched J):** in spirit — k-independent J pieces (static moments,
+  reg quadrature geometry) hoisted/shared; reg moments batched over k via
+  `_seg_seg_reg_moments_from_geometry_swept`. The k-dependent off-edge block
+  stays the per-k C++ call (cheap).
+- **Step 2 (static once):** done — the plan said this was "already once per
+  sweep"; it was **not** (`_build_J_blocks` recomputed it every k). Now once.
+- **Step 3 (batched Z):** deliberately **not** as (n_k, N, N) — see above.
+- **Step 4 (solve loop):** unchanged (already per-k).
+- **Step 5 (enrichment):** `compute_impedance_swept` already supports it (it
+  loops `compute_impedance`). `compute_y_matrix_swept` still raises for
+  `use_singular_enrichment` — a pre-existing, opt-in, bspline-only gap that
+  is **not** a Triangular-retirement blocker (Triangular has no enrichment),
+  so it was left as-is.
+- **Step 6 (source):** already k-independent, unchanged.
+- **Memory:** the only new allocation (the `exp(-jkR)` phase intermediate) is
+  k-chunked under a byte budget.
+
+Result — per-k swept cost, mean of reps, `OPENBLAS_NUM_THREADS=1`:
+
+```
+design                segs   Bs1/Tri before*   Bs1/Tri after
+trap_fan (small)      ~100   ~5x               2.06x
+fandipole (medium)    ~423   ~2.6x (@300)      1.77x
+bowtiearray (large)   ~696   ~1.7x             1.69x   (no regression)
+```
+*before = the benchmark table below / the plan's original ratios.
+
+trap_fan 41-k swept, cumulative: **Bspline=1 353 → 123 ms (−65%)**,
+Bspline=2 417 → 149 ms (−64%); impedance unchanged. Verified roundoff-equal
+to the per-k path (~7e-13 relative); 104 pysim + 1058 antenna_designer tests
+pass, plus a new `test_bspline_fandipole_swept_matches_per_freq`.
+
+Remaining lever (not done): on *tiny* designs (<~50 segs) Bs1 is still ~7×
+Tri, but only ~1.4 ms/k absolute — the bottleneck there is the per-k C++
+off-edge call + solve, which Triangular batches over k via a C++ kernel that
+accepts a k-array. Matching that needs a batched C++ off-edge kernel for the
+bspline basis (the "heavy lift" the plan flagged); deferred as low-value
+(sub-2 ms/k).
+
 ## TL;DR
 
 The process-level caches added in pysim PRs #80 (geometry) and #81
