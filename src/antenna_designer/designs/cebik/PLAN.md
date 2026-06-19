@@ -190,15 +190,20 @@ useful NEGATIVE results that widen the trusted envelope:
 - Ideal-TL network feeds with virtual ports (g5rv) -- the TL + virtual-port
   reduction matches PyNEC's tl_card to a few percent.
 
-Holes confirmed and pinned (PyNEC models them; every pysim basis raises) -- the
-highest-value targets for a pysim fix, each now locked by a test:
-- Parasitic (no-port) closed loops -> `NotImplementedError: closed loop with no
-  port edge`. Bounds the entire cubical-quad / parasitic-loop-beam family (the
-  catalog's `quad`); a batch-3 3-element quad was DROPPED because it only
-  re-trips this one known hole.
+Holes found by this batch (PyNEC models them; pysim raised):
+- Parasitic (no-port) closed loops -- bounded the entire cubical-quad /
+  parasitic-loop-beam family (the catalog's `quad`); a batch-3 3-element quad
+  was DROPPED because it only re-tripped this hole. **RESOLVED (follow-up):**
+  the limitation lived in `geometry.py`'s cycle cutter, not in pysim's solver --
+  it refused to cut a cycle that carried no port edge. pysim already carries
+  current around closed loops via junction KCL (single-port loops like
+  `delta_loop` always worked). The fix cuts a parasitic loop at an arbitrary
+  edge and registers the two cut nodes as junctions; the cubical `quad` now
+  solves on all four bases within a few percent of PyNEC, with no pysim change.
 - Closed loops with two port edges (a feed + a termination) -> `NotImplementedError:
   closed loop with 2 port edges`. Bounds terminated loops (the catalog's
-  `rhombic`, `t2fd`).
+  `rhombic`, `t2fd`). Still open -- liftable the same way (cut at one port edge,
+  leave the second as a mid-polyline feed); a separate follow-up.
 
 Shared limitations (NOT pysim-specific -- PyNEC hits them too):
 - An ideal lossless TL is singular at exactly k*lambda/2 (sin betaL -> 0); the

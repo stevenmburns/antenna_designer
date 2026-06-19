@@ -10,12 +10,18 @@ graph, decomposes it into maximal chains between junction/endpoint
 nodes, and emits the junction list.
 
 Supported topologies:
-  * Each connected component must contain at least one degree-1 endpoint
-    OR at least one junction (degree >= 3); pure cycles aren't handled.
-  * Any number of junctions of any degree (tees, X's, hentenna-style
-    multi-junction, fandipole-style multi-spoke feeds).
+  * Open chains and any number of junctions of any degree (tees, X's,
+    hentenna-style multi-junction, fandipole-style multi-spoke feeds).
+  * Pure cycles (closed loops). A cycle is cut at one edge into two
+    polylines joined by a junction at each cut node, so pysim's KCL
+    carries the current around the loop. The cut edge is the loop's port
+    edge when it has one (driven loops); for a PARASITIC loop, which
+    radiates only through mutual coupling, the cut edge is arbitrary.
+    A cycle with two or more port edges is not yet handled.
   * One or more excited segments per geometry (each becomes a delta-gap
-    feed in the returned `feeds` list).
+    feed in the returned `feeds` list). The geometry as a whole must
+    carry at least one excitation, but individual loop components need
+    not (a parasitic loop is excited only by coupling).
 """
 
 from __future__ import annotations
@@ -174,31 +180,34 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
                         in_comp.add(eo)
                         stack.append(eo)
 
-        # A "port edge" carries either a voltage (legacy build_tls path) or
-        # a network-spec name. Both are valid cut points for closed loops.
+        # A "port edge" carries either a voltage (legacy build_tls path) or a
+        # network-spec name. To open the cycle we cut ONE edge into its own
+        # polyline and register the two cut nodes as junctions, so pysim's KCL
+        # enforces current continuity around the loop. We PREFER to cut at a
+        # port edge: it has to become its own polyline anyway, to host the
+        # delta-gap feed. A PARASITIC loop has no port edge, so the cut point
+        # is arbitrary (any edge breaks the cycle) -- we cut the first one, and
+        # since it carries no voltage/name it simply stays a passive polyline
+        # whose only role is to anchor the two cut-node junctions.
         excited_in_comp = [
             ei
             for ei in comp_edges
             if edges[ei][3] is not None or tup_names[edges[ei][4]] is not None
         ]
-        if not excited_in_comp:
-            raise NotImplementedError(
-                "closed loop with no port edge is not supported "
-                "(parasitic-only loops are not yet handled)"
-            )
         if len(excited_in_comp) > 1:
             raise NotImplementedError(
                 f"closed loop with {len(excited_in_comp)} port edges is not supported"
             )
 
-        feed_ei = excited_in_comp[0]
-        cut_a, cut_b, feed_n_seg, _, feed_tup_idx = edges[feed_ei]
+        cut_ei = excited_in_comp[0] if excited_in_comp else comp_edges[0]
+        cut_a, cut_b, cut_n_seg, _, cut_tup_idx = edges[cut_ei]
 
-        # Polyline 0 (feed): the excited edge alone, A → B.
-        feed_pl_idx = len(polylines)
+        # Polyline 0: the cut edge alone, A → B. It hosts the delta-gap feed
+        # when the cut was a port edge; for a parasitic loop it is just passive.
+        cut_pl_idx = len(polylines)
         polylines.append(np.stack([nodes[cut_a], nodes[cut_b]], axis=0))
-        edge_segments.append([feed_n_seg])
-        edge_to_polyline[feed_tup_idx] = (feed_pl_idx, 0)
+        edge_segments.append([cut_n_seg])
+        edge_to_polyline[cut_tup_idx] = (cut_pl_idx, 0)
 
         # Polyline 1 (long way): walk B → ... → A via the remaining edges.
         # The cut nodes are now polyline boundaries; the walker stops there.
@@ -208,18 +217,18 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
         junction_ends.setdefault(cut_b, [])
 
         # Undo the flood-fill's seen marks on the cycle remainder so the
-        # walker can traverse them. Keep the feed edge marked since it's
+        # walker can traverse them. Keep the cut edge marked since it's
         # already become polyline 0.
         for ei in comp_edges:
-            if ei != feed_ei:
+            if ei != cut_ei:
                 edge_seen[ei] = False
 
         first = next(
-            (eo for _nb, eo in adj[cut_b] if eo != feed_ei and not edge_seen[eo]),
+            (eo for _nb, eo in adj[cut_b] if eo != cut_ei and not edge_seen[eo]),
             None,
         )
         # In a pure cycle every node has degree 2, so there's exactly one
-        # remaining edge at cut_b after consuming the feed.
+        # remaining edge at cut_b after consuming the cut edge.
         assert first is not None, "cycle cut left no continuation"
         path_nodes, path_edges = walk_from(cut_b, first)
         loop_pl_idx = len(polylines)
@@ -228,12 +237,12 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
         for k, e in enumerate(path_edges):
             edge_to_polyline[edges[e][4]] = (loop_pl_idx, k)
 
-        # Register the cut endpoints as junctions: feed polyline has
+        # Register the cut endpoints as junctions: the cut polyline has
         # path [A, B] so its start=A, end=B; loop polyline was walked
         # B → A so its start=B, end=A.
-        junction_ends[cut_a].append((feed_pl_idx, "start"))
+        junction_ends[cut_a].append((cut_pl_idx, "start"))
         junction_ends[cut_a].append((loop_pl_idx, "end"))
-        junction_ends[cut_b].append((feed_pl_idx, "end"))
+        junction_ends[cut_b].append((cut_pl_idx, "end"))
         junction_ends[cut_b].append((loop_pl_idx, "start"))
 
     # Junctions = nodes where >= 2 polylines meet. Single-end records
