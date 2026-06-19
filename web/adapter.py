@@ -402,8 +402,8 @@ def _pack_wires(currents) -> list[dict]:
     ]
 
 
-def _feed_indices(engine, currents) -> tuple[int, int]:
-    """Pick a (wire, knot) for the feed marker.
+def _primary_feed(engine):
+    """(polyline_idx, arclength) of the driven feed, or None.
 
     PysimEngine exposes `_feeds = [(polyline_idx, arclength, voltage)]`
     post-translator. For network-spec designs the geometry translator
@@ -415,7 +415,7 @@ def _feed_indices(engine, currents) -> tuple[int, int]:
     feeds = getattr(engine, "_feeds", None) or []
     feed_names = getattr(engine, "_feed_names", None) or []
     if not feeds:
-        return 0, 0
+        return None
     feed_idx = 0
     network = getattr(engine, "_network", None)
     if network is not None and network.sources:
@@ -426,6 +426,30 @@ def _feed_indices(engine, currents) -> tuple[int, int]:
         if driven_name in feed_names:
             feed_idx = feed_names.index(driven_name)
     pl_idx, arclen, _v = feeds[feed_idx]
+    return int(pl_idx), float(arclen)
+
+
+def _interp_polyline(knots, cum, arclen):
+    """3D point at `arclen` along a polyline (knots + cumulative arclength)."""
+    arclen = min(max(arclen, 0.0), float(cum[-1]))
+    seg = int(np.searchsorted(cum, arclen, side="right")) - 1
+    seg = min(max(seg, 0), len(knots) - 2)
+    span = cum[seg + 1] - cum[seg]
+    t = 0.0 if span <= 0 else (arclen - cum[seg]) / span
+    return (knots[seg] + t * (knots[seg + 1] - knots[seg])).tolist()
+
+
+def _feed_indices(engine, currents) -> tuple[int, int]:
+    """Pick a (wire, knot) for the feed marker — the knot nearest the feed.
+
+    Kept for the feed_knot_index the frontend uses to read feed current and
+    split the current envelope. The visible marker dot uses `_feed_position`
+    instead (exact, not snapped to a knot).
+    """
+    pf = _primary_feed(engine)
+    if pf is None:
+        return 0, 0
+    pl_idx, arclen = pf
     if pl_idx >= len(currents):
         return 0, 0
     knots = currents[pl_idx].knot_positions
@@ -434,8 +458,29 @@ def _feed_indices(engine, currents) -> tuple[int, int]:
     # Cumulative arclength along the polyline.
     deltas = np.linalg.norm(np.diff(knots, axis=0), axis=1)
     cum = np.concatenate([[0.0], np.cumsum(deltas)])
-    j = int(np.argmin(np.abs(cum - float(arclen))))
-    return int(pl_idx), j
+    j = int(np.argmin(np.abs(cum - arclen)))
+    return pl_idx, j
+
+
+def _feed_position(engine, currents):
+    """Exact 3D feed point for the primary feed — the physical location the
+    solver actually feeds, independent of where segment knots fall. Avoids
+    the half-segment marker shift from snapping to the nearest knot, which
+    lands on an endpoint when the feed edge has no interior knot (e.g. a
+    1-segment driven stub under odd-parity bases like sinusoidal/Bspline=2).
+    """
+    pf = _primary_feed(engine)
+    if pf is None:
+        return None
+    pl_idx, arclen = pf
+    if pl_idx >= len(currents):
+        return None
+    knots = currents[pl_idx].knot_positions
+    if knots.shape[0] < 2:
+        return knots[0].tolist() if knots.shape[0] else None
+    deltas = np.linalg.norm(np.diff(knots, axis=0), axis=1)
+    cum = np.concatenate([[0.0], np.cumsum(deltas)])
+    return _interp_polyline(knots, cum, arclen)
 
 
 def _pynec_feed_indices(builder, currents) -> tuple[int, int]:
@@ -470,6 +515,38 @@ def _pynec_feed_indices(builder, currents) -> tuple[int, int]:
         k = currents[i].knot_positions.shape[0]
         return i, k // 2
     return 0, 0
+
+
+def _pynec_feed_position(builder, currents):
+    """Exact 3D feed point for PyNEC: the midpoint of the driven segment.
+    NEC feeds at segment (n_seg+1)//2, so on a 1-segment feed edge the feed
+    sits at the edge midpoint — not the wire's centre knot (`k//2`), which
+    lands on an endpoint for a 2-knot wire. Mirrors `_pynec_feed_indices`'
+    driven-tuple selection.
+    """
+    tuples = list(builder.build_wires())
+    driven_name = None
+    if hasattr(builder, "build_network"):
+        net = builder.build_network()
+        if net is not None and net.sources:
+            driven_name = net.sources[0].port
+    for i, t in enumerate(tuples):
+        ev = t[3]
+        name = t[4] if len(t) >= 5 else None
+        if driven_name is not None:
+            if name != driven_name:
+                continue
+        elif ev is None:
+            continue
+        if i >= len(currents):
+            return None
+        knots = currents[i].knot_positions
+        n_seg = knots.shape[0] - 1
+        if n_seg < 1:
+            return knots[0].tolist() if knots.shape[0] else None
+        mid_seg = (n_seg + 1) // 2  # 1-indexed driven segment
+        return (0.5 * (knots[mid_seg - 1] + knots[mid_seg])).tolist()
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -704,6 +781,7 @@ def _make_example(name: str, cls) -> AntennaExample:
             "wires": _pack_wires(currents),
             "feed_wire_index": feed_wire_idx,
             "feed_knot_index": feed_knot_idx,
+            "feed_position": _feed_position(eng, currents),
             "z_in_re": float(z_primary.real),
             "z_in_im": float(z_primary.imag),
             "design_freq_mhz": design_freq,
@@ -814,6 +892,7 @@ def _make_example(name: str, cls) -> AntennaExample:
             "wires": _pack_wires(currents),
             "feed_wire_index": feed_wire_idx,
             "feed_knot_index": feed_knot_idx,
+            "feed_position": _pynec_feed_position(builder, currents),
             "z_in_re": float(z_primary.real),
             "z_in_im": float(z_primary.imag),
             "design_freq_mhz": design_freq,

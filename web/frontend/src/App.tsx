@@ -443,6 +443,8 @@ function ResultPanel({
 type FeedEntry = {
   wire_index: number;
   knot_index: number;
+  /** Exact 3D feed point; preferred over the knot lookup for the marker dot. */
+  feed_position?: [number, number, number];
   z_re: number;
   z_im: number;
   v_re: number;
@@ -454,6 +456,9 @@ type SolveResponse = {
   wires: Wire[];
   feed_wire_index: number;
   feed_knot_index: number;
+  /** Exact 3D feed point for the primary feed; the marker dot uses this so
+   *  it stays on the true feed regardless of solver-basis parity. */
+  feed_position?: [number, number, number];
   z_in_re: number;
   z_in_im: number;
   /** Multi-feed geometries (bowtie 1×2 array) populate this; single-feed
@@ -3720,14 +3725,17 @@ function CurrentCanvas({
         : [{
             wire_index: feedWireIdx,
             knot_index: result.feed_knot_index,
+            feed_position: result.feed_position,
             v_re: 1, v_im: 0,
             z_re: result.z_in_re, z_im: result.z_in_im,
           }];
       for (let fi = 0; fi < feedList.length; fi++) {
         const f = feedList[fi];
         const w_ = result.wires[f.wire_index];
-        if (!w_) continue;
-        const feed = project(w_.knot_positions[f.knot_index]);
+        // Prefer the exact feed point; fall back to the nearest knot.
+        const pos3d = f.feed_position ?? (w_ ? w_.knot_positions[f.knot_index] : undefined);
+        if (!pos3d) continue;
+        const feed = project(pos3d);
         ctx!.fillStyle = "#ffd166";
         ctx!.beginPath();
         ctx!.arc(feed.x, feed.y, 5 * s, 0, Math.PI * 2);
