@@ -33,11 +33,18 @@ jobs:
         pip install setuptools numpy scipy pytest matplotlib icecream scikit.rf coverage pybind11 fastapi httpx
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: install swig3.0 (g++, buildtools and fortran already installed)
+    - name: install swig3.0 + LAPACKE/OpenBLAS (g++, buildtools and fortran already installed)
       run: |
-        sudo apt install -y swig3.0
+        sudo apt install -y swig3.0 liblapacke-dev libopenblas-dev
 
     - name: Compile
+      # The fork's PyNEC links a real LAPACK backend (the accelerated necpp
+      # needs it). Use the lapacke backend (reference LAPACKE + OpenBLAS) — its
+      # libs are plain apt packages, unlike the default ATLAS or MKL backends.
+      # The LAPACK code path is turned on by setup.py -D macros, so necpp_src's
+      # configure stays --without-lapack (it only generates config.h).
+      env:
+        PYNEC_BACKEND: lapacke
       run: |
         git submodule init
         git submodule update --remote
