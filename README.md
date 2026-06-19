@@ -15,7 +15,7 @@
 | src/antenna\_designer/designs/bowtiearray.py                             |        7 |        0 |    100% |           |
 | src/antenna\_designer/designs/cebik/\_\_init\_\_.py                      |        0 |        0 |    100% |           |
 | src/antenna\_designer/designs/cebik/bisquare.py                          |       29 |        0 |    100% |           |
-| src/antenna\_designer/designs/cebik/bobtail.py                           |       24 |        0 |    100% |           |
+| src/antenna\_designer/designs/cebik/bobtail.py                           |       26 |        0 |    100% |           |
 | src/antenna\_designer/designs/cebik/discone.py                           |       29 |        0 |    100% |           |
 | src/antenna\_designer/designs/cebik/half\_square.py                      |       28 |        0 |    100% |           |
 | src/antenna\_designer/designs/cebik/hb9cv.py                             |       31 |        0 |    100% |           |
@@ -80,7 +80,7 @@
 | src/antenna\_designer/sim.py                                             |        2 |        0 |    100% |           |
 | src/antenna\_designer/sweep.py                                           |      123 |        7 |     94% |   105-116 |
 | src/antenna\_designer/transform.py                                       |       42 |        1 |     98% |        62 |
-| **TOTAL**                                                                | **3523** |  **137** | **96%** |           |
+| **TOTAL**                                                                | **3525** |  **137** | **96%** |           |
 
 
 ## Setup coverage badge
