@@ -715,6 +715,12 @@ def _make_example(name: str, cls) -> AntennaExample:
             "ground_eps_r": _PEC_GROUND_EPS_R,
             "ground_sigma": _PEC_GROUND_SIGMA,
             "z0_ohms": target_z0,
+            # Fraction of input power actually radiated (1.0 unless the design
+            # has resistive loads, e.g. a terminated rhombic / T2FD). The
+            # server's far-field normaliser multiplies directivity by this so
+            # the UI plots GAIN, not directivity; current_distribution() above
+            # populated it on the engine.
+            "radiation_efficiency": float(getattr(eng, "_excited_efficiency", 1.0)),
         }
         if multi_feed and len(zs) > 1:
             # Pull per-feed drive voltages off the engine so the frontend
