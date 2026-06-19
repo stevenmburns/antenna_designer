@@ -79,7 +79,7 @@ free-space figures at the 28.57 MHz family default:
 | design        | headline result                                            |
 |---------------|------------------------------------------------------------|
 | half_square   | 4.7 dBi, ~62 ohm corner feed, VP bidirectional broadside   |
-| bobtail       | 6.4 dBi peak, ~30 dB end nulls, high-Z base feed           |
+| bobtail       | 6.4 dBi peak, deep end nulls, ~50 ohm current-max tap feed |
 | quad          | 7.0 dBi forward, resonant driver ~132 ohm                  |
 | lazy_h        | 8.1 dBi (stacking gain), HP broadside, high-Z tuner feed   |
 | lpda          | ~6-9 dBi forward across ~24-32 MHz (feed-Z caveat in file) |
@@ -91,6 +91,19 @@ Two models carry documented modeling caveats (see their module docstrings):
 the LPDA's ideal lossless crossed feeder gives an unreliable feedpoint
 impedance, and the HB9CV's single-ended crossed TL reaches only ~8 dB F/B
 (the deep ZL null wants a true differential transposed line / pysim DiffTL).
+
+**Bobtail feedpoint revision (post-merge):** the bobtail was originally
+base-fed at the classic "tank" point (the bottom of the centre vertical). That
+is a current null -> a high, strongly-reactive impedance (~5000-8000j) that, a
+segment-convergence + multi-basis study showed, neither converges with
+segmentation nor agrees between solver bases (NEC2/sinusoidal ~5000, rooftop
+~2700, bspl-d2 ~3500 ohm) -- the textbook ill-conditioned high-Z feedpoint
+Cebik warned about, and a unun can't fix it because it scales the large
+reactance too. We re-fed it like `half_square`: tapped at a current MAXIMUM
+(`feed_height_frac` up the centre vertical), giving a coax-direct ~50 ohm that
+all four engines agree on (45-49 ohm) at identical gain/pattern. Gain and
+pattern were basis-stable throughout; only the feed Z was unreliable -- exactly
+Cebik's "model for gain/pattern, treat high-Z feeds as approximate" guidance.
 
 ## Batch 2 (PR #91)
 
