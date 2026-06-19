@@ -90,9 +90,7 @@ jobs:
     # the ~1 GB intel-oneapi-mkl-classic-devel install adds ~3 min per run, so
     # running it per-PR would burn CI minutes for marginal coverage. The
     # post-merge run on main catches MKL-path regressions without slowing PRs.
-    # TEMP(validate-on-PR): also runs on this PR to prove the MKL build before
-    # it lands on main; restore to `github.event_name == 'push'` before merge.
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
