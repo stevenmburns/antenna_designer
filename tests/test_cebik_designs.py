@@ -60,6 +60,26 @@ def test_half_square_is_broadside_with_end_nulls():
     assert broadside - end_on > 8.0
 
 
+def test_half_square_feed_wire_carries_current_free_ends_null():
+    """The corner feed is a dedicated 1-segment driven edge, so both its
+    knots are junctions. current_distribution must carry the segment current
+    onto those boundary knots (continuous through a junction) rather than
+    zeroing them, which would render a zero-current gap right at the feed —
+    the current maximum. The two open leg ends, by contrast, are genuine free
+    ends and stay at the current null Cebik describes."""
+    from antenna_designer.designs.cebik.half_square import Builder
+
+    cur = PyNECEngine(Builder(), ground=None).current_distribution()
+    # Tuple order from build_wires: 0=left leg, 1=feed stub, 2=top, 3=right leg.
+    feed = np.abs(cur[1].knot_currents)
+    assert cur[1].knot_positions.shape[0] == 2  # 1-segment feed edge
+    assert feed.min() > 1e-4  # both junction knots carry current, no gap
+    # Open leg ends (knot 0 of the left leg, last knot of the right leg) are
+    # free ends -> current null.
+    assert abs(cur[0].knot_currents[0]) < 1e-9
+    assert abs(cur[3].knot_currents[-1]) < 1e-9
+
+
 def test_half_square_length_factor_tunes_reactance():
     """Reactance climbs monotonically with length_factor through resonance."""
     from antenna_designer.designs.cebik.half_square import Builder

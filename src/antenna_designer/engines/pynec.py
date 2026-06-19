@@ -412,10 +412,12 @@ class PyNECEngine(SimulationEngine):
 
     def current_distribution(self):
         """Per-tuple knot positions + complex currents. Each build_wires()
-        tuple becomes one wire entry with n_seg+1 knot positions; per-knot
-        currents are the average of the two adjacent NEC segment-centre
-        currents, with boundary knots zeroed (open-wire BC). The pysim web
-        backend uses the same averaging convention."""
+        tuple becomes one wire entry with n_seg+1 knot positions; interior
+        knots are the average of the two adjacent NEC segment-centre
+        currents. Boundary knots are zeroed at genuine free ends (open-wire
+        BC) but carry the adjacent segment-centre current at junctions, where
+        the current is physically continuous through the shared endpoint.
+        Mirrors web.pynec_backend._segment_centers_to_knot_currents."""
         if self._use_reducer:
             self.c = self._excited_real_context(C_LIGHT / (self.builder.freq * 1e6))
         self._set_freq_and_execute()
@@ -426,6 +428,19 @@ class PyNECEngine(SimulationEngine):
         all_tags = list(sc.get_current_segment_tag())
         all_cur = sc.get_current()
 
+        # A wire end shared with another tuple is a junction (current
+        # continuous through it); an unshared end is a free end (I -> 0).
+        # Without this, a 1-segment feed stub — both ends junctions — would
+        # render zero current along its whole length even though it sits at a
+        # current maximum, opening a visible gap at the feed.
+        def _key(p):
+            return tuple(np.round(np.asarray(p, dtype=float), 6))
+
+        endpoint_count: dict = {}
+        for t in self.tups:
+            for p in (t[0], t[1]):
+                endpoint_count[_key(p)] = endpoint_count.get(_key(p), 0) + 1
+
         out = []
         for tag_idx, t in enumerate(self.tups, start=1):
             p0, p1, n_seg = t[0], t[1], t[2]
@@ -435,9 +450,11 @@ class PyNECEngine(SimulationEngine):
             knot_cur = np.zeros(n_seg + 1, dtype=np.complex128)
             if n_seg >= 2:
                 knot_cur[1:-1] = 0.5 * (cur_per_seg[:-1] + cur_per_seg[1:])
-            elif n_seg == 1:
-                # 1-segment wire: no interior knot, leave boundaries at 0.
-                pass
+            if cur_per_seg.shape[0] >= 1:
+                if endpoint_count.get(_key(p0), 0) >= 2:
+                    knot_cur[0] = cur_per_seg[0]
+                if endpoint_count.get(_key(p1), 0) >= 2:
+                    knot_cur[-1] = cur_per_seg[-1]
             out.append(
                 WireCurrents(
                     knot_positions=knots,
