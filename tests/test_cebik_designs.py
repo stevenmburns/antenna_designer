@@ -1207,6 +1207,30 @@ def test_terminated_rhombic_is_unidirectional_across_engines():
     assert front_to_back(ref) > 15.0
 
 
+def test_pynec_pec_matches_pysim_sinusoidal_on_terminated_loop():
+    """PyNEC defaults to PEC wires (WIRE_CONDUCTIVITY=None), matching pysim's
+    lossless model. With copper loss off, PyNEC and pysim's SINUSOIDAL basis --
+    the same NEC2 basis family -- agree on a terminated rhombic to a fraction
+    of an ohm and a fraction of a dB. This pins that clean cross-engine
+    reference (turning copper loss back on would offset it by a few tenths of
+    a dB, which is exactly why the default is PEC)."""
+    from antenna_designer.designs.cebik.rhombic import Builder
+    from antenna_designer.engines import PysimEngine
+    from pysim import SinusoidalPySim
+
+    z_nec = _z(Builder())  # PyNEC, PEC by default
+    eng = PysimEngine(Builder(), ground=None, solver=SinusoidalPySim)
+    z_sin = eng.impedance()[0]
+    # same basis family + both PEC -> impedance agrees to well under 1%.
+    assert abs(z_nec - z_sin) / abs(z_nec) < 0.01
+    # and the load efficiency that feeds the gain correction matches too.
+    eng.current_distribution()
+    z_ref_eff = eng._excited_efficiency
+    nec = PyNECEngine(Builder())
+    nec.current_distribution()
+    assert abs(nec._excited_efficiency - z_ref_eff) < 0.02
+
+
 def test_t2fd_broadband_gain_agrees_across_engines():
     """The T2FD is a folded loop carrying a feed AND a terminating resistor
     (two port edges). With the load shaping the current and its loss folded
