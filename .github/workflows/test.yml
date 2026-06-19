@@ -155,4 +155,4 @@ jobs:
         OPENBLAS_NUM_THREADS: "1"
       run: |
         pip install -e .
-        pytest tests/
+        python -m pytest tests/  # -m puts CWD on sys.path so the top-level web/ package imports
