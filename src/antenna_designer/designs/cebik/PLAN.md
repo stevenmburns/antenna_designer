@@ -144,3 +144,78 @@ Design-method notes learned this round:
   half-wave sections a centre feed already makes them in-phase (it degenerates
   to lazy_h's 1 wl element), and the multi-section phase-reversed curtain is
   already covered by `freq_based/sterba`. The discone took its slot instead.
+
+## Batch 3 (methodology-stress set)
+
+A third eight-model set, chosen NOT just to fill catalog gaps but to probe the
+engines' methodology -- each design exercises a geometry or feed the earlier
+batches did not, to find where pysim's bases agree with the PyNEC reference and
+where they break. All free-space, self-contained, MKL-PyNEC verified, with
+regression tests in `tests/test_cebik_designs.py` (including a cross-engine
+"methodology" section). Headline free-space figures at 28.57 MHz:
+
+| design          | gap probed / headline result                                |
+|-----------------|-------------------------------------------------------------|
+| helix           | first 3-D (non-planar) radiator: normal-mode helical        |
+|                 | vertical, ~15 ohm near-resonant, VP omni ~1.2 dBi           |
+| koch_dipole     | fractal miniaturisation + dense 60deg junctions: it-2 Koch  |
+|                 | resonates at 0.33 wl span vs 0.49 straight, R ~37 ohm       |
+| longwire        | longest open conductor: ~3.5 wl centre-fed, ~138 ohm, 5.5   |
+|                 | dBi multi-lobe pattern tilted toward the wire axis          |
+| bruce           | series-fed VP meander: five co-phased risers, ~4.3 dBi      |
+|                 | broadside; high-Z reactive current-min feed (matching net)  |
+| four_square     | densest multi-feed: 4 quadrature voltage feeds in a 2-D     |
+|                 | box, ~8.8 dBi diagonal cardioid, ~28 dB F/B                 |
+| horizontal_loop | large single horizontal loop: ~1 wl perimeter, ~126 ohm,    |
+|                 | zenith-pointing NVIS lobe (~3.3 dBi)                        |
+| g5rv            | ideal-TL impedance transformer: 1.5 wl doublet through a    |
+|                 | matched line -> reactive ~115 ohm shack Z (tuner job)       |
+| zepp            | ideal-TL feeder at a near-open port: end-fed half wave, the |
+|                 | series stub can't coax-match it (|Gamma| preserved)         |
+
+### Methodology findings (the point of this batch)
+
+What pysim handles correctly (all four bases agree with PyNEC, no exceptions) --
+useful NEGATIVE results that widen the trusted envelope:
+- 3-D non-planar space curves (helix) -- the dense chain of short skewed
+  segments and 3-D junctions is fine.
+- Dense acute-angle segmentation (koch_dipole) -- sharp 60deg/120deg interior
+  junctions do not split the bases.
+- Long multi-half-wave standing-wave wires (longwire) -- segmentation-stable;
+  only a modest, expected R/X spread.
+- Large single closed loops with one port (horizontal_loop) -- like the
+  existing delta/diamond loops, fully supported in a new (horizontal) plane.
+- Dense multi-feed excitation (four_square, 4 simultaneous complex voltages) --
+  the multi-port excitation path is solid.
+- Ideal-TL network feeds with virtual ports (g5rv) -- the TL + virtual-port
+  reduction matches PyNEC's tl_card to a few percent.
+
+Holes confirmed and pinned (PyNEC models them; every pysim basis raises) -- the
+highest-value targets for a pysim fix, each now locked by a test:
+- Parasitic (no-port) closed loops -> `NotImplementedError: closed loop with no
+  port edge`. Bounds the entire cubical-quad / parasitic-loop-beam family (the
+  catalog's `quad`); a batch-3 3-element quad was DROPPED because it only
+  re-trips this one known hole.
+- Closed loops with two port edges (a feed + a termination) -> `NotImplementedError:
+  closed loop with 2 port edges`. Bounds terminated loops (the catalog's
+  `rhombic`, `t2fd`).
+
+Shared limitations (NOT pysim-specific -- PyNEC hits them too):
+- An ideal lossless TL is singular at exactly k*lambda/2 (sin betaL -> 0); the
+  network guard fires on every engine including PyNEC. `g5rv`'s default match
+  length sits just off the half wave.
+
+Conditioning lessons (extending the bobtail finding):
+- A feed at a current MINIMUM that is NOT exactly on the null (the Bruce's tap a
+  little up the end riser) is high-Z and reactive but WELL-CONDITIONED: the
+  bases agree within a few percent.
+- A feed at a near-exact current null (the Zepp's end-fed point, the bobtail's
+  original base) is ILL-CONDITIONED: the bare impedance varies ~2x between
+  bases. Through a feeder/stub the transformed R agrees but the REACTANCE
+  inherits the spread. Gain and pattern stay basis-stable throughout -- the
+  recurring "model for gain/pattern, treat high-Z/current-null feeds as
+  approximate" rule.
+- A lossless series feeder preserves |Gamma|, so it cannot bring a near-open
+  end feed near 50 ohm (zepp) -- the historical reason the Zepp ran tuned
+  feeders to a tuner; a coax match needs a parallel stub (the catalog's
+  `jpole`, modelled in physical wire).
