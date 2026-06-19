@@ -1176,6 +1176,60 @@ def test_parasitic_loop_quad_agrees_across_engines():
         assert abs(z.imag) < 15.0
 
 
+def test_terminated_rhombic_is_unidirectional_across_engines():
+    """A closed loop with TWO port edges -- the rhombic's feed apex + its
+    terminating resistor -- is now handled too (cut at one port, the other
+    rides the long-way polyline as a mid-polyline feed). The resistive load
+    is imposed with its physical series-impedance BC in the excited solve, so
+    pysim develops the same TRAVELING-WAVE unidirectional pattern as PyNEC
+    (it was bidirectional, F/B ~1 dB, before the load shaped the current), and
+    the radiation efficiency folds the termination loss into GAIN."""
+    from antenna_designer.designs.cebik.rhombic import Builder
+    from antenna_designer.engines import PysimEngine
+    from pysim import TriangularPySim
+
+    ref = _far_field(Builder())  # PyNEC reference
+    ff = PysimEngine(Builder(), ground=None, solver=TriangularPySim).far_field(
+        n_theta=90, n_phi=360, del_theta=1, del_phi=1
+    )
+
+    def front_to_back(far):
+        r = np.array(far.rings)
+        ti = int(np.argmax(r.max(axis=1)))
+        pphi = int(np.argmax(r[ti]))
+        return r[ti][pphi] - r[ti][(pphi + 180) % 360]
+
+    # gain now accounts for the termination loss (directivity x efficiency),
+    # so it lands close to PyNEC instead of ~3 dB high.
+    assert abs(ff.max_gain - ref.max_gain) < 0.8
+    # and the termination makes it strongly unidirectional, like PyNEC.
+    assert front_to_back(ff) > 15.0
+    assert front_to_back(ref) > 15.0
+
+
+def test_t2fd_broadband_gain_agrees_across_engines():
+    """The T2FD is a folded loop carrying a feed AND a terminating resistor
+    (two port edges). With the load shaping the current and its loss folded
+    into gain, pysim's low broadband gain matches PyNEC instead of reading
+    several dB high."""
+    from antenna_designer.designs.cebik.t2fd import Builder
+    from antenna_designer.engines import PysimEngine
+    from pysim import BSplinePySim, SinusoidalPySim, TriangularPySim
+
+    g_ref = _far_field(Builder()).max_gain  # PyNEC reference
+    for solver, kw in [
+        (TriangularPySim, {}),
+        (SinusoidalPySim, {}),
+        (BSplinePySim, {"degree": 2}),
+    ]:
+        g = (
+            PysimEngine(Builder(), ground=None, solver=solver, solver_kwargs=kw)
+            .far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+            .max_gain
+        )
+        assert abs(g - g_ref) < 0.8
+
+
 def test_g5rv_ideal_halfwave_line_is_singular_on_every_engine():
     """An ideal lossless TL is singular at exactly k*lambda/2 (sin betaL = 0);
     the guard fires identically on PyNEC and every pysim basis -- a shared

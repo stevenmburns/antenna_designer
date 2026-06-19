@@ -312,14 +312,20 @@ class PysimEngine(SimulationEngine):
         a placeholder V=0) would solve with no excitation — every basis
         coefficient is zero and `compute_impedance`'s V/I returns NaN."""
         if self._network is not None:
+            # excited_state imposes the physical series-load BC (not the V=0
+            # pin the impedance path uses), so resistive loads shape the
+            # current; it also returns the radiation efficiency the far field
+            # uses to turn directivity into gain.
             Y = self._compute_y_matrix(wavelength)
-            Y_total = self._reducer.apply_branches(Y, wavelength)
-            V_full = self._reducer.resolve_voltages(Y_total)
+            V_full, self._excited_efficiency = self._reducer.excited_state(
+                Y, wavelength
+            )
             feeds_resolved = [
                 (w, arc, complex(V_full[i]))
                 for i, (w, arc, _v) in enumerate(self._feeds)
             ]
         elif self._tls:
+            self._excited_efficiency = 1.0
             Y = self._compute_y_matrix(wavelength)
             Y_total = self._apply_tls(Y, wavelength)
             V, _ = self._resolve_feed_voltages(Y_total)
@@ -327,6 +333,7 @@ class PysimEngine(SimulationEngine):
                 (w, arc, complex(V[i])) for i, (w, arc, _v) in enumerate(self._feeds)
             ]
         else:
+            self._excited_efficiency = 1.0
             return self._make_solver(wavelength=wavelength)
         return self._solver(
             wires=self._polylines,
@@ -470,7 +477,12 @@ class PysimEngine(SimulationEngine):
         p_rad = float(np.sum(mag2_int * np.sin(theta_int)[:, None]) * dtheta * dphi)
         if p_rad <= 0:
             raise RuntimeError("computed zero radiated power")
-        directivity_norm = 4 * np.pi / p_rad
+        # For a network with resistive loads the excited solve reports the
+        # fraction of input power actually radiated; folding it in converts
+        # directivity into GAIN. Load-free / lossless designs report 1.0, so
+        # the field is unchanged for everything that isn't a terminated antenna.
+        efficiency = getattr(self, "_excited_efficiency", 1.0)
+        directivity_norm = 4 * np.pi / p_rad * efficiency
 
         # Evaluate on the user grid (NEC convention: θ from 0 to 90−Δθ).
         theta_deg = np.linspace(0, 90 - del_theta, n_theta)

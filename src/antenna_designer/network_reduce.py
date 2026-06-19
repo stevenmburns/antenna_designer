@@ -208,21 +208,14 @@ class NetworkReducer:
                 Y -= (z_l / denom) * np.outer(y_col, y_col)
         return Y
 
-    def apply_branches(self, Y, wavelength):
-        """Pad Y to include virtual ports, then stamp every network branch.
+    def _augment_with_lines(self, Y, wavelength):
+        """Pad the real-port Y to all ports and stamp the TL / DiffTL branches.
 
-        Y is the raw real-port admittance, shape (n_real, n_real); the
-        return is a (n_total, n_total) augmented matrix with zeros in the
-        virtual-port rows/cols (no antenna admittance) plus the branch
-        contributions.
-
-        Order matters: Load branches modify the antenna's real-port Y first
-        (matching ld_card's effect inside the MoM), then TL branches stamp
-        on the loaded Y. A TL connected to a loaded port sees the external
-        side of the load.
-        """
-        omega = 2.0 * np.pi * C_LIGHT / wavelength
-        Y = self.apply_loads(Y, omega)
+        Loads are NOT stamped here: for the impedance reduction they are folded
+        into the real-port Y by `apply_loads` (called first by `apply_branches`),
+        and for the current solve they are imposed as explicit series-impedance
+        boundary conditions by `excited_state`. Either way the line stamping is
+        identical, so it lives here and both paths share it."""
         n_total = self.n_total_ports
         Y_full = np.zeros((n_total, n_total), dtype=np.complex128)
         n_real = Y.shape[0]
@@ -248,7 +241,7 @@ class NetworkReducer:
                 )
                 Y_full[np.ix_(idx, idx)] += y4
             elif isinstance(br, Load):
-                continue  # already applied to the real-port Y
+                continue  # not a line; see apply_loads / excited_state
             elif isinstance(br, TwoPort):
                 raise NotImplementedError(
                     "TwoPort: sketched but not cross-engine validated. "
@@ -257,6 +250,23 @@ class NetworkReducer:
             else:
                 raise NotImplementedError(f"branch type {type(br).__name__}")
         return Y_full
+
+    def apply_branches(self, Y, wavelength):
+        """Pad Y to include virtual ports, then stamp every network branch.
+
+        Y is the raw real-port admittance, shape (n_real, n_real); the
+        return is a (n_total, n_total) augmented matrix with zeros in the
+        virtual-port rows/cols (no antenna admittance) plus the branch
+        contributions.
+
+        Order matters: Load branches modify the antenna's real-port Y first
+        (matching ld_card's effect inside the MoM), then TL branches stamp
+        on the loaded Y. A TL connected to a loaded port sees the external
+        side of the load.
+        """
+        omega = 2.0 * np.pi * C_LIGHT / wavelength
+        Y = self.apply_loads(Y, omega)
+        return self._augment_with_lines(Y, wavelength)
 
     def resolve_voltages(self, Y_total):
         """Return the (n_total,) voltage vector after solving the network:
@@ -278,6 +288,83 @@ class NetworkReducer:
             Y_fd = Y_total[np.ix_(floating, driven)]
             V[floating] = np.linalg.solve(Y_ff, -Y_fd @ v_driven)
         return V
+
+    def excited_state(self, Y_real, wavelength):
+        """Physical port voltages + radiation efficiency for the CURRENT-
+        DISTRIBUTION / far-field solve.
+
+        `resolve_voltages` pins loaded ports at V=0 and folds the load into the
+        Y matrix via Sherman-Morrison (`apply_loads`): correct for the driving-
+        point impedance, but WRONG for the radiated field. Forcing V=0 at a
+        loaded port makes the load a SHORT, so a terminated antenna (rhombic,
+        T2FD) never develops the traveling wave that makes it unidirectional.
+        Here we instead impose the physical series-load boundary condition
+        ``V_k = -Z_L,k * I_k`` at each loaded port, so the load shapes the
+        current the same way NEC2's ld_card does.
+
+        Returns ``(V_full, efficiency)``:
+          V_full      -- (n_total,) port voltages to force in the excited solver
+          efficiency  -- P_radiated / P_input = 1 - P_dissipated / P_input, the
+                         fraction of input power radiated rather than burned in
+                         resistive loads. The far field multiplies directivity
+                         by it to get GAIN. A load-free / lossless network
+                         returns 1.0, leaving the field unchanged.
+        """
+        omega = 2.0 * np.pi * C_LIGHT / wavelength
+        # Lines stamped, loads left OUT -- they are imposed as BCs below, not
+        # folded into Y (that is the resolve_voltages/impedance path).
+        Y = self._augment_with_lines(Y_real, wavelength)
+        n = self.n_total_ports
+
+        # Per-port source EMF and series-load impedance. A port may carry
+        # BOTH (a driven segment with a series loading element, e.g. the
+        # centre-loaded short dipole) -- the Thevenin BC below covers it.
+        v_src = dict(zip(self.driven_port_idx, self.driven_voltages))
+        z_load = {
+            self.port_to_idx[br.port]: load_impedance(br, omega)
+            for br in self.network.branches
+            if isinstance(br, Load)
+        }
+
+        # A pure source (EMF, no series load) pins V_k = V_src,k and is known.
+        # Every other port is an unknown with a single linear BC:
+        #   load present:  V_k + Z_L,k * (Y V)_k = V_src,k   (Thevenin; V_src=0
+        #                                                      if undriven)
+        #   no load:                  (Y V)_k    = 0         (floating, I_ext=0)
+        pinned = [k for k in v_src if k not in z_load]
+        unknown = [k for k in range(n) if k not in pinned]
+        V = np.zeros(n, dtype=np.complex128)
+        for k in pinned:
+            V[k] = v_src[k]
+        if unknown:
+            pos = {p: j for j, p in enumerate(unknown)}
+            v_pin = np.array([V[k] for k in pinned], dtype=np.complex128)
+            A = np.zeros((len(unknown), len(unknown)), dtype=np.complex128)
+            rhs = np.zeros(len(unknown), dtype=np.complex128)
+            for row, k in enumerate(unknown):
+                # (Y V)_k = Y[k,unknown]·V_unknown + Y[k,pinned]·V_pin; the
+                # pinned part is known and moves to the right-hand side.
+                known = Y[k, pinned] @ v_pin if pinned else 0.0
+                if k in z_load:
+                    A[row, pos[k]] += 1.0
+                    A[row, :] += z_load[k] * Y[k, unknown]
+                    rhs[row] = v_src.get(k, 0.0 + 0.0j) - z_load[k] * known
+                else:
+                    A[row, :] += Y[k, unknown]
+                    rhs[row] = -known
+            V[unknown] = np.linalg.solve(A, rhs)
+
+        # Efficiency = P_radiated / P_input from the resulting port currents.
+        # Sources deliver P_in = 1/2 Re(V_src · I*); resistive loads burn
+        # P_diss = 1/2 Re(Z_L) |I|². Reactive loads (a loading coil) burn
+        # nothing, so they leave efficiency at 1.0.
+        current = Y @ V
+        p_in = 0.5 * float(np.real(sum(v_src[k] * np.conj(current[k]) for k in v_src)))
+        p_diss = 0.5 * float(
+            sum(np.real(z_load[k]) * abs(current[k]) ** 2 for k in z_load)
+        )
+        efficiency = 1.0 if p_in <= 0.0 else max(0.0, min(1.0, 1.0 - p_diss / p_in))
+        return V, efficiency
 
     def impedance_from_y(self, Y_total):
         """Driven-port impedance: solve the network for V (loaded ports

@@ -188,17 +188,15 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
         # delta-gap feed. A PARASITIC loop has no port edge, so the cut point
         # is arbitrary (any edge breaks the cycle) -- we cut the first one, and
         # since it carries no voltage/name it simply stays a passive polyline
-        # whose only role is to anchor the two cut-node junctions.
+        # whose only role is to anchor the two cut-node junctions. Any extra
+        # port edges (a feed + a termination, as in a terminated rhombic/T2FD)
+        # stay inside the long-way polyline and are registered as feeds by
+        # arclength below, so a multi-port loop is handled too.
         excited_in_comp = [
             ei
             for ei in comp_edges
             if edges[ei][3] is not None or tup_names[edges[ei][4]] is not None
         ]
-        if len(excited_in_comp) > 1:
-            raise NotImplementedError(
-                f"closed loop with {len(excited_in_comp)} port edges is not supported"
-            )
-
         cut_ei = excited_in_comp[0] if excited_in_comp else comp_edges[0]
         cut_a, cut_b, cut_n_seg, _, cut_tup_idx = edges[cut_ei]
 
