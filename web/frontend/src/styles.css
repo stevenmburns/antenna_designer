@@ -1,4 +1,6 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+/* Fonts are loaded via <link rel="preconnect"> + stylesheet in index.html
+   (faster than a render-blocking @import; the stack falls back to system-ui
+   offline). */
 
 /* ============================================================
    pysim — Blueprint theme
@@ -53,6 +55,15 @@
   --text-base: 13px; /* primary controls, field rows */
   --text-sm: 12px;   /* secondary controls, readouts, status */
   --text-xs: 11px;   /* uppercase labels, captions */
+
+  /* spacing scale — 2 / 4 / 6 / 8 / 12 / 16 / 20 (snapped from ad-hoc 2..18) */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 20px;
 
   --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -157,6 +168,28 @@ html, body, #root {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Themed scrollbars (Firefox + WebKit) — transparent track, thumb in the
+   control-border color; follows the theme via tokens. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-control) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-control);
+  border-radius: var(--r-md);
+  border: 2px solid var(--panel);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}
+
 /* Motion — ease state changes (hover/active/focus) instead of snapping. */
 button,
 select,
@@ -192,11 +225,11 @@ button:focus-visible,
 
 .sidebar {
   background: var(--panel);
-  padding: 18px;
+  padding: var(--space-7);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-6);
   overflow-y: auto;
   min-height: 0;
   min-width: 0;
@@ -206,7 +239,7 @@ button:focus-visible,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-4);
 }
 
 .sidebar h1 {
@@ -240,15 +273,15 @@ button:focus-visible,
 
 .geometry-tabs {
   display: flex;
-  gap: 4px;
-  margin-bottom: 4px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 
 .geometry-select-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 4px 0 8px;
+  gap: var(--space-4);
+  margin: var(--space-2) 0 var(--space-4);
 }
 
 .geometry-select-label {
@@ -265,7 +298,7 @@ button:focus-visible,
   color: var(--fg);
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
-  padding: 7px 9px;
+  padding: var(--space-4) var(--space-4);
   font: inherit;
   font-size: var(--text-base);
   font-weight: 500;
@@ -283,8 +316,8 @@ button:focus-visible,
 }
 
 .examples-error {
-  margin: 8px 0;
-  padding: 8px 10px;
+  margin: var(--space-4) 0;
+  padding: var(--space-4) var(--space-5);
   border: 1px solid var(--danger-border);
   border-radius: var(--r-sm);
   background: var(--danger-bg);
@@ -298,7 +331,7 @@ button:focus-visible,
   color: var(--muted);
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
   font: inherit;
   font-size: var(--text-sm);
   cursor: pointer;
@@ -317,20 +350,20 @@ button:focus-visible,
 }
 
 .band-tabs {
-  margin-top: 4px;
-  gap: 2px;
+  margin-top: var(--space-2);
+  gap: var(--space-1);
 }
 
 .band-tabs button {
-  padding: 3px 4px;
+  padding: var(--space-2) var(--space-2);
   font-size: var(--text-xs);
 }
 
 .fan-band-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--inset);
@@ -340,7 +373,7 @@ button:focus-visible,
 .fan-band-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
 }
 
 .fan-band-label {
@@ -356,7 +389,7 @@ button:focus-visible,
   color: var(--fg);
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
-  padding: 2px 4px;
+  padding: var(--space-1) var(--space-2);
   font: inherit;
   font-size: var(--text-sm);
   cursor: pointer;
@@ -374,7 +407,7 @@ button:focus-visible,
   justify-content: space-between;
   color: var(--muted);
   font-size: var(--text-sm);
-  margin-top: 2px;
+  margin-top: var(--space-1);
 }
 
 .fan-band-len {
@@ -388,8 +421,8 @@ button:focus-visible,
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
-  margin: 4px 0 -4px;
-  padding-top: 11px;
+  margin: var(--space-2) 0 -4px;
+  padding-top: var(--space-5);
   border-top: 1px solid var(--border);
 }
 
@@ -401,7 +434,7 @@ button:focus-visible,
 .field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--space-3);
   font-size: var(--text-base);
 }
 
@@ -409,7 +442,7 @@ button:focus-visible,
   color: var(--muted);
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-4);
   white-space: nowrap;
 }
 
@@ -422,7 +455,7 @@ button:focus-visible,
   color: var(--fg);
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
-  padding: 5px 7px;
+  padding: var(--space-3) var(--space-4);
   width: 100%;
   font: inherit;
 }
@@ -467,12 +500,12 @@ input[type=checkbox] {
 
 .backend-tabs {
   display: flex;
-  gap: 4px;
+  gap: var(--space-2);
 }
 
 .backend-tab-cell {
   display: flex;
-  gap: 2px;
+  gap: var(--space-1);
   flex: 1;
 }
 
@@ -482,7 +515,7 @@ input[type=checkbox] {
   color: var(--muted);
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm) 0 0 var(--r-sm);
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
   font: inherit;
   font-size: var(--text-sm);
   cursor: pointer;
@@ -522,7 +555,7 @@ input[type=checkbox] {
   border: 1px solid var(--border-control);
   border-left: none;
   border-radius: 0 var(--r-sm) var(--r-sm) 0;
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
   font-size: 14px;
   cursor: pointer;
   line-height: 1;
@@ -558,7 +591,7 @@ input[type=checkbox] {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: var(--space-5) var(--space-6);
   border-bottom: 1px solid var(--border);
 }
 
@@ -569,7 +602,7 @@ input[type=checkbox] {
   font-size: 22px;
   line-height: 1;
   cursor: pointer;
-  padding: 0 4px;
+  padding: 0 var(--space-2);
 }
 
 .backend-config-close:hover {
@@ -577,15 +610,15 @@ input[type=checkbox] {
 }
 
 .backend-config-body {
-  padding: 12px 16px;
+  padding: var(--space-5) var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-5);
   overflow-y: auto;
 }
 
 .backend-config-footer {
-  padding: 10px 16px;
+  padding: var(--space-5) var(--space-6);
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
@@ -596,7 +629,7 @@ input[type=checkbox] {
   color: var(--muted);
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
-  padding: 5px 11px;
+  padding: var(--space-3) var(--space-5);
   font: inherit;
   font-size: var(--text-sm);
   cursor: pointer;
@@ -611,7 +644,7 @@ input[type=checkbox] {
   background: var(--readout-bg);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  padding: 11px 13px;
+  padding: var(--space-5) var(--space-5);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   line-height: 1.8;
@@ -636,8 +669,8 @@ input[type=checkbox] {
 }
 
 .feeds-table {
-  margin-top: 6px;
-  padding-top: 6px;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
   border-top: 1px dashed var(--border-control);
 }
 
@@ -646,7 +679,7 @@ input[type=checkbox] {
   font-size: var(--text-xs);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  margin-bottom: 2px;
+  margin-bottom: var(--space-1);
 }
 
 .smith,
@@ -659,8 +692,8 @@ input[type=checkbox] {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 12px 11px;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-5);
   border-right: 1px solid var(--border);
   background: var(--panel);
   overflow-y: auto;
@@ -672,13 +705,13 @@ input[type=checkbox] {
   color: var(--muted);
   border: 1px solid var(--border-control);
   border-radius: var(--r-md);
-  padding: 7px 7px 5px;
+  padding: var(--space-4) var(--space-4) var(--space-3);
   cursor: pointer;
   font: inherit;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-3);
   flex-shrink: 0;
 }
 
@@ -722,33 +755,33 @@ input[type=checkbox] {
 .antenna-overlay,
 .smith-overlay {
   position: absolute;
-  top: 14px;
-  right: 16px;
+  top: var(--space-6);
+  right: var(--space-6);
   z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 7px;
+  gap: var(--space-4);
 }
 
 .projection-toggle {
   display: flex;
-  gap: 3px;
+  gap: var(--space-2);
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  padding: 3px;
+  padding: var(--space-2);
   box-shadow: 0 2px 10px var(--shadow);
 }
 
 .overlay-checkbox {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  padding: 5px 10px;
+  padding: var(--space-3) var(--space-5);
   font: var(--text-xs) var(--font-mono);
   color: var(--muted);
   cursor: pointer;
@@ -766,7 +799,7 @@ input[type=checkbox] {
   border: none;
   color: var(--muted);
   font: var(--text-xs) var(--font-mono);
-  padding: 4px 10px;
+  padding: var(--space-2) var(--space-5);
   border-radius: var(--r-sm);
   cursor: pointer;
 }
@@ -783,9 +816,9 @@ input[type=checkbox] {
 
 .link-toggle {
   display: flex;
-  gap: 6px;
+  gap: var(--space-3);
   align-items: center;
-  margin-top: 2px;
+  margin-top: var(--space-1);
   font-size: var(--text-sm);
   color: var(--muted);
   cursor: pointer;
@@ -829,8 +862,8 @@ canvas {
 
 .status {
   position: absolute;
-  bottom: 10px;
-  right: 14px;
+  bottom: var(--space-5);
+  right: var(--space-6);
   font-size: var(--text-sm);
   color: var(--muted);
   font-family: var(--font-mono);
