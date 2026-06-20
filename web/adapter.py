@@ -43,7 +43,13 @@ from antenna_designer.builder import (
 )
 from antenna_designer.engines.pynec import PyNECEngine
 from antenna_designer.engines.pysim import PysimEngine
-from pysim import BSplinePySim, HMatrixPySim, SinusoidalPySim, TriangularPySim
+from pysim import (
+    ArrayBlockPySim,
+    BSplinePySim,
+    HMatrixPySim,
+    SinusoidalPySim,
+    TriangularPySim,
+)
 
 from .examples import register
 from .examples._base import (
@@ -72,6 +78,12 @@ _PYSIM_MODELS = {
     # aca_leaf_size, aca_tol, solve_tol, …). Ground/enrichment fall back to
     # the dense bspline solve inside HMatrixPySim.
     "hmatrix": HMatrixPySim,
+    # Element-aware array-block accelerator (sibling of hmatrix) for arrays of
+    # identical/few-shape elements: dense per-shape self-blocks + low-rank
+    # coupling, block-Jacobi GMRES. Same B-spline basis and model_options as
+    # bspline/hmatrix (degree, aca_tol, solve_tol, …); on a single connected
+    # structure it degrades to one element and matches the dense bspline solve.
+    "arrayblock": ArrayBlockPySim,
 }
 
 

@@ -520,25 +520,52 @@ type SolveResponse = {
   z0_ohms?: number;
 };
 
-// Backend selector — three PySim model variants + PyNEC. Per-backend
+// Backend selector — PySim model variants + PyNEC. Per-backend
 // `model_options` are forwarded to server.py's _make_pysim_sim.
-type Backend = "triangular" | "sinusoidal" | "bspline" | "pynec";
+type Backend =
+  | "triangular"
+  | "sinusoidal"
+  | "bspline"
+  | "hmatrix"
+  | "arrayblock"
+  | "pynec";
 
 const BACKEND_LABEL: Record<Backend, string> = {
   triangular: "Triangular",
   sinusoidal: "Sinusoidal",
   bspline: "B-spline",
+  hmatrix: "H-matrix (ACA)",
+  arrayblock: "Array-block",
   pynec: "PyNEC",
 };
 
-const BACKEND_ORDER: Backend[] = ["triangular", "sinusoidal", "bspline", "pynec"];
+const BACKEND_ORDER: Backend[] = [
+  "triangular",
+  "sinusoidal",
+  "bspline",
+  "hmatrix",
+  "arrayblock",
+  "pynec",
+];
 
-// All three pysim models have the PEC image-method ground; PyNEC uses
-// its own Sommerfeld / reflection-coefficient ground. Kept as an explicit
-// list so future backends without ground support can be excluded by name.
+// hmatrix (hierarchical H-matrix / ACA) and arrayblock (element-aware block
+// solver for arrays) are accelerators built on the same B-spline basis as
+// bspline; they share its options and request shape, and fall back to the
+// dense bspline path for ground/enrichment.
+const BSPLINE_FAMILY: Backend[] = ["bspline", "hmatrix", "arrayblock"];
+function isBSplineFamily(b: Backend): boolean {
+  return BSPLINE_FAMILY.includes(b);
+}
+
+// Every pysim model has the PEC image-method ground; PyNEC uses its own
+// Sommerfeld / reflection-coefficient ground. Kept as an explicit list so
+// future backends without ground support can be excluded by name.
 function backendSupportsGround(b: Backend): boolean {
   return (
-    b === "triangular" || b === "bspline" || b === "sinusoidal" || b === "pynec"
+    b === "triangular" ||
+    b === "sinusoidal" ||
+    isBSplineFamily(b) ||
+    b === "pynec"
   );
 }
 
@@ -575,30 +602,38 @@ type BSplineOpts = CommonOpts & {
 };
 type PyNECOpts = CommonOpts;
 
+// hmatrix and arrayblock share BSplineOpts (same basis + knobs); the ACA
+// tolerances use the solver defaults.
 type BackendOptsMap = {
   triangular: TriangularOpts;
   sinusoidal: SinusoidalOpts;
   bspline: BSplineOpts;
+  hmatrix: BSplineOpts;
+  arrayblock: BSplineOpts;
   pynec: PyNECOpts;
+};
+
+const BSPLINE_DEFAULT_OPTS: BSplineOpts = {
+  nPerWire: 30,
+  wireRadius: 0.0005,
+  degree: 2,
+  nQpPair: 4,
+  feedSmoothingFactor: null,
+  useSingularEnrichment: false,
+  enrichmentVariant: "raw",
+  tikhonovLambda: 0.1,
+  autoTapRatioThreshold: 0.3,
+  nQpSing: 32,
+  enrichmentMinK: 3,
+  nQpSource: 16,
 };
 
 const DEFAULT_BACKEND_OPTS: BackendOptsMap = {
   triangular: { nPerWire: 30, wireRadius: 0.0005, nQpReg: 4, nQpOff: 4 },
   sinusoidal: { nPerWire: 30, wireRadius: 0.0005, nQpConst: 8 },
-  bspline: {
-    nPerWire: 30,
-    wireRadius: 0.0005,
-    degree: 2,
-    nQpPair: 4,
-    feedSmoothingFactor: null,
-    useSingularEnrichment: false,
-    enrichmentVariant: "raw",
-    tikhonovLambda: 0.1,
-    autoTapRatioThreshold: 0.3,
-    nQpSing: 32,
-    enrichmentMinK: 3,
-    nQpSource: 16,
-  },
+  bspline: { ...BSPLINE_DEFAULT_OPTS },
+  hmatrix: { ...BSPLINE_DEFAULT_OPTS },
+  arrayblock: { ...BSPLINE_DEFAULT_OPTS },
   pynec: { nPerWire: 30, wireRadius: 0.0005 },
 };
 
@@ -647,7 +682,9 @@ function modelOptionsForRequest(
     const o = opts as SinusoidalOpts;
     return { n_qp_const: o.nQpConst };
   }
-  if (backend === "bspline") {
+  if (isBSplineFamily(backend)) {
+    // bspline, hmatrix, and arrayblock all take the B-spline kwargs; the
+    // accelerators read additional aca_tol/solve_tol from their own defaults.
     const o = opts as BSplineOpts;
     return {
       degree: o.degree,
@@ -671,7 +708,12 @@ type SolveRequest = {
    *  → backend falls back to default_params. */
   variant?: string;
   solver: "pysim" | "pynec";
-  pysim_model?: "triangular" | "sinusoidal" | "bspline";
+  pysim_model?:
+    | "triangular"
+    | "sinusoidal"
+    | "bspline"
+    | "hmatrix"
+    | "arrayblock";
   model_options?: Record<string, unknown>;
   n_per_wire: number;
   design_freq_mhz: number;
@@ -1253,7 +1295,7 @@ export function App() {
       // enrichment off in the request when ground is active so the user
       // gets a sensible solve instead of a server error; the gear shows
       // an inline note.
-      if (backend === "bspline" && groundActive) {
+      if (isBSplineFamily(backend) && groundActive) {
         opts.use_singular_enrichment = false;
       }
       base.model_options = opts;
@@ -2354,7 +2396,7 @@ function BackendConfigModal({
             />
           )}
 
-          {backend === "bspline" && (
+          {isBSplineFamily(backend) && (
             <BSplineFields
               opts={opts as BSplineOpts}
               onPatch={(p) => onPatch(p as never)}
