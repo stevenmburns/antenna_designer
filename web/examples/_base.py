@@ -274,6 +274,10 @@ class AntennaExample:
     pysim_sweep: SweepFn
     pynec_build: Optional[PynecBuildFn] = None
     pynec_solve: Optional[SolveFn] = None
+    # Render the geometry as a NEC2 .nec card deck (str) for the current
+    # request (params/variant/freq/ground). None when the design has no
+    # faithful native-NEC representation (TL/DiffTL/virtual-driver networks).
+    nec_export: Optional[Callable[[dict], str]] = None
     # When set, pattern() calls this to excite the NEC context (e.g.
     # multi-source drive for bowtie's 1×2 array). When None, pattern()
     # uses the default single-feed excitation reading b["feed_seg"] /

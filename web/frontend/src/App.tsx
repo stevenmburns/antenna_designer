@@ -939,6 +939,10 @@ export function App() {
     setTheme(next);
   };
 
+  // Tools (gear) dropdown in the header. Tucked away because it holds
+  // occasional actions like the NEC deck export, not per-solve controls.
+  const [gearMenuOpen, setGearMenuOpen] = useState(false);
+
   // Schema-driven parameter controls. Each registered example bundles
   // its parameter schema in web/examples/<name>.py; the backend serves
   // them on GET /examples and we render generic sliders from the result.
@@ -1315,6 +1319,46 @@ export function App() {
       base.daisy_chain = false;
     }
     return base;
+  }
+
+  // Export the current design as a NEC2 .nec card deck and trigger a
+  // browser download. The backend reuses the same builder construction as
+  // the live solve, so the deck matches what's on screen. Designs with no
+  // faithful native-NEC form (TL/DiffTL networks) come back 422; surface
+  // the server's message rather than downloading an error page.
+  async function downloadNec() {
+    setGearMenuOpen(false);
+    try {
+      const resp = await fetch("/export_nec", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildRequest()),
+      });
+      if (!resp.ok) {
+        let detail = `NEC export failed (${resp.status}).`;
+        try {
+          detail = (await resp.json()).detail ?? detail;
+        } catch {
+          /* non-JSON error body — keep the status-based message */
+        }
+        window.alert(detail);
+        return;
+      }
+      const blob = await resp.blob();
+      const cd = resp.headers.get("Content-Disposition") ?? "";
+      const m = cd.match(/filename="([^"]+)"/);
+      const filename = m ? m[1] : `${geometry.replace(/\./g, "_") || "antenna"}.nec`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      window.alert(`NEC export failed: ${e}`);
+    }
   }
 
   const currentBands: BandSpec[] = currentExample?.bands ?? [];
@@ -1799,15 +1843,49 @@ export function App() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <h1>Antenna Designer</h1>
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={() => applyTheme(theme === "dark" ? "light" : "dark")}
-            title="Toggle light / dark theme"
-            aria-label="Toggle light / dark theme"
-          >
-            {theme === "dark" ? "☀" : "☾"}
-          </button>
+          <div className="header-actions">
+            <div className="gear-menu-wrap">
+              <button
+                type="button"
+                className="header-icon-btn"
+                onClick={() => setGearMenuOpen((o) => !o)}
+                title="Tools"
+                aria-label="Tools menu"
+                aria-haspopup="menu"
+                aria-expanded={gearMenuOpen}
+              >
+                ⚙
+              </button>
+              {gearMenuOpen && (
+                <>
+                  <div
+                    className="gear-menu-backdrop"
+                    onClick={() => setGearMenuOpen(false)}
+                  />
+                  <div className="gear-menu" role="menu">
+                    <button
+                      type="button"
+                      className="gear-menu-item"
+                      role="menuitem"
+                      onClick={downloadNec}
+                      title="Download this design as a NEC2 .nec card deck (for xnec2c, 4nec2, EZNEC, …)"
+                    >
+                      Download .nec deck
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={() => applyTheme(theme === "dark" ? "light" : "dark")}
+              title="Toggle light / dark theme"
+              aria-label="Toggle light / dark theme"
+            >
+              {theme === "dark" ? "☀" : "☾"}
+            </button>
+          </div>
         </div>
 
         <div className="geometry-select-row">

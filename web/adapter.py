@@ -942,6 +942,21 @@ def _make_example(name: str, cls) -> AntennaExample:
             ]
         return out
 
+    def nec_export(req: dict) -> str:
+        # Same builder construction as pynec_solve, then serialise to a NEC2
+        # card deck. Ground/freq mirror what the live solve uses so the
+        # downloaded deck matches the antenna the user is viewing.
+        from antenna_designer.nec_export import export_nec as _export_nec
+
+        design_freq = float(req.get("design_freq_mhz", _design_freq_default(req)))
+        meas_freq = float(req.get("measurement_freq_mhz", design_freq))
+        builder = _build_builder(cls, req)
+        builder.freq = meas_freq
+        if has_design_freq:
+            builder.design_freq = design_freq
+        ground = _ground_for_engine(req, 0.0) or "free"
+        return _export_nec(builder, ground=ground, freq=meas_freq)
+
     def pysim_sweep(req: dict, freqs_mhz: list[float]):
         builder = _build_builder(cls, req)
         # PysimEngine reads builder.freq only for the initial wavelength
@@ -974,6 +989,7 @@ def _make_example(name: str, cls) -> AntennaExample:
         pynec_solve=pynec_solve,
         pynec_build=pynec_build,
         pynec_pattern_excite=pynec_pattern_excite,
+        nec_export=nec_export,
         multi_feed=multi_feed,
         param_schema=param_schema,
         bands=bands,

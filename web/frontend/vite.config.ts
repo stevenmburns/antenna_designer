@@ -12,6 +12,7 @@ export default defineConfig({
       "/converge": { target: "http://127.0.0.1:8000", changeOrigin: true },
       "/pattern": { target: "http://127.0.0.1:8000", changeOrigin: true },
       "/examples": { target: "http://127.0.0.1:8000", changeOrigin: true },
+      "/export_nec": { target: "http://127.0.0.1:8000", changeOrigin: true },
     },
   },
 });
