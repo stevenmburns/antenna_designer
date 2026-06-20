@@ -1,4 +1,12 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  Fragment,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 type Wire = {
   label: string;
@@ -858,8 +866,34 @@ function useThumbColumnSize(
   return size;
 }
 
+type Theme = "light" | "dark";
+const ThemeContext = createContext<Theme>("light");
+
 export function App() {
   const [geometry, setGeometry] = useState<string>("");
+
+  // Theme is seeded from the <html data-theme> the no-flash script in
+  // index.html set (localStorage || prefers-color-scheme); the effect mirrors
+  // changes back to the attribute + storage. The 3 canvases read their colors
+  // from CSS vars via getComputedStyle, so they consume ThemeContext to repaint
+  // on toggle (see FarFieldChart/SmithChart/CurrentCanvas).
+  const [theme, setTheme] = useState<Theme>(() =>
+    document.documentElement.dataset.theme === "dark" ? "dark" : "light",
+  );
+  // Apply the attribute SYNCHRONOUSLY here, not in a post-render effect: React
+  // runs child effects before parent effects, so the canvases' draw effects
+  // would re-read getComputedStyle while the attribute still held the previous
+  // theme — lagging one toggle behind the (pure-CSS) chrome. Setting it eagerly
+  // means the attribute is already current when those effects re-run.
+  const applyTheme = (next: Theme) => {
+    document.documentElement.dataset.theme = next;
+    try {
+      localStorage.setItem("theme", next);
+    } catch {
+      /* storage disabled — in-memory toggle still works */
+    }
+    setTheme(next);
+  };
 
   // Schema-driven parameter controls. Each registered example bundles
   // its parameter schema in web/examples/<name>.py; the backend serves
@@ -1716,9 +1750,21 @@ export function App() {
   }, []);
 
   return (
+    <ThemeContext.Provider value={theme}>
     <div className="app">
       <aside className="sidebar">
-        <h1>pysim — interactive</h1>
+        <div className="sidebar-header">
+          <h1>pysim — interactive</h1>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={() => applyTheme(theme === "dark" ? "light" : "dark")}
+            title="Toggle light / dark theme"
+            aria-label="Toggle light / dark theme"
+          >
+            {theme === "dark" ? "☀" : "☾"}
+          </button>
+        </div>
 
         <div className="geometry-select-row">
           <label className="geometry-select-label" htmlFor="geometry-select">
@@ -2194,6 +2240,7 @@ export function App() {
         <div className="status">ws: {status}</div>
       </main>
     </div>
+    </ThemeContext.Provider>
   );
 }
 
@@ -2641,6 +2688,7 @@ function FarFieldChart({
   azElevDeg: number;
   elevAzDeg: number;
 }) {
+  const theme = useContext(ThemeContext); // repaint on theme toggle (dep below)
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -3037,7 +3085,7 @@ function FarFieldChart({
     const peakText = `peak ${peakDbi >= 0 ? "+" : ""}${peakDbi.toFixed(1)} dBi`;
     const tw = ctx.measureText(peakText).width;
     ctx.fillText(peakText, size - tw - 6, 14);
-  }, [result, pattern, size, cut, azElevDeg, elevAzDeg]);
+  }, [result, pattern, size, cut, azElevDeg, elevAzDeg, theme]);
 
   return <canvas ref={canvasRef} className="farfield" />;
 }
@@ -3100,6 +3148,7 @@ function SmithChart({
    *  reflects antenna type rather than guessing from response shape. */
   multiFeed: boolean;
 }) {
+  const theme = useContext(ThemeContext); // repaint on theme toggle (dep below)
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -3508,7 +3557,7 @@ function SmithChart({
     // initial false to the real /examples value (true for bowtie /
     // hexbeam_5band) — the user saw only one Z* annotation in the
     // legend because the closure stayed wedged on the single-feed branch.
-  }, [r, x, z0, size, sweep, converge, measFreqMhz, running, convergeRunning, feeds, multiFeed]);
+  }, [r, x, z0, size, sweep, converge, measFreqMhz, running, convergeRunning, feeds, multiFeed, theme]);
 
   return <canvas ref={canvasRef} className="smith" />;
 }
@@ -3524,6 +3573,7 @@ function CurrentCanvas({
   showHeatmap: boolean;
   showEnvelope: boolean;
 }) {
+  const theme = useContext(ThemeContext); // repaint on theme toggle (dep below)
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -3777,7 +3827,7 @@ function CurrentCanvas({
     const obs = new ResizeObserver(onResize);
     obs.observe(canvas);
     return () => obs.disconnect();
-  }, [result, projection, showHeatmap, showEnvelope]);
+  }, [result, projection, showHeatmap, showEnvelope, theme]);
 
   return <canvas ref={canvasRef} />;
 }
