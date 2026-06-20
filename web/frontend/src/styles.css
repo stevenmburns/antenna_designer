@@ -83,6 +83,70 @@
   --plot-current-4: 178, 58, 32;
 }
 
+/* ============================================================
+   Dark theme — overrides ONLY token values (component rules are
+   token-driven, so the whole app + canvas plots retheme). Set via
+   <html data-theme="dark"> by the toggle / no-flash script.
+   ============================================================ */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* surfaces */
+  --bg: #0f1115;
+  --panel: #181b22;
+  --inset: #11141a;
+  --readout-bg: #14171e;
+  --stage: #0c0e12;
+
+  /* ink */
+  --fg: #e6e9ef;
+  --muted: #9aa3b2;
+  --muted-2: #717c8d;
+
+  /* lines */
+  --border: #2a313d;
+  --border-control: #343c4a;
+  --border-hover: #475264;
+
+  /* accent + signal */
+  --accent: #76d0ff;
+  --accent-soft: rgba(118, 208, 255, 0.15);
+  --accent-border: #3d6b82;
+  --hot: #ffb454;
+
+  /* state */
+  --danger: #ff9b9b;
+  --danger-bg: #2a1414;
+  --danger-border: #572a2a;
+
+  --track: #2a313d;
+  --grid: rgba(120, 170, 230, 0.06);
+  --shadow: rgba(0, 0, 0, 0.5);
+
+  /* canvas plot tokens — carried verbatim from the original dark theme */
+  --plot-bg: #0d1015;
+  --plot-bg-rgb: 13, 16, 21;
+  --plot-grid: #2a313d;
+  --plot-axis: #3a4150;
+  --plot-axis-faint: #23272f;
+  --plot-label-dim: #4a5160;
+  --plot-label: #7b8493;
+  --plot-label-bright: #9aa3b2;
+  --plot-label-strong: #cdd5e0;
+  --plot-center-mark: #5a6170;
+  --plot-spoke: rgba(180, 140, 250, 0.7);
+  --plot-feed: #ffd166;
+  --plot-lobe-rgb: 255, 209, 102;
+  --plot-nec-rgb: 110, 220, 255;
+  --plot-ground-rgb: 140, 110, 70;
+  --plot-envelope-rgb: 118, 208, 255;
+  --plot-current-0: 40, 64, 96;
+  --plot-current-1: 60, 140, 200;
+  --plot-current-2: 118, 208, 255;
+  --plot-current-3: 255, 209, 102;
+  --plot-current-4: 255, 130, 80;
+}
+
 html, body, #root {
   margin: 0;
   height: 100%;
@@ -138,12 +202,40 @@ button:focus-visible,
   min-width: 0;
 }
 
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .sidebar h1 {
   font-size: var(--text-lg);
   font-weight: 700;
-  margin: 0 0 6px;
+  margin: 0;
   letter-spacing: -0.01em;
   color: var(--fg);
+}
+
+.theme-toggle {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  background: var(--inset);
+  color: var(--muted);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  font-size: var(--text-base);
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-toggle:hover {
+  color: var(--accent);
+  border-color: var(--border-hover);
 }
 
 .geometry-tabs {
