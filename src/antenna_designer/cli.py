@@ -12,7 +12,13 @@ from . import (
 )
 from .engines import PyNECEngine, PysimEngine
 
-from pysim import TriangularPySim, SinusoidalPySim, BSplinePySim
+from pysim import (
+    TriangularPySim,
+    SinusoidalPySim,
+    BSplinePySim,
+    HMatrixPySim,
+    ArrayBlockPySim,
+)
 
 from icecream import ic
 
@@ -29,6 +35,8 @@ PYSIM_BASES = {
     "triangular": TriangularPySim,
     "sinusoidal": SinusoidalPySim,
     "bspline": BSplinePySim,
+    "hmatrix": HMatrixPySim,
+    "arrayblock": ArrayBlockPySim,
 }
 
 
