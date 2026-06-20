@@ -32,7 +32,8 @@
 
   /* accent + signal */
   --accent: #2f5fb0;
-  --accent-soft: #e4ecf8;
+  --accent-soft: #e4ecf8; /* focus rings */
+  --accent-active: #c7d9f3; /* selected tab/radio fill — darker than --inset */
   --accent-border: #9db4dc;
   --hot: #cf7a22;
 
@@ -121,7 +122,8 @@
 
   /* accent + signal */
   --accent: #76d0ff;
-  --accent-soft: rgba(118, 208, 255, 0.15);
+  --accent-soft: rgba(118, 208, 255, 0.15); /* focus rings */
+  --accent-active: rgba(118, 208, 255, 0.22); /* selected tab/radio fill */
   --accent-border: #3d6b82;
   --hot: #ffb454;
 
@@ -344,7 +346,7 @@ button:focus-visible,
 }
 
 .geometry-tabs button.active {
-  background: var(--accent-soft);
+  background: var(--accent-active);
   color: var(--accent);
   border-color: var(--accent-border);
   font-weight: 600;
@@ -545,7 +547,7 @@ input[type=checkbox] {
 }
 
 .backend-tab-btn.active {
-  background: var(--accent-soft);
+  background: var(--accent-active);
   color: var(--accent);
   border-color: var(--accent-border);
 }
@@ -812,7 +814,7 @@ input[type=checkbox] {
 
 .projection-toggle button.active {
   color: var(--accent);
-  background: var(--accent-soft);
+  background: var(--accent-active);
 }
 
 .link-toggle {
