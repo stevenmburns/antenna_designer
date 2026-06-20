@@ -25,9 +25,12 @@ def _parity_for_solver(solver, solver_kwargs):
         return "even"
     if name == "SinusoidalPySim":
         return "odd"
-    if name in ("BSplinePySim", "HMatrixPySim"):
-        # HMatrixPySim is a BSplinePySim subclass (same basis), so it shares
-        # the degree-driven parity.
+    if name in ("BSplinePySim", "HMatrixPySim", "ArrayBlockPySim"):
+        # HMatrixPySim and ArrayBlockPySim are BSplinePySim subclasses (same
+        # basis), so they share the degree-driven parity. Getting this right
+        # matters for cross-solver comparison: a mismatched parity would build
+        # a *different* mesh and silently invalidate any A/B against the dense
+        # bspline path.
         degree = (solver_kwargs or {}).get("degree", 2)
         return "even" if int(degree) == 1 else "odd"
     return "any"

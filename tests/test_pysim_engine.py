@@ -1438,3 +1438,40 @@ def test_translator_rejects_geometry_with_no_excitation():
     ]
     with pytest.raises(ValueError, match="no excitation"):
         flat_wires_to_polylines(tups)
+
+
+@pytest.mark.parametrize(
+    "design_module",
+    [
+        "antenna_designer.designs.invveearray",
+        "antenna_designer.designs.bowtiearray2x4",
+    ],
+)
+def test_pysim_arrayblock_matches_dense_bspline(design_module):
+    """The element-aware array-block solver must reproduce the dense bspline
+    per-port impedance on the array designs. Both go through PysimEngine, so
+    this also pins the parity wiring: a wrong parity for ArrayBlockPySim would
+    build a different mesh and the impedances would diverge."""
+    from importlib import import_module
+    from pysim import BSplinePySim, ArrayBlockPySim
+
+    b = import_module(design_module).Builder()
+    kw = {"solver_kwargs": {"degree": 2}}
+    z_dense = PysimEngine(b, solver=BSplinePySim, **kw).impedance()
+    z_block = PysimEngine(b, solver=ArrayBlockPySim, **kw).impedance()
+    assert len(z_dense) == len(z_block) > 1
+    for i, (zd, zb) in enumerate(zip(z_dense, z_block)):
+        assert abs(zd - zb) / abs(zd) < 1e-3, f"feed {i}: {zd} vs {zb}"
+
+
+def test_pysim_arrayblock_parity_matches_bspline():
+    """ArrayBlockPySim shares BSplinePySim's degree-driven parity (a regression
+    guard for the _parity_for_solver wiring)."""
+    from pysim import BSplinePySim, ArrayBlockPySim
+    from antenna_designer.engines.pysim import _parity_for_solver
+
+    for degree in (1, 2):
+        kw = {"degree": degree}
+        assert _parity_for_solver(ArrayBlockPySim, kw) == _parity_for_solver(
+            BSplinePySim, kw
+        )
