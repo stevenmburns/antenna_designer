@@ -230,6 +230,7 @@ button:focus-visible,
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+  overflow-x: hidden; /* fixed-width rail — never scroll horizontally */
   overflow-y: auto;
   min-height: 0;
   min-width: 0;
@@ -696,7 +697,7 @@ input[type=checkbox] {
   padding: var(--space-5) var(--space-5);
   border-right: 1px solid var(--border);
   background: var(--panel);
-  overflow-y: auto;
+  overflow: hidden; /* thumbs are scaled to fit exactly; never scroll */
   justify-content: center;
 }
 
