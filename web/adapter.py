@@ -43,7 +43,7 @@ from antenna_designer.builder import (
 )
 from antenna_designer.engines.pynec import PyNECEngine
 from antenna_designer.engines.pysim import PysimEngine
-from pysim import BSplinePySim, SinusoidalPySim, TriangularPySim
+from pysim import BSplinePySim, HMatrixPySim, SinusoidalPySim, TriangularPySim
 
 from .examples import register
 from .examples._base import (
@@ -67,6 +67,11 @@ _PYSIM_MODELS = {
     "triangular": TriangularPySim,
     "sinusoidal": SinusoidalPySim,
     "bspline": BSplinePySim,
+    # Hierarchical (H-matrix / ACA) accelerator — same B-spline basis as
+    # bspline; model_options forward verbatim (degree, aca_eta,
+    # aca_leaf_size, aca_tol, solve_tol, …). Ground/enrichment fall back to
+    # the dense bspline solve inside HMatrixPySim.
+    "hmatrix": HMatrixPySim,
 }
 
 
