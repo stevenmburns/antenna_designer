@@ -7,103 +7,53 @@ Living roadmap of what's done and what's left on the multi-engine refactor. Upda
 `antenna_designer` exposes two simulation backends behind a common `SimulationEngine` interface:
 
 - **`PyNECEngine`** — the original NEC2/PyNEC path. Default backend. Supports free space / PEC / finite-Sommerfeld ground via the `ground=` parameter, multi-element arrays, transmission-line cards (`tl_card`), and arbitrary segment counts. This is the production backend; nothing here is restricted relative to the historical behaviour.
-- **`PysimEngine`** — the pure-Python MoM solvers from the vendored `pysim/` submodule, accessed through a flat-wire-to-polyline geometry translator (`antenna_designer/geometry.py`). Selectable solver (`TriangularPySim` default, `SinusoidalPySim`, `BSplinePySim`) via the engine's `solver=` kwarg.
+- **`PysimEngine`** — the pure-Python MoM solvers from the vendored `pysim/` submodule, accessed through a flat-wire-to-polyline geometry translator (`antenna_designer/geometry.py`). Selectable solver (`TriangularPySim` default, `SinusoidalPySim`, `BSplinePySim`, plus the large-N accelerators `HMatrixPySim` and `ArrayBlockPySim`) via the engine's `solver=` kwarg. `impedance()`, `impedance_sweep()`, `current_distribution()`, and `far_field()` are all supported across the bases.
 
 Selection is uniform across the Python API and the CLI: `compare_patterns([engine_instance, ...])` for ad-hoc comparisons; `engine=` factory kwarg on `sweep` / `sweep_freq` / `sweep_gain` / `sweep_patterns` / `optimize`; `--engine pynec|pysim --ground free|pec|finite|finite:eps,sigma` on every analysis subcommand.
 
-Cross-validation at design freq, free space, against PyNEC: ≤ 0.1 dBi peak directivity agreement on the dipole; ≤ 0.005 dBi on PEC ground. Sinusoidal lands within ~10 % R and ~10 Ω X of PyNEC on the hentenna's tee-junction geometry.
+Antenna topology and circuit elements both translate to pysim now: open chains with arbitrary junctions, pure closed loops (driven, parasitic, or terminated two-port), multi-feed arrays, and port-based networks (transmission lines + lumped R/L/C) via `build_network()`. Cross-validation at design freq, free space, against PyNEC: ≤ 0.1 dBi peak directivity agreement on the dipole; ≤ 0.005 dBi on PEC ground; ~1–3 % R / a few Ω X on closed loops and multi-feed arrays. Cross-validation tests live in `tests/test_pysim_engine.py`.
 
-## Known geometry limitations
+## Geometry & circuit support — current state
 
-These are the topologies `PysimEngine` currently rejects. PyNECEngine is unaffected — these only matter if you're cross-validating with pysim or using it as the production backend.
+Everything the translator previously rejected now works through `PysimEngine`. PyNECEngine was always unaffected.
 
-| limitation | affected designs (today) | status |
-|---|---|---|
-| ~~pure closed loops~~ | ~~bowtie, delta_loop, diamond_loop, inv_delta_loop, folded_invvee, delta_loop_slanted{,2,3}~~ | **done** — cut-at-feed-edge in `flat_wires_to_polylines` |
-| ~~multiple excitations (`ex_card` voltage on more than one segment)~~ | ~~every array design~~ | **done** — translator emits a `feeds` list, `PysimEngine.impedance()` returns per-port Z |
-| ~~transmission-line cards (`tl_card`)~~ | ~~`freq_based.delta_looparray_with_tls`~~ | **done** — `impedance()` only; sweep raises `NotImplementedError` |
+| topology / feature | status |
+|---|---|
+| open chains, arbitrary junctions (degree-2/3 tees) | **done** — junction walker + KCL in `flat_wires_to_polylines` |
+| pure closed loops (driven) | **done** — cut-at-port-edge (`8cc7945` lineage) |
+| **parasitic loops** (cycle with no excited/port edge) | **done** (`8cc7945`) — cut an arbitrary edge; it stays a passive polyline anchoring the two cut-node junctions |
+| **terminated / multi-port loops** (feed + termination) | **done** (`bcd64c4`) — extra port edges register as feeds by arclength inside the long-way polyline |
+| multiple excitations (`ex_card` on >1 segment) | **done** — translator emits a `feeds` list; `impedance()` returns per-port Z; `impedance_sweep` returns `(n_k, n_feeds)` |
+| transmission-line cards (`tl_card`), `impedance()` **and** `impedance_sweep()` | **done** (`c3535d4`, `1f899dc`) — multi-port Y extraction + nodal reduction; batched swept-k with frequency-dependent βl |
+| port-based network spec (`build_network`): TL + lumped R/L/C | **done** (`a09d548`, `6be1f5f`) — see "Landed" below |
+| differential / common-mode 2-wire TL (`DiffTL`) | **done** (`96336f8`) — pysim only; PyNECEngine raises `NotImplementedError` |
+| loaded-antenna far field (efficiency from resistive loads) | **done** (`bcd64c4`) — directivity → gain when loads present |
 
-## ~~Next branch: closed-loop support in the translator~~ — landed
+No topology in `designs/` is currently rejected by the translator.
 
-Implementation: after the existing junction/endpoint walker finishes, any unwalked edges belong to pure-cycle components. The translator floods each cycle, locates its excited edge, and cuts there — emitting the excited edge as a single-edge polyline and the rest of the loop as a second polyline running the long way back. Both cut endpoints become 2-entry junctions so pysim's KCL closes the loop.
+## Known limitations (genuinely open)
 
-Surprise relative to the plan: **bowtie is a pure cycle, not a degree-3 case**. The two triangles share corners at `(±y, 0)` but each triangle only contributes one edge incident at the shared corner, leaving those corners degree-2. The whole bowtie is a single 10-edge cycle with one excited segment (the lower triangle's centre gap) and one passive segment (the upper triangle's centre gap, no `ex_card`). It falls out of the same cut-at-excited-edge path with no special handling.
+- **Strict `tl_card` PyNEC cross-validation.** `PysimEngine.impedance()` runs cleanly on `delta_looparray_with_tls`, but the numerical answer doesn't match PyNEC (PyNEC: −77 −18255j; pysim: +55 −3j). Both engines are self-consistent across frequency and TL-length sweeps — this is a genuine modeling-convention difference, not numerical noise. Root cause: NEC2's `tl_card` treats TL endpoints as **segment-level** ports while pysim's post-processing treats them as **basis-level** ports (delta-gap at the wire midpoint). On this design the central driver is a 10 cm gap effectively decoupled from the loops (`Y[loop, driver] ≈ 3e-7`), so the TL transformation dominates and the segment-vs-basis distinction blows up the result. The Y reduction itself is verified clean (Y symmetric, passive-port `I_ext=0` exact, `coeffs[m] = 1/Z` for single-port). Two optional follow-ups: (a) add a TL design where loop↔driver coupling is non-negligible and re-compare — agreement should tighten; (b) implement segment-averaging at TL endpoints to match NEC2's convention.
+- **`PyNECEngine` does not implement `DiffTL`** — differential/common-mode TL is a pysim-only feature.
+- **`finite` ground in pysim is approximate** — PEC image + Fresnel on the reflected wave; the impedance is still the PEC result. Use PyNECEngine for full Sommerfeld finite-ground impedance.
+- **No conductor loss in pysim** — wires are PEC; lossy-element efficiency needs PyNECEngine + `ld_card`.
 
-Cross-validation at design freq, free space (R, X in Ω):
+## Landed (condensed changelog)
 
-| design | PyNEC | pysim Sinusoidal | pysim Triangular |
-|---|---|---|---|
-| bowtie | 188.6, +16.3 | 186.1, +14.2 | 187.7, +13.9 |
-| delta_loop | 113.4, +46.1 | 110.5, +43.9 | 110.5, +42.7 |
-| diamond_loop | 219.7, +60.1 | 216.8, +58.0 | 220.7, +57.6 |
+Historical branches, newest first. Each was a "next branch" entry; the engineering notes worth keeping are folded in.
 
-Both pysim bases agree with PyNEC to ~1–3 % R and a few Ω X on the closed-loop designs (tighter than the hentenna because there are no degree-3 junctions adding extra basis-family bias). All six previously-blocked closed-loop designs now translate cleanly; the remaining 16 blocked designs are *all* multi-feed arrays (no more closed-loop blockers in the codebase).
-
-Parasitic-only loops (a cycle with no excited segment, no other component) raise a clear `NotImplementedError` rather than crashing inside pysim. Loops with multiple excitations also raise specifically. Neither case appears in `designs/`.
-
-## ~~Next branch: cross-engine pattern comparison in the CLI~~ — landed
-
-The `compare_patterns` subcommand accepts `--engines` plural, with each spec spelled as `pynec`, `pysim`, or `pysim:triangular|sinusoidal|bspline` (basis is part of engine identity, not a separate flag). Builders × engines combine via **numpy-style broadcasting** in `broadcast_pairs` (cli.py), not literal Cartesian product: equal lengths zip pairwise, length-1 broadcasts against the other, other mismatches reject. Labels are `bname/espec` when both vary, otherwise whichever varies. Covered by `tests/test_engine_spec.py` (23 tests).
-
-Surprise relative to the plan: broadcasting beats cross-product because it lets you express specific pairings (`--builders A B C --engines E1 E2 E3` zips into 3 chosen pairs); a true Cartesian product would always yield 9. If we ever want both, add an opt-in `--cross-product` flag on top.
-
-## ~~Next branch: named parameter variants per builder~~ — landed
-
-The convention turned out simpler than the original `VARIANTS: dict[str, dict]` proposal: a Builder class exposes variants as class attributes whose name ends in `_params` and whose value is a `Mapping` (typically `MappingProxyType`). The unnamed default is `default_params`; named variants are `opt_params`, `s07_params`, `current_physical_params`, etc. CLI selector syntax is `builder[:variant]` (cli.py:90 `get_builder`); `:default` and no colon both pick `default_params`. `list_variants` discovers the available names for error messages.
-
-In practice this nests with the existing builder-resolution rules (local/library × explicit/implicit `Builder`), so `freq_based.invvee:dipole` works the same way `freq_based.invvee` does.
-
-Open question deferred: compositing variants with per-flag overrides (`--set length=5.2`). Not implemented; ad-hoc sweeping still goes through `sweep`/`optimize`.
-
-## ~~Next branch: multi-feed PysimEngine~~ — landed
-
-Discovered to already be working when re-auditing the design tree: 34/35 designs solve cleanly through `PysimEngine.impedance()`, including every multi-feed array previously listed as blocked (`invveearray`, `moxonarray`, `yagiarray`, `bowtiearray{,1x2,2x4}`, `delta_looparray{,_1x4,_1x4_grouped,_2x2}`, `hentenna_array`, `hourglass_array`, `folded_invveearray`, `diamond_loop_turnstile`). The geometry translator emits a `feeds: list[(polyline_idx, arclength, voltage)]` and `PysimEngine.impedance()` returns a list of per-port impedances; `impedance_sweep` normalises its return to `(n_k, n_feeds)` to match PyNECEngine.
-
-The only remaining limitation is `tl_card` (1 design: `delta_looparray_with_tls`).
-
-Cross-validation at design freq, free space (R, X in Ω) — sampled multi-feed arrays vs PyNEC:
-
-| design  | feeds | PyNEC range          | pysim Triangular range | max ΔR | max ΔX |
-|---------|-------|----------------------|------------------------|--------|--------|
-| invveearray | 4 | 48.0…55.4, −7.8…−3.0 | 47.1…54.8, −9.5…−4.8   | 0.95   | 1.82   |
-| moxonarray  | 4 | 43.8…44.3, −28.5…−24.9 | 39.9…40.4, −30.0…−26.4 | 3.95   | 1.51   |
-| yagiarray   | 4 | 81.6…81.9, +2.1     | 83.8…84.1, +0.7…+0.8  | 2.23   | 1.34   |
-
-Same ballpark agreement as the closed-loop work (~few % R, a few Ω X). Cross-validation tests live in `tests/test_pysim_engine.py`.
-
-**Where the interface code lives.** Same call as before: don't move the translator upstream yet. The shape just settled; let it bake.
-
-## ~~Next branch: `tl_card` support in PysimEngine~~ — landed
-
-`PysimEngine.impedance()` handles transmission-line cards by extracting the multi-port Y matrix, stamping each TL's 2×2 admittance contribution at its endpoint pair, then reducing back to the driven-port impedance via nodal analysis with passive-port currents constrained to zero. The original implementation used **N independent solves** as a workaround for pysim's `compute_y_matrix` not supporting junctions; that's been lifted upstream and the engine now calls `compute_y_matrix` directly (one LU + N back-subs instead of N × factor cost).
-
-The path also fixed a latent `AttributeError` — `PysimEngine.__init__` used to call `builder.build_tls()` before `build_wires()` had run, blowing up on builders that populate `self.tls` inside `build_wires`. Order is reversed now.
-
-**Cross-validation surprise.** PyNEC and pysim disagree wildly on `delta_looparray_with_tls` at default params (PyNEC: −77 −18255j; pysim: +55 −3j). Both engines stay self-consistent across frequency and TL length sweeps — this is a genuine modeling-convention difference, not numerical noise. The most likely root cause: NEC2's `tl_card` treats TL endpoints as **segment-level** ports (network attached to the segment as a whole) while my pysim post-processing treats them as **basis-level** ports (delta-gap at the wire midpoint). On simple geometries the two coincide; on this design the central driver is a 10cm gap with effectively zero coupling to the loops in the antenna's own Y matrix, so the TL transformation dominates and the segment-vs-basis distinction blows up the result. Reproducer: `Y[loop, driver] ≈ 3e-7` (essentially decoupled) — every Ω of driver impedance comes from how you stamp the TLs, so the conventions diverge maximally.
-
-What this means going forward: the multi-port Y reduction is mathematically clean (verified: Y symmetric, passive-port `I_ext=0` constraint exact, `coeffs[m] = 1/Z` at the feed for single-port). Self-consistency tests are in `tests/test_pysim_engine.py`; strict PyNEC numerical agreement isn't currently achievable on the one available test fixture. If we ever land another TL design where loop-driver coupling is non-negligible, retry the comparison.
-
-`impedance_sweep` with TLs is implemented: batched Y over k via `compute_y_matrix_swept`, then per-k TL stamping (βl is frequency-dependent) and driven-port reduction. Matches per-k `impedance()` to ~1e-11 on `delta_looparray_with_tls`.
-
-## ~~Next branch: junction support in pysim's `compute_y_matrix`~~ — landed upstream
-
-Originally listed here as a follow-up. Landed in stevenmburns/pysim#78: both `compute_y_matrix` and `compute_y_matrix_swept` now handle junctions via a matrix-RHS Schur-complement KCL solve across all three solvers (triangular, bspline; sinusoidal already worked structurally). The N-solves workaround in `PysimEngine` has been deleted; the engine calls the upstream batched path directly.
+- **Array-block solver** (`d136d68`) — `ArrayBlockPySim` integrated into `PysimEngine` (block-low-rank for phased arrays); shares BSpline segment parity (`a97f488`).
+- **Port-based network spec** (`a09d548`, `6be1f5f`, `5bbfecc`, `4dff155`, `6e024bc`) — `build_network()` returns named logical ports (`PortAtEdge`, `PortVirtual`, `Driven`) and 2-port branches (`TL`, `DiffTL`, `Load`, `TwoPort`); every branch stamps a frequency-dependent 2×2 admittance into Y. `Load` (series/parallel R/L/C, incl. LC traps at exact resonance) lands via a Sherman-Morrison Y stamp. ~15 designs use it (G5RV, Zepp, rhombic, LPDA, T2FD, HB9CV, trap dipole/fan, Sterba variants, etc.). This unblocked lumped-element designs (matching networks, traps, bandpass filters) that previously couldn't be modeled at all. `build_tls()` retained as the legacy path; `NetworkReducer` extracted engine-agnostic (`93b5883`).
+- **Differential TL** (`96336f8`, `14223c0`) — `DiffTL` 2-wire element with `transposed` flag (#89).
+- **`tl_card` in PysimEngine** (`c3535d4`, `6ba7e37`, `1f899dc`, `6c3ddb2`) — multi-port Y extraction + nodal reduction for `impedance()`, then batched swept-k for `impedance_sweep()` (matches per-k `impedance()` to ~1e-11). Junction support in pysim's `compute_y_matrix`/`compute_y_matrix_swept` landed upstream (stevenmburns/pysim#78), replacing the N-solves workaround.
+- **Closed-loop translator** — pure cycles open by cutting at the port edge (driven) or an arbitrary edge (parasitic); cut nodes become 2-entry junctions so pysim's KCL closes the loop. Surprise: bowtie is a single 10-edge cycle (shared corners stay degree-2), not a degree-3 case — falls out of the same path with no special handling.
+- **Multi-feed PysimEngine** — translator emits `feeds: list[(polyline_idx, arclength, voltage)]`; `impedance()` returns per-port Z. Validated against PyNEC on invveearray/moxonarray/yagiarray (≤ ~4 Ω ΔR).
+- **Cross-engine `compare_patterns` CLI** — `--engines pynec|pysim|pysim:triangular|sinusoidal|bspline`; builders × engines combine via numpy-style broadcasting (`broadcast_pairs`), not Cartesian product, so `--builders A B C --engines E1 E2 E3` zips into 3 chosen pairs. Covered by `tests/test_engine_spec.py`.
+- **Named parameter variants** — Builder classes expose variants as `*_params` class attributes (`MappingProxyType`); CLI selector `builder[:variant]`; `default_params` is the unnamed default.
+- **Engine infra** — `segment_parity` infra + parity coercion (`0d5c385`).
 
 ## Next branches (rough priority order)
 
-### 1. Port-based network spec (TL cleanup + lumped R/L/C) — [#65](https://github.com/stevenmburns/antenna_designer/issues/65)
-
-Replace `build_tls()` (NEC2-shaped: segment indices, requires a dummy stub wire) with `build_network()` returning named logical ports and 2-port branches. Same branch shape covers TLs **and** lumped R/L/C — every branch stamps a frequency-dependent 2×2 admittance into Y at the right port pair, which `_apply_tls` is already the prototype of.
-
-PysimEngine loses the dummy stub wire (virtual ports become Y-matrix rows only); PyNECEngine auto-generates the NEC2 hacks via `tl_card` / `ld_card` (segment loading) / `nt_card` (arbitrary 2-port Y between segments). Issue #65 has the full sketch plus seven open design questions to settle before implementation — naming convention for feed edges, ground reference semantics, backwards-compat with `build_tls()`, etc. **Biggest-impact next branch** — unblocks lumped-element designs (matching networks, traps, bandpass filters) which we currently can't model at all.
-
-### 2. Strict PyNEC cross-validation for `tl_card`
-
-`PysimEngine.impedance()` runs cleanly on `delta_looparray_with_tls` but the numerical answer doesn't match PyNEC (segment-vs-basis port convention — see the closed branch above). Two follow-ups, both optional:
-
-- Add a TL design where the in-antenna coupling between TL endpoints isn't near-zero, then re-run the comparison; agreement should be much tighter when the antenna's own Y has meaningful off-diagonal terms.
-- Implement segment-averaging at the TL endpoints (averaged current over the TL-end segment instead of basis coefficient at the midpoint). Closer to NEC2's convention; may reconcile.
-
-### 3. Far-field for the new designs
-
-Stage 2b validated the pattern math on the dipole; once tee-junction geometries are stable, re-run the directivity cross-check on hentenna and fandipole and add a corresponding test. Lower priority — now that cross-engine `compare_patterns` is in the CLI, this is largely a "run it and write a test" task.
+1. **Far-field validation tests for network/loop designs.** `far_field()` works across all bases and loaded-antenna gain is correct (`bcd64c4`); what's missing is a directivity cross-check + regression tests on the tee-junction and network designs (hentenna, fandipole, trap_fan_dipole). Largely a "run `compare_patterns` and write the test" task.
+2. **Strict `tl_card` PyNEC cross-validation** — see Known limitations. Optional; needs either a better-coupled TL test design or segment-averaging at TL endpoints.
+3. **Variant compositing with per-flag overrides** (`--set length=5.2`) — deferred. Ad-hoc parameter sweeping still goes through `sweep` / `optimize`.
