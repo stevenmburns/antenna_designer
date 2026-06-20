@@ -274,6 +274,78 @@ button:focus-visible,
   border-color: var(--border-hover);
 }
 
+.header-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.gear-menu-wrap {
+  position: relative;
+  display: flex;
+}
+
+/* Matches .theme-toggle so the two header icons read as a set. */
+.header-icon-btn {
+  width: 28px;
+  height: 28px;
+  background: var(--inset);
+  color: var(--muted);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  font-size: var(--text-base);
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-icon-btn:hover {
+  color: var(--accent);
+  border-color: var(--border-hover);
+}
+
+/* Transparent full-screen catcher so a click anywhere closes the menu. */
+.gear-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.gear-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 41;
+  min-width: 160px;
+  padding: var(--space-1);
+  background: var(--bg);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-md);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.28);
+}
+
+.gear-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-radius: var(--r-sm);
+  color: var(--fg);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.gear-menu-item:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .geometry-tabs {
   display: flex;
   gap: var(--space-2);

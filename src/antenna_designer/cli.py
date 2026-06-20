@@ -479,5 +479,54 @@ def cli(arguments=None):
 
     p.set_defaults(func=f)
 
+    p = subparsers.add_parser("export", help="Export antenna to a NEC2 .nec card deck")
+    p.add_argument(
+        "--builder",
+        type=str,
+        default="freq_based.invvee:dipole",
+        help="Antenna builder to export.",
+    )
+    p.add_argument(
+        "--ground",
+        default=_GROUND_UNSET,
+        help="Ground model: free | pec | finite | finite:<eps_r>,<sigma> "
+        "(default: finite, matching PyNECEngine).",
+    )
+    p.add_argument("--out", default=None, help="Write the deck here (default: stdout).")
+    p.add_argument(
+        "--freq",
+        default=None,
+        type=float,
+        help="Frequency in MHz for the FR card (default: the builder's freq).",
+    )
+    p.add_argument(
+        "--no-pattern",
+        dest="include_rp",
+        action="store_false",
+        default=True,
+        help="Omit the RP far-field card (impedance only, via XQ).",
+    )
+
+    def f(args):
+        from .nec_export import export_nec
+
+        builder = get_builder(args.builder)
+        if builder is None:
+            raise SystemExit(f"unknown builder: {args.builder!r}")
+        kwargs = {"include_rp": args.include_rp}
+        if args.ground is not _GROUND_UNSET:
+            kwargs["ground"] = parse_ground(args.ground)
+        if args.freq is not None:
+            kwargs["freq"] = args.freq
+        deck = export_nec(builder(), **kwargs)
+        if args.out:
+            with open(args.out, "w") as fh:
+                fh.write(deck)
+            print(f"wrote {args.out}")
+        else:
+            print(deck, end="")
+
+    p.set_defaults(func=f)
+
     args = parser.parse_args(args=arguments)
     args.func(args)

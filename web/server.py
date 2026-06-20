@@ -102,10 +102,10 @@ from collections import OrderedDict
 from copy import deepcopy
 
 import numpy as np
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from starlette.websockets import WebSocketState
 
 from . import pynec_backend
@@ -660,6 +660,33 @@ async def pattern_endpoint(req: dict):
     if req.get("solver") != "pynec" or not pynec_backend.HAVE_PYNEC:
         return {"available": False}
     return await run_in_threadpool(pynec_backend.pattern, req)
+
+
+@app.post("/export_nec")
+async def export_nec_endpoint(req: dict):
+    """Render the current design as a downloadable NEC2 .nec card deck.
+
+    Reuses the same builder construction as the live solve (params, variant,
+    frequency, ground), so the deck matches the antenna on screen. Returns 422
+    for designs with no faithful native-NEC representation (TL/DiffTL/virtual-
+    driver networks), which the frontend surfaces as a message.
+    """
+    geometry = req.get("geometry", next(iter(EXAMPLES)))
+    ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
+    if ex.nec_export is None:
+        raise HTTPException(
+            status_code=422, detail="NEC export unavailable for this design."
+        )
+    try:
+        deck = await run_in_threadpool(ex.nec_export, req)
+    except NotImplementedError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    filename = f"{ex.name.replace('.', '_')}.nec"
+    return Response(
+        content=deck,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.get("/healthz")
