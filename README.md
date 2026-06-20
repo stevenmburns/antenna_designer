@@ -81,7 +81,7 @@
 | src/antenna\_designer/engine.py                                          |       43 |        3 |     93% |65, 94, 100 |
 | src/antenna\_designer/engines/\_\_init\_\_.py                            |        3 |        0 |    100% |           |
 | src/antenna\_designer/engines/pynec.py                                   |      266 |       19 |     93% |116, 119, 132, 152, 159, 173, 190, 270, 303-304, 316, 388, 390-394, 396, 401 |
-| src/antenna\_designer/engines/pysim.py                                   |      274 |        4 |     99% |31, 55, 268, 479 |
+| src/antenna\_designer/engines/pysim.py                                   |      274 |        4 |     99% |33, 57, 270, 481 |
 | src/antenna\_designer/far\_field.py                                      |       94 |        0 |    100% |           |
 | src/antenna\_designer/geometry.py                                        |      137 |        4 |     97% |60, 85, 89, 101 |
 | src/antenna\_designer/network.py                                         |      104 |        6 |     94% |188, 217, 234, 271, 281, 283 |
