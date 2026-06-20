@@ -21,7 +21,7 @@ The antenna-simulation market splits into three tiers:
 - **H-matrix / ACA acceleration + GMRES** for large-N scaling — no open MoM tool (PyNEC, nec2c, xnec2c) advertises fast-matrix/compression methods; they are all dense O(N²).
 - **A modern web UI** (FastAPI + React, real-time Smith/pattern/3D/current plots) — every free peer is a native desktop app or a library/CLI with no GUI.
 
-**Where it lags the field** (mostly vs. the commercial tier, expected for a focused tool): no FEM/FDTD/asymptotic solvers, no GPU/MPI, no multiphysics, no SAR/RCS/EMC, no CAD import, no automatic adaptive meshing, lossy/finite-ground impedance is approximate, and no `.nec` card export (the interoperability lingua franca of the amateur tier).
+**Where it lags the field** (mostly vs. the commercial tier, expected for a focused tool): no FEM/FDTD/asymptotic solvers, no GPU/MPI, no multiphysics, no SAR/RCS/EMC, no CAD import, no automatic adaptive meshing, lossy/finite-ground impedance is approximate, and no `.nec` *import* yet (export now exists — see below — but round-tripping external decks back in does not).
 
 ---
 
@@ -37,7 +37,7 @@ The antenna-simulation market splits into three tiers:
 | **Ground** | Free space; PEC (image method, all pysim bases); finite ground (PyNEC full Sommerfeld; pysim = PEC image + Fresnel on reflected wave — **impedance still PEC, an approximation**). |
 | **Sweeps / opt** | Frequency sweep (batched swept-k Y-matrix), parameter sweep, gain sweep, pattern sweep, `scipy.optimize` (SLSQP/L-BFGS-B) parameter optimization, cross-engine comparison. |
 | **UI / viz** | React 18 + Vite web frontend: 3D WebGL geometry, current distribution (mag/phase), Smith chart w/ SWR circle, polar patterns (az/el), frequency-sweep plots, live parameter sliders, solver/ground selection. FastAPI backend, WebSocket sweeps. matplotlib for CLI plots. |
-| **I/O** | Designs as Python builder classes; network spec (TL, DiffTL, Load, TwoPort, ports-at-edges). **NEC cards are input-only** (via PyNEC, for cross-validation). No `.nec` export. matplotlib PNG export. |
+| **I/O** | Designs as Python builder classes; network spec (TL, DiffTL, Load, TwoPort, ports-at-edges). **`.nec` card export** via `nec_export` (CLI `export` subcommand + web gear-menu download; validated against `nec2c`); TL/DiffTL reducer designs excepted. NEC card *import* not yet (PyNEC consumes cards only for cross-validation). matplotlib PNG export. |
 | **Performance** | OpenMP/BLAS threading, libmvec AVX2 sincos, K-independent geometry cache for sweeps, on-demand block eval for H-matrix. H-matrix tested on 100-director Yagi (2142 segments), O(N log N) vs dense O(N²). |
 | **API / CLI** | Python API (`AntennaBuilder`, engines, `sweep*`, `optimize`, `pattern`, `compare_patterns`); CLI subcommands `draw / sweep / optimize / pattern / compare_patterns`; uniform `SimulationEngine` interface. |
 | **Validation / limits** | Cross-validated against PyNEC (≤0.1 dBi directivity on dipole; ~1–3% R on loops and multi-feed arrays). **Genuine open limits:** pysim wires are PEC (no copper loss); pysim finite-ground impedance is approximate (PEC image + Fresnel); `DiffTL` is pysim-only (PyNEC raises `NotImplementedError`); strict `tl_card` numerical agreement with PyNEC is unmet on low-coupling geometries (a segment-vs-basis port-convention difference, not a bug). |
@@ -175,7 +175,7 @@ The antenna-simulation market splits into three tiers:
 | 3D pattern | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ (WebGL geometry; pattern polar) |
 | Smith chart | via AutoEZ | ✓ | – | ✓ | – | – | ✓ |
 | Optimizer | via AutoEZ | ✓ (GA) | ✓ | ✓ (Platinum) | ✓ | – | ✓ (scipy) |
-| `.nec` import/export | ✓ / ✓ | ✓ / ✓ | limited | own | ✓ / ✓ | ✓ / ✓ | **input only** |
+| `.nec` import/export | ✓ / ✓ | ✓ / ✓ | limited | own | ✓ / ✓ | ✓ / ✓ | **export ✓ / import ✗** |
 | Real/Sommerfeld ground (impedance) | ✓ | ✓ | MININEC | ✓ | ✓ | ✓ | **PyNEC ✓; pysim approx** |
 
 ---
@@ -216,7 +216,7 @@ The antenna-simulation market splits into three tiers:
 Impedance / SWR / Γ, gain / directivity, far-field 2D patterns, current distribution, frequency sweeps, parameter optimization, Smith chart, 3D geometry view, transmission lines + loads, multi-port networks. These are expected across the whole amateur tier; `antenna_designer` has them.
 
 ### Gaps worth noting
-- **No `.nec` card export** — the interoperability lingua franca of the amateur tier (4nec2, EZNEC, xnec2c all read/write `.nec`). Input-only today (`geometry.py`). *Highest-leverage gap to close for adoption / switching cost.*
+- **`.nec` import (round-trip) not yet** — export now exists (`nec_export`: CLI + web download, validated against `nec2c`, and round-tripped through xnec2c), closing the headline interoperability gap. What remains is *reading* external `.nec` decks back in; that's the lower-leverage half (most amateur-tier value is getting designs *out* to existing tools). PyNEC has no deck reader, so import would mean a small `.nec` parser driving the card API.
 - **pysim finite-ground impedance is approximate** (PEC image + Fresnel); only PyNEC does full Sommerfeld. Real-ground HF work (verticals, low dipoles) leans on the PyNEC path.
 - **No copper/conductor loss in pysim** (PEC wires); efficiency on lossy elements requires PyNEC + `ld_card`.
 - **3D radiation-pattern rendering** — competitors (4nec2, EZNEC, MMANA, xnec2c) all advertise full 3D pattern *surfaces*. The solver produces full-sphere far-field data (`far_field()` returns `(n_theta, n_phi)` rings for every basis, including HMatrix/ArrayBlock), but the UI renders it as polar az/el cuts rather than a 3D pattern surface — so this is a rendering gap, not a solver gap.
@@ -226,7 +226,7 @@ Impedance / SWR / Γ, gain / directivity, far-field 2D patterns, current distrib
 ### Suggested positioning statement
 > *An open-source, browser-based wire-antenna MoM simulator for amateur/HF design that uniquely combines multiple basis functions, H-matrix acceleration for large arrays, and a NEC-2 cross-validation engine — delivering paid-tier (AN-SOF/MMANA-Pro) modeling quality for free, with no platform lock-in.*
 
-The two clearest roadmap items implied by the gap analysis: **(1) `.nec` export** for ecosystem interoperability, and **(2) a 3D far-field pattern surface in the UI** (the solver already produces full-sphere data across all bases) to reach visual parity with 4nec2/EZNEC.
+The clearest roadmap item implied by the gap analysis is now **a 3D far-field pattern surface in the UI** (the solver already produces full-sphere data across all bases) to reach visual parity with 4nec2/EZNEC. The former top item — `.nec` export for ecosystem interoperability — has shipped (`nec_export`, validated against `nec2c`); the smaller follow-on is `.nec` *import* for full round-trip.
 
 ---
 
