@@ -25,7 +25,9 @@ def _parity_for_solver(solver, solver_kwargs):
         return "even"
     if name == "SinusoidalPySim":
         return "odd"
-    if name == "BSplinePySim":
+    if name in ("BSplinePySim", "HMatrixPySim"):
+        # HMatrixPySim is a BSplinePySim subclass (same basis), so it shares
+        # the degree-driven parity.
         degree = (solver_kwargs or {}).get("degree", 2)
         return "even" if int(degree) == 1 else "odd"
     return "any"
