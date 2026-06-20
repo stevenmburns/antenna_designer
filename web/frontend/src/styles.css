@@ -9,23 +9,24 @@
 :root {
   color-scheme: light;
 
-  /* surfaces */
-  --bg: #e6ebf1;
+  /* surfaces — stepped for elevation: tinted stage so white panels read as
+     raised, recessed insets inside panels. (--bg is covered by the grid so
+     it only matters at edges.) */
+  --bg: #dde5ee;
   --panel: #ffffff;
-  --inset: #eef3f8;
-  --inset-deep: #f2f6fb;
-  --readout-bg: #f2f6fb;
-  --stage: #eef3f9;
+  --inset: #e9eff6;
+  --readout-bg: #eef3f9;
+  --stage: #e4ecf5;
 
   /* ink */
   --fg: #152439;
   --muted: #5d6e85;
-  --muted-2: #8294ab;
+  --muted-2: #647590; /* darkened to ~4.5:1 on white (was #8294ab, ~3.4:1) */
 
-  /* lines */
-  --border: #d8e1ea;
-  --border-control: #cdd8e4;
-  --border-hover: #aebccd;
+  /* lines — strengthened so structure reads without heavy surface contrast */
+  --border: #c6d2e0;
+  --border-control: #bfcddd;
+  --border-hover: #a3b4c9;
 
   /* accent + signal */
   --accent: #2f5fb0;
@@ -33,9 +34,25 @@
   --accent-border: #9db4dc;
   --hot: #cf7a22;
 
-  --track: #d8e1ea;
+  /* state */
+  --danger: #a23a3a;
+  --danger-bg: #fbeaea;
+  --danger-border: #e3b4b4;
+
+  --track: #c6d2e0;
   --grid: rgba(47, 95, 176, 0.07);
-  --shadow: rgba(30, 55, 95, 0.12);
+  --shadow: rgba(30, 55, 95, 0.16);
+
+  /* radius scale — one small token set instead of ad-hoc 5..10px */
+  --r-sm: 6px;  /* inputs, selects, tabs, buttons */
+  --r-md: 8px;  /* cards, readouts, thumbs, toggles, overlays */
+  --r-lg: 10px; /* modal */
+
+  /* type scale — title / body / control / caption (was 16/13/12.5/12/11/10) */
+  --text-lg: 17px;   /* sidebar title */
+  --text-base: 13px; /* primary controls, field rows */
+  --text-sm: 12px;   /* secondary controls, readouts, status */
+  --text-xs: 11px;   /* uppercase labels, captions */
 
   --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -76,6 +93,31 @@ html, body, #root {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Motion — ease state changes (hover/active/focus) instead of snapping. */
+button,
+select,
+input,
+.thumb,
+.overlay-checkbox {
+  transition: background-color 130ms ease, border-color 130ms ease,
+    color 130ms ease, box-shadow 130ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Keyboard focus — consistent ring on buttons/thumbs (selects + number
+   inputs style :focus directly above). */
+button:focus-visible,
+.thumb:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 .app {
   display: grid;
   grid-template-columns: 320px 1fr;
@@ -97,7 +139,7 @@ html, body, #root {
 }
 
 .sidebar h1 {
-  font-size: 16px;
+  font-size: var(--text-lg);
   font-weight: 700;
   margin: 0 0 6px;
   letter-spacing: -0.01em;
@@ -120,7 +162,7 @@ html, body, #root {
 .geometry-select-label {
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -130,10 +172,10 @@ html, body, #root {
   background: var(--inset);
   color: var(--fg);
   border: 1px solid var(--border-control);
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   padding: 7px 9px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
 }
@@ -151,11 +193,11 @@ html, body, #root {
 .examples-error {
   margin: 8px 0;
   padding: 8px 10px;
-  border: 1px solid #e3b4b4;
-  border-radius: 6px;
-  background: #fbeaea;
-  color: #a23a3a;
-  font-size: 0.9em;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--r-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: var(--text-sm);
 }
 
 .geometry-tabs button {
@@ -163,10 +205,10 @@ html, body, #root {
   background: var(--inset);
   color: var(--muted);
   border: 1px solid var(--border-control);
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   padding: 6px 8px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -189,7 +231,7 @@ html, body, #root {
 
 .band-tabs button {
   padding: 3px 4px;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .fan-band-group {
@@ -198,9 +240,9 @@ html, body, #root {
   gap: 4px;
   padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-md);
   background: var(--inset);
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 
 .fan-band-header {
@@ -212,7 +254,7 @@ html, body, #root {
 .fan-band-label {
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -221,10 +263,10 @@ html, body, #root {
   background: var(--panel);
   color: var(--fg);
   border: 1px solid var(--border-control);
-  border-radius: 5px;
+  border-radius: var(--r-sm);
   padding: 2px 4px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -232,14 +274,14 @@ html, body, #root {
   margin-left: auto;
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .fan-band-sublabel {
   display: flex;
   justify-content: space-between;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
   margin-top: 2px;
 }
 
@@ -250,7 +292,7 @@ html, body, #root {
 
 .group-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
@@ -268,7 +310,7 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 
 .field label {
@@ -287,7 +329,7 @@ html, body, #root {
   background: var(--inset);
   color: var(--fg);
   border: 1px solid var(--border-control);
-  border-radius: 5px;
+  border-radius: var(--r-sm);
   padding: 5px 7px;
   width: 100%;
   font: inherit;
@@ -347,10 +389,10 @@ input[type=checkbox] {
   background: var(--inset);
   color: var(--muted);
   border: 1px solid var(--border-control);
-  border-radius: 6px 0 0 6px;
+  border-radius: var(--r-sm) 0 0 var(--r-sm);
   padding: 6px 8px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -361,12 +403,12 @@ input[type=checkbox] {
 
 .backend-tab-btn .slot-letter {
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--text-base);
   letter-spacing: 0.05em;
 }
 
 .backend-tab-btn .slot-sub {
-  font-size: 10px;
+  font-size: var(--text-xs);
   opacity: 0.7;
   text-transform: lowercase;
 }
@@ -387,7 +429,7 @@ input[type=checkbox] {
   color: var(--muted);
   border: 1px solid var(--border-control);
   border-left: none;
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
   padding: 6px 8px;
   font-size: 14px;
   cursor: pointer;
@@ -412,7 +454,7 @@ input[type=checkbox] {
 .backend-config-modal {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   width: min(420px, 90vw);
   max-height: 80vh;
   display: flex;
@@ -461,10 +503,10 @@ input[type=checkbox] {
   background: var(--inset);
   color: var(--muted);
   border: 1px solid var(--border-control);
-  border-radius: 5px;
+  border-radius: var(--r-sm);
   padding: 5px 11px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -476,10 +518,10 @@ input[type=checkbox] {
 .readout {
   background: var(--readout-bg);
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: var(--r-md);
   padding: 11px 13px;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   line-height: 1.8;
 }
 
@@ -509,7 +551,7 @@ input[type=checkbox] {
 
 .feeds-table-header {
   color: var(--muted-2);
-  font-size: 11px;
+  font-size: var(--text-xs);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   margin-bottom: 2px;
@@ -518,7 +560,7 @@ input[type=checkbox] {
 .smith,
 .farfield {
   display: block;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
 }
 
 .thumbstrip {
@@ -537,7 +579,7 @@ input[type=checkbox] {
   background: var(--inset);
   color: var(--muted);
   border: 1px solid var(--border-control);
-  border-radius: 9px;
+  border-radius: var(--r-md);
   padding: 7px 7px 5px;
   cursor: pointer;
   font: inherit;
@@ -557,12 +599,12 @@ input[type=checkbox] {
 .thumb-canvas {
   display: block;
   pointer-events: none;
-  border-radius: 5px;
+  border-radius: var(--r-sm);
   overflow: hidden;
 }
 
 .thumb-label {
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 0.03em;
 }
 
@@ -602,7 +644,7 @@ input[type=checkbox] {
   gap: 3px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-md);
   padding: 3px;
   box-shadow: 0 2px 10px var(--shadow);
 }
@@ -613,9 +655,9 @@ input[type=checkbox] {
   gap: 6px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-md);
   padding: 5px 10px;
-  font: 11px var(--font-mono);
+  font: var(--text-xs) var(--font-mono);
   color: var(--muted);
   cursor: pointer;
   user-select: none;
@@ -631,9 +673,9 @@ input[type=checkbox] {
   background: transparent;
   border: none;
   color: var(--muted);
-  font: 11px var(--font-mono);
+  font: var(--text-xs) var(--font-mono);
   padding: 4px 10px;
-  border-radius: 5px;
+  border-radius: var(--r-sm);
   cursor: pointer;
 }
 
@@ -652,7 +694,7 @@ input[type=checkbox] {
   gap: 6px;
   align-items: center;
   margin-top: 2px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--muted);
   cursor: pointer;
   user-select: none;
@@ -697,7 +739,7 @@ canvas {
   position: absolute;
   bottom: 10px;
   right: 14px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--muted);
   font-family: var(--font-mono);
 }
