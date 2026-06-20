@@ -69,7 +69,13 @@ def test_make_factory_binds_ground_and_solver():
 
 
 def test_pysim_bases_keys():
-    assert set(PYSIM_BASES) == {"triangular", "sinusoidal", "bspline"}
+    assert set(PYSIM_BASES) == {
+        "triangular",
+        "sinusoidal",
+        "bspline",
+        "hmatrix",
+        "arrayblock",
+    }
 
 
 O = " --fn /dev/null"
