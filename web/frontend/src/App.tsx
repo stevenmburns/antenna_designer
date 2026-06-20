@@ -844,10 +844,12 @@ function useThumbColumnSize(
   stripRef: React.RefObject<HTMLDivElement>,
   maxThumb = 280,
 ) {
-  // Vertical thumbstrip: each of 3 thumbs takes ~1/3 of the strip's actual
-  // rendered height. Fixed overhead per fit:
-  //   strip padding (10+10) + gaps between thumbs (2*8) +
-  //   per-thumb (button padding 10 + label ~14 + gap 4 + border 2) * 3 ≈ 126
+  // Vertical thumbstrip: 3 thumbs scaled so they ALWAYS fit (the strip never
+  // scrolls — overflow:hidden in CSS). Fixed overhead:
+  //   strip padding (12+12) + 2 gaps (2*8) +
+  //   per-thumb (button padding 8+6 + label ~14 + gap 6 + border 2) * 3 ≈ 148.
+  // Bias slightly high (150) so they fit with a hair of slack rather than
+  // clip; floor low so a short window shrinks them instead of overflowing.
   const [size, setSize] = useState(180);
   useEffect(() => {
     const el = stripRef.current;
@@ -855,8 +857,8 @@ function useThumbColumnSize(
     const update = () => {
       const h = el.clientHeight;
       if (h <= 0) return;
-      const perThumb = (h - 130) / 3;
-      setSize(Math.max(100, Math.min(maxThumb, Math.floor(perThumb))));
+      const perThumb = (h - 150) / 3;
+      setSize(Math.max(40, Math.min(maxThumb, Math.floor(perThumb))));
     };
     update();
     const ro = new ResizeObserver(update);
@@ -1754,7 +1756,7 @@ export function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <h1>pysim — interactive</h1>
+          <h1>Antenna Designer</h1>
           <button
             type="button"
             className="theme-toggle"
