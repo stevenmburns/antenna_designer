@@ -390,6 +390,34 @@ button:focus-visible,
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+.geometry-filter {
+  flex: 1;
+  background: var(--inset);
+  color: var(--fg);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  padding: var(--space-4);
+  font: inherit;
+  font-size: var(--text-base);
+}
+
+.geometry-filter:hover {
+  border-color: var(--border-hover);
+}
+
+.geometry-filter:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.geometry-filter-hint {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+}
+
 .examples-error {
   margin: var(--space-4) 0;
   padding: var(--space-4) var(--space-5);
