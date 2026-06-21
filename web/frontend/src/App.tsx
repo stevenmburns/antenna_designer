@@ -1513,10 +1513,10 @@ export function App() {
     if (!sweepEnabled) {
       return;
     }
-    sweepTimerRef.current = window.setTimeout(() => {
-      runSweep();
-      sweepTimerRef.current = null;
-    }, 500);
+    // runSweep itself waits for the live solve to finish before it starts
+    // (see its guard), so the dwell effectively begins once the heatmap solve
+    // has returned rather than competing with it.
+    sweepTimerRef.current = window.setTimeout(runSweep, 500);
     return () => {
       if (sweepTimerRef.current) window.clearTimeout(sweepTimerRef.current);
     };
@@ -1545,10 +1545,8 @@ export function App() {
     if (!convergeEnabled) {
       return;
     }
-    convergeTimerRef.current = window.setTimeout(() => {
-      runConverge();
-      convergeTimerRef.current = null;
-    }, 500);
+    // Like the sweep, runConverge waits for the live solve before starting.
+    convergeTimerRef.current = window.setTimeout(runConverge, 500);
     return () => {
       if (convergeTimerRef.current) window.clearTimeout(convergeTimerRef.current);
     };
@@ -1583,6 +1581,17 @@ export function App() {
   ]);
 
   async function runSweep() {
+    // Hold off until the live /ws solve (the one that fills in the heatmap,
+    // impedance, and far field) has returned. Its 41 background freq solves
+    // would otherwise share CPU with it and stretch the time-to-heatmap — the
+    // pain that motivated this on large arrays. Re-poll until the main solve is
+    // idle, then proceed; the input-change effect cancels this timer on the
+    // next change, so rapid edits still debounce.
+    if (inFlightRef.current || pendingRef.current) {
+      sweepTimerRef.current = window.setTimeout(runSweep, 200);
+      return;
+    }
+    sweepTimerRef.current = null;
     sweepAbortRef.current?.abort();
     const controller = new AbortController();
     sweepAbortRef.current = controller;
@@ -1692,6 +1701,14 @@ export function App() {
   }
 
   async function runConverge() {
+    // Same as runSweep: defer the converge ladder (another batch of solves)
+    // until the live solve has returned, so it never competes with the solve
+    // that draws the heatmap.
+    if (inFlightRef.current || pendingRef.current) {
+      convergeTimerRef.current = window.setTimeout(runConverge, 200);
+      return;
+    }
+    convergeTimerRef.current = null;
     convergeAbortRef.current?.abort();
     const controller = new AbortController();
     convergeAbortRef.current = controller;
