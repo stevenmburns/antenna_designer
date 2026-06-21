@@ -8,7 +8,7 @@ import math
 
 import pytest
 
-from antenna_designer.designs.freq_based.hexbeam_5band import Builder
+from antenna_designer.designs.multiband.hexbeam_5band import Builder
 
 
 def _feeds(tups):
@@ -137,7 +137,7 @@ def test_registered_in_web_examples():
     """Adapter auto-discovers the new design and reports multi_feed."""
     from web.examples import REGISTRY
 
-    ex = REGISTRY.get("freq_based.hexbeam_5band")
+    ex = REGISTRY.get("multiband.hexbeam_5band")
     assert ex is not None
     assert ex.multi_feed is True
 

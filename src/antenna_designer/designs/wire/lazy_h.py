@@ -13,7 +13,7 @@ in-phase drive, and the junction is the (high-impedance) feedpoint taken to an
 antenna tuner via 300-600 ohm open-wire line. The phasing harness exists only
 to impose equal in-phase excitation; by the array's symmetry that is exactly
 what two equal in-phase centre feeds produce, so we model it that way (cf.
-the multi-feed convention in freq_based/hexbeam_5band). This fills the
+the multi-feed convention in multiband/hexbeam_5band). This fills the
 vertical-stacking gap: the catalog's other arrays phase elements side-by-side,
 not collinear elements stacked in height.
 

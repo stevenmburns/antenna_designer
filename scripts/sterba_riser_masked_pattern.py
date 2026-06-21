@@ -19,7 +19,7 @@ import sys
 
 import numpy as np
 
-from antenna_designer.designs.freq_based.sterba import Builder
+from antenna_designer.designs.wire.sterba import Builder
 from antenna_designer.engines import PysimEngine
 from antenna_designer.far_field import plot_patterns
 

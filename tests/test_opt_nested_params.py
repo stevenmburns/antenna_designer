@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from antenna_designer.designs.freq_based.hexbeam_5band import Builder
+from antenna_designer.designs.multiband.hexbeam_5band import Builder
 from antenna_designer.opt import _get_path, _set_path, _parse_path
 
 

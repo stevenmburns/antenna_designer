@@ -182,7 +182,7 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
             lo, hi, step = -180.0, 180.0, 1.0
             unit = unit or "°"
         # `design_freq` is the geometry-sizing frequency for
-        # freq_based.* designs (wavelength = c / design_freq, then
+        # geometry-from-design_freq designs (wavelength = c / design_freq, then
         # dimensions are wavelength × factors). Wire it into the
         # global designFreq state on the frontend so the slider
         # actually retunes the geometry AND the meas-freq slider
@@ -320,7 +320,7 @@ def _derive_schema(default_params: dict) -> tuple:
         # the adapter just doesn't expose a redundant slider for it.
         #
         # `design_freq` is the geometry-sizing frequency for
-        # freq_based.* designs, driven by the "design freq" band-tab
+        # design_freq-sized designs, driven by the "design freq" band-tab
         # row + slider in the UI (which sends design_freq_mhz on the
         # request). Skipping it here too prevents the auto-derived
         # schema slider from duplicating that control.
@@ -866,7 +866,7 @@ def _make_example(name: str, cls) -> AntennaExample:
         meas_freq = float(req.get("measurement_freq_mhz", design_freq))
         builder = _build_builder(cls, req)
         builder.freq = meas_freq
-        # For freq_based designs the geometry computes from
+        # For design_freq-sized designs the geometry computes from
         # design_freq via build_wires(); apply the request's
         # design_freq_mhz so dragging the design-freq slider actually
         # retunes the antenna. Top-level designs don't carry the
@@ -1135,12 +1135,12 @@ def _make_example(name: str, cls) -> AntennaExample:
 def list_designs() -> list[str]:
     """Discover every Builder file under designs/.
 
-    Top-level files register under their bare stem (`invvee`). Files
-    inside a subpackage (today only `freq_based/`) register under the
-    dotted path the user sees in the UI (`freq_based.invvee`) — same
-    convention as the Python import path, minus the leading
-    `antenna_designer.designs.`. The dotted name is what `register_all`
-    feeds back to importlib too.
+    Every design lives in a family subpackage (`dipoles/`, `loops/`,
+    `arrays/`, …) and registers under the dotted path the user sees in
+    the UI (`dipoles.invvee`) — the same convention as the Python import
+    path, minus the leading `antenna_designer.designs.`. The dotted name
+    is what `register_all` feeds back to importlib too. Any bare top-level
+    `*.py` (none today) would register under its stem.
     """
     names: list[str] = []
     for p in sorted(DESIGNS_DIR.glob("*.py")):

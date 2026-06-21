@@ -6,16 +6,16 @@ o = " --fn /dev/null"
 
 def test_cli_draw():
     for design in [
-        "moxon",
-        "vertical",
-        "freq_based.invvee",
-        "freq_based.invvee:dipole",
-        "invveearray",
-        "bowtie",
-        "bowtiearray",
-        "bowtiearray2x4",
-        "freq_based.yagi",
-        "freq_based.fandipole",
+        "beams.moxon",
+        "verticals.vertical",
+        "dipoles.invvee",
+        "dipoles.invvee:dipole",
+        "arrays.invveearray",
+        "specialty.bowtie",
+        "arrays.bowtiearray",
+        "arrays.bowtiearray2x4",
+        "beams.yagi",
+        "multiband.fandipole",
     ]:
         ant.cli(f"draw --builder {design}{o}".split())
 
@@ -45,28 +45,28 @@ def test_cli_sweep():
 
 def test_cli_optimize():
     ant.cli(
-        f"optimize --params length_factor angle_radians --builder freq_based.invvee{o}".split()
+        f"optimize --params length_factor angle_radians --builder dipoles.invvee{o}".split()
     )
     ant.cli(
-        f"optimize --opt_gain --params length_factor angle_radians --resonance --builder freq_based.invvee{o}".split()
+        f"optimize --opt_gain --params length_factor angle_radians --resonance --builder dipoles.invvee{o}".split()
     )
 
 
 def test_cli_pattern():
-    ant.cli(f"pattern --builder freq_based.yagi{o}".split())
-    ant.cli(f"pattern --builder freq_based.invvee --wireframe{o}".split())
+    ant.cli(f"pattern --builder beams.yagi{o}".split())
+    ant.cli(f"pattern --builder dipoles.invvee --wireframe{o}".split())
 
 
 def test_cli_compare_patterns():
     ant.cli(f"compare_patterns{o}".split())
-    ant.cli(f"compare_patterns --builders freq_based.invvee moxon{o}".split())
-    ant.cli(f"compare_patterns --builders freq_based.invvee hexbeam{o}".split())
+    ant.cli(f"compare_patterns --builders dipoles.invvee moxon{o}".split())
+    ant.cli(f"compare_patterns --builders dipoles.invvee hexbeam{o}".split())
 
 
 def test_cli_engine_flag():
     """--engine pysim selects the pysim backend; --ground forces a
     specific ground model on either engine."""
-    dipole = "freq_based.invvee:dipole"
+    dipole = "dipoles.invvee:dipole"
     ant.cli(f"pattern --builder {dipole} --engine pysim --ground free{o}".split())
     ant.cli(f"pattern --builder {dipole} --engine pysim --ground pec{o}".split())
     ant.cli(

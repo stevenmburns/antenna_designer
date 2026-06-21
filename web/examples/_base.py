@@ -332,7 +332,7 @@ class AntennaExample:
     # or its built-in default.
     default_freq_mhz: Optional[float] = None
     # True when the Builder has a `design_freq` parameter that scales
-    # geometry (freq_based.* designs). The frontend uses this to show
+    # geometry (design_freq-sized designs). The frontend uses this to show
     # or hide the design-freq band-tab row: hand-tuned absolute
     # designs (top-level designs/) ignore design_freq, so the row
     # would just be a noop slider for them.

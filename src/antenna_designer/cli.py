@@ -76,7 +76,41 @@ def resolve_class(s):
     if (res := try_to_resolve_list(lst)) is not None:
         return res
 
-    return try_to_resolve_list(["antenna_designer", "designs"] + lst)
+    if (res := try_to_resolve_list(["antenna_designer", "designs"] + lst)) is not None:
+        return res
+
+    # Designs live under a family subpackage (designs/<family>/<name>.py).
+    # Basenames are globally unique, so a bare name like "moxon" can still be
+    # resolved by searching each family — the family prefix ("beams.moxon")
+    # is accepted by the branch above but not required.
+    for fam in _design_families():
+        cand = ["antenna_designer", "designs", fam] + lst
+        if (res := try_to_resolve_list(cand)) is not None:
+            return res
+
+    return None
+
+
+def _design_families():
+    """Family subpackage names under antenna_designer.designs (cached)."""
+    global _DESIGN_FAMILIES
+    if _DESIGN_FAMILIES is None:
+        import os
+
+        import antenna_designer.designs as _d
+
+        fams = set()
+        for root in list(getattr(_d, "__path__", [])):
+            for name in os.listdir(root):
+                if name.startswith(("_", ".")):
+                    continue
+                if os.path.isdir(os.path.join(root, name)):
+                    fams.add(name)
+        _DESIGN_FAMILIES = sorted(fams)
+    return _DESIGN_FAMILIES
+
+
+_DESIGN_FAMILIES = None
 
 
 def list_variants(cls):
@@ -219,14 +253,14 @@ def cli(arguments=None):
                 "--builders",
                 type=str,
                 nargs="+",
-                default=["freq_based.invvee:dipole", "freq_based.invvee"],
+                default=["dipoles.invvee:dipole", "dipoles.invvee"],
                 help="Use this list of antenna builders.",
             )
         else:
             p.add_argument(
                 "--builder",
                 type=str,
-                default="freq_based.invvee:dipole",
+                default="dipoles.invvee:dipole",
                 help="Use this antenna builder.",
             )
 
@@ -483,7 +517,7 @@ def cli(arguments=None):
     p.add_argument(
         "--builder",
         type=str,
-        default="freq_based.invvee:dipole",
+        default="dipoles.invvee:dipole",
         help="Antenna builder to export.",
     )
     p.add_argument(

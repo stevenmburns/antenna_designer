@@ -17,7 +17,7 @@ import sys
 
 import numpy as np
 
-from antenna_designer.designs.freq_based import sterba, sterba_driven
+from antenna_designer.designs.wire import sterba, sterba_driven
 from antenna_designer.engines import PysimEngine
 
 FF_KW = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)

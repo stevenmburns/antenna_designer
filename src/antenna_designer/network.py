@@ -124,7 +124,7 @@ class Load:
     Either way the effect is "lumped impedance in series with the segment":
     Load modifies a single segment's self-Z (rank-1 update on the MoM
     matrix). The classic dual-band trap dipole uses Load(parallel=True) at
-    a single segment in each arm — see designs/freq_based/trap_dipole.py.
+    a single segment in each arm — see designs/multiband/trap_dipole.py.
     """
 
     port: str

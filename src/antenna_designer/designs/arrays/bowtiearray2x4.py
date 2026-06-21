@@ -1,5 +1,5 @@
-from .. import Array2x4Builder
-from . import bowtie
+from ... import Array2x4Builder
+from ..specialty import bowtie
 
 from types import MappingProxyType
 

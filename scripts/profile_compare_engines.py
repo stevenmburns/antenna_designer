@@ -61,10 +61,10 @@ import time  # noqa: E402
 sys.path.insert(0, "/home/smburns/antennas/antenna_designer/src")
 sys.path.insert(0, "/home/smburns/antennas/antenna_designer/pysim/src")
 
-from antenna_designer.designs.freq_based.fandipole import (  # noqa: E402
+from antenna_designer.designs.multiband.fandipole import (  # noqa: E402
     Builder as FanBuilder,
 )
-from antenna_designer.designs.freq_based.trap_fan_dipole import (  # noqa: E402
+from antenna_designer.designs.multiband.trap_fan_dipole import (  # noqa: E402
     Builder as TrapBuilder,
 )
 from antenna_designer.engines.pynec import PyNECEngine  # noqa: E402

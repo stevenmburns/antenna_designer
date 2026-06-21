@@ -1,10 +1,10 @@
-from ..builder import Array1x4Builder
-from .freq_based import delta_loop
+from ...builder import Array1x4GroupedBuilder
+from ..loops import delta_loop
 
 from types import MappingProxyType
 
 
-class Builder(Array1x4Builder):
+class Builder(Array1x4GroupedBuilder):
     default_params = MappingProxyType(
         {
             "design_freq": 28.47,
@@ -14,7 +14,8 @@ class Builder(Array1x4Builder):
             "length_factor_otop": 1.0795,
             "angle_radians_otop": 0.8911,
             "base": 7.0,
-            "del_y": 4.0,
+            "del_y0": 6.0,
+            "del_y1": 2.5,
             "del_z": 0.0,
             "phase_lr": 0.0,
         }

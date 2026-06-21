@@ -1,4 +1,4 @@
-from antenna_designer.designs.freq_based.invvee import Builder
+from antenna_designer.designs.dipoles.invvee import Builder
 # from icecream import ic
 
 from types import MappingProxyType
@@ -13,20 +13,20 @@ def test_resolve_class():
     def check(res):
         return res is not None and not isinstance(res, ModuleType)
 
-    assert check(resolve_class("moxon.Builder"))
-    assert check(resolve_class("moxon.Builder"))
+    assert check(resolve_class("beams.moxon.Builder"))
+    assert check(resolve_class("beams.moxon.Builder"))
 
-    assert not check(resolve_class("moxon.Builder0"))
+    assert not check(resolve_class("beams.moxon.Builder0"))
     assert check(resolve_class("freq_based_dipole.Builder"))
     assert check(resolve_class("freq_based_dipole.FancyBuilder"))
     assert not check(resolve_class("freq_based_dipole.Builder0"))
-    assert check(resolve_class("moxon"))
+    assert check(resolve_class("beams.moxon"))
     assert check(resolve_class("freq_based_dipole"))
     assert not check(resolve_class("fail"))
 
     assert check(resolve_class("subdir.moxon.Builder"))
 
-    assert check(resolve_class("freq_based.invvee"))
+    assert check(resolve_class("dipoles.invvee"))
 
 
 def test_unit_params():

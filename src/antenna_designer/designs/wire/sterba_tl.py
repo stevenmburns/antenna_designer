@@ -1,6 +1,6 @@
 """Sterba curtain, transmission-line sister design of `sterba.py`.
 
-Where `freq_based.sterba` models the curtain as a single continuous wire
+Where `wire.sterba` models the curtain as a single continuous wire
 (Cebik's offset-pair trick, verticals as real wires), this variant models
 the vertical phasing sections as **ideal transmission lines** via
 `build_network()`.

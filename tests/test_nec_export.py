@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from antenna_designer.designs.freq_based.invvee import Builder as InvVee
-from antenna_designer.designs.freq_based.yagi import Builder as Yagi
+from antenna_designer.designs.dipoles.invvee import Builder as InvVee
+from antenna_designer.designs.beams.yagi import Builder as Yagi
 from antenna_designer.engines import PyNECEngine
 from antenna_designer.nec_export import export_nec
 
@@ -61,7 +61,7 @@ def test_export_ground_cards():
 def test_export_reducer_network_raises():
     """build_network() TL/virtual-driver designs go through the multiport-Y
     reducer and have no faithful native-NEC deck."""
-    from antenna_designer.designs.freq_based.delta_looparray_network import (
+    from antenna_designer.designs.arrays.delta_looparray_network import (
         Builder as NetTLBuilder,
     )
 
@@ -71,7 +71,7 @@ def test_export_reducer_network_raises():
 
 def test_export_legacy_tls_emits_tl_cards():
     """The legacy build_tls() path maps to native NEC TL cards."""
-    from antenna_designer.designs.freq_based.delta_looparray_with_tls import (
+    from antenna_designer.designs.arrays.delta_looparray_with_tls import (
         Builder as TLBuilder,
     )
 

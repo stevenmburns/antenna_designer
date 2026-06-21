@@ -149,13 +149,13 @@ def test_example_round_trips_through_make_example(name):
 
 
 # ---------------------------------------------------------------------------
-# freq_based.yagi — n_directors is the integer scalar that drives the
+# beams.yagi — n_directors is the integer scalar that drives the
 # director count in build_wires().
 # ---------------------------------------------------------------------------
 
 
 def test_yagi_n_directors_is_int_slider():
-    schema = {s.name: s for s in REGISTRY["freq_based.yagi"].param_schema}
+    schema = {s.name: s for s in REGISTRY["beams.yagi"].param_schema}
     n_dir = schema["n_directors"]
     assert isinstance(n_dir, ParamSpec)
     assert n_dir.kind == "int"
@@ -163,20 +163,20 @@ def test_yagi_n_directors_is_int_slider():
 
 
 def test_yagi_factor_sliders_present():
-    schema = {s.name: s for s in REGISTRY["freq_based.yagi"].param_schema}
+    schema = {s.name: s for s in REGISTRY["beams.yagi"].param_schema}
     for key in ("length_factor", "director_factor", "reflector_factor", "boom_factor"):
         assert key in schema
         assert schema[key].kind == "float"
 
 
 # ---------------------------------------------------------------------------
-# freq_based.hentenna_slant — explicit ui_params overrides on
+# specialty.hentenna_slant — explicit ui_params overrides on
 # length_factor, top_aspect, bot_aspect, slant_degrees.
 # ---------------------------------------------------------------------------
 
 
 def test_hentenna_slant_aspect_overrides_applied():
-    schema = {s.name: s for s in REGISTRY["freq_based.hentenna_slant"].param_schema}
+    schema = {s.name: s for s in REGISTRY["specialty.hentenna_slant"].param_schema}
     top = schema["top_aspect"]
     bot = schema["bot_aspect"]
     slant = schema["slant_degrees"]
@@ -188,12 +188,12 @@ def test_hentenna_slant_aspect_overrides_applied():
 
 
 def test_hentenna_slant_lists_z50_z100_variants():
-    variants = REGISTRY["freq_based.hentenna_slant"].variants
+    variants = REGISTRY["specialty.hentenna_slant"].variants
     assert set(variants) >= {"default", "z50", "z100"}
 
 
 def test_hentenna_slant_z100_overrides_default_factors():
-    vv = REGISTRY["freq_based.hentenna_slant"].variant_values
+    vv = REGISTRY["specialty.hentenna_slant"].variant_values
     assert vv["z100"]["length_factor"] != vv["default"]["length_factor"]
     assert vv["z100"]["top_aspect"] != vv["default"]["top_aspect"]
 
@@ -207,15 +207,15 @@ def test_hentenna_slant_z100_overrides_default_factors():
 @pytest.mark.parametrize(
     "name,expected",
     [
-        ("hexbeam", {"default", "opt"}),
-        ("moxon", {"default", "opt", "original"}),
-        ("invveearray", {"default", "old"}),
-        ("freq_based.delta_loop", {"default", "z100", "z200"}),
-        ("freq_based.diamond_loop", {"default", "z100", "z200"}),
-        ("freq_based.inv_delta_loop", {"default", "z100", "z200"}),
-        ("freq_based.hentenna", {"default", "z50", "z100"}),
-        ("freq_based.delta_loop_slanted", {"default", "slant0", "slant30"}),
-        ("delta_looparray", {"default", "dy3_dz2", "dy35_dz2", "dy45_dz2"}),
+        ("beams.hexbeam", {"default", "opt"}),
+        ("beams.moxon", {"default", "opt", "original"}),
+        ("arrays.invveearray", {"default", "old"}),
+        ("loops.delta_loop", {"default", "z100", "z200"}),
+        ("loops.diamond_loop", {"default", "z100", "z200"}),
+        ("loops.inv_delta_loop", {"default", "z100", "z200"}),
+        ("specialty.hentenna", {"default", "z50", "z100"}),
+        ("loops.delta_loop_slanted", {"default", "slant0", "slant30"}),
+        ("arrays.delta_looparray", {"default", "dy3_dz2", "dy35_dz2", "dy45_dz2"}),
     ],
 )
 def test_variant_family(name, expected):
@@ -239,11 +239,11 @@ def test_twoband_fan_dipole_carries_spacing_sweep_variants():
         "s05",
         "s07",
     }
-    assert set(REGISTRY["twoband_fan_dipole"].variants) >= expected
+    assert set(REGISTRY["multiband.twoband_fan_dipole"].variants) >= expected
 
 
 # ---------------------------------------------------------------------------
-# design_freq presence — freq_based.* designs derive geometry from
+# design_freq presence — design_freq-sized designs derive geometry from
 # design_freq; top-level designs are hand-tuned in absolute meters. The
 # adapter uses has_design_freq to decide whether to write the request's
 # design_freq_mhz onto the builder; the wrong polarity silently breaks
@@ -315,7 +315,7 @@ def test_explicit_step_override_still_wins():
 def test_auto_derived_length_factors_resolve_at_one_per_mille(name):
     """Every length_factor-family slider without an explicit step must land
     at <=0.12% relative resolution (the regression the centralised auto-step
-    fixed: arrays and freq_based loops previously sat at ~1%)."""
+    fixed: arrays and design_freq loops previously sat at ~1%)."""
     cls = _builder_cls(name)
     ui = dict(cls.default_params).get("ui_params") or {}
 
