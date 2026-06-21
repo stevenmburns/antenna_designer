@@ -19,7 +19,12 @@ import importlib
 import pytest
 
 import web.examples  # noqa: F401 — primes the adapter
-from web.adapter import _make_example
+from web.adapter import (
+    _auto_paramspec,
+    _make_example,
+    _nice_step,
+    _precision_for_step,
+)
 from web.examples import REGISTRY
 from web.examples._base import (
     DEFAULT_HF_BANDS,
@@ -250,3 +255,76 @@ def test_has_design_freq_matches_default_params(name):
     cls = _builder_cls(name)
     expected = "design_freq" in dict(cls.default_params)
     assert REGISTRY[name].has_design_freq is expected
+
+
+# ---------------------------------------------------------------------------
+# Auto-derived slider resolution. A numeric param without an explicit
+# ui_params step gets a 0.1% *relative* step (window / 1000, rounded to one
+# significant figure) so any scaling factor / fraction / length is
+# fine-tunable by hand regardless of magnitude. precision tracks the step.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        (0.0010876, 0.001),
+        (0.00099, 0.001),
+        (0.028, 0.03),
+        (0.00005, 0.00005),
+        (0.0, 0.0),
+    ],
+)
+def test_nice_step_rounds_to_one_sig_fig(raw, expected):
+    assert _nice_step(raw) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    "step, expected",
+    [(1.0, 1), (0.1, 2), (0.01, 3), (0.001, 4), (0.0001, 5), (0.00005, 6)],
+)
+def test_precision_tracks_step_decimals(step, expected):
+    assert _precision_for_step(step) == expected
+
+
+@pytest.mark.parametrize("default", [1.0876, 0.05, 0.012, 0.95, 3.48])
+def test_auto_step_is_about_one_per_mille_relative(default):
+    spec = _auto_paramspec("some_factor", default, None)
+    rel = spec.step / abs(default)
+    # one-sig-fig rounding spreads it, but it must stay near 0.1% and never
+    # regress to the old 1% auto-step.
+    assert 0.0004 <= rel <= 0.0016
+
+
+def test_explicit_step_override_still_wins():
+    spec = _auto_paramspec("length_factor", 1.0, {"step": 0.0001, "precision": 4})
+    assert spec.step == pytest.approx(0.0001)
+    assert spec.precision == 4
+
+
+@pytest.mark.parametrize("name", DESIGN_NAMES)
+def test_auto_derived_length_factors_resolve_at_one_per_mille(name):
+    """Every length_factor-family slider without an explicit step must land
+    at <=0.12% relative resolution (the regression the centralised auto-step
+    fixed: arrays and freq_based loops previously sat at ~1%)."""
+    cls = _builder_cls(name)
+    ui = dict(cls.default_params).get("ui_params") or {}
+
+    def explicit_step(leaf):
+        ov = ui.get(leaf)
+        return isinstance(ov, dict) and "step" in ov
+
+    def specs(seq):
+        for s in seq:
+            inner = getattr(s, "params", None)
+            if inner:
+                yield from specs(inner)
+            else:
+                yield s
+
+    for s in specs(REGISTRY[name].param_schema):
+        if "length_factor" not in s.name or s.kind != "float":
+            continue
+        if explicit_step(s.name):
+            continue
+        assert s.step / abs(s.default) <= 0.0012, (name, s.name, s.step, s.default)

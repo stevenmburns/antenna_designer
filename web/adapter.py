@@ -28,6 +28,7 @@ skipped (no UI yet — the request can still override via re/im dict).
 from __future__ import annotations
 
 import importlib
+import math
 import pathlib
 import time
 from functools import lru_cache
@@ -99,6 +100,28 @@ def _strip_ui(params: dict) -> dict:
     return {k: v for k, v in params.items() if k != "ui_params"}
 
 
+def _nice_step(raw: float) -> float:
+    """Round a raw step down to a single significant figure so auto-derived
+    sliders land on clean stops (0.0010876 → 0.001, 0.028 → 0.03,
+    0.00005 → 0.00005) instead of ugly fractional grids."""
+    if raw <= 0.0:
+        return raw
+    exp = math.floor(math.log10(raw))
+    mant = round(raw / 10.0**exp)  # nearest integer in [1, 10]
+    if mant >= 10:
+        mant, exp = 1, exp + 1
+    return mant * 10.0**exp
+
+
+def _precision_for_step(step: float) -> int:
+    """Decimal places to display a value stepped by `step`, with one digit
+    of headroom so an off-grid default still reads meaningfully. Capped at
+    6 to keep labels sane for very small factors."""
+    if step <= 0.0:
+        return 3
+    return min(6, max(0, -math.floor(math.log10(step))) + 1)
+
+
 def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec | None:
     """Build a ParamSpec from a default value plus optional UI overrides.
 
@@ -109,14 +132,11 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
     override = dict(override or {})
     label = override.pop("label", name)
     unit = override.pop("unit", None)
-    # `length_factor`-family params scale wavelength-dependent dimensions
-    # and want fine tuning by default: a 0.1% step (0.001 for a factor near
-    # 1.0) with 4-decimal display. Centralised here so designs get the
-    # convention for free — a design's ui_params can still override either
-    # (e.g. fandipole tunes per-band at 0.0001). Without this the numeric
-    # auto-step below lands at ~1% of the slider range, far too coarse.
-    is_length_factor = "length_factor" in name
-    precision = int(override.pop("precision", 4 if is_length_factor else 3))
+    # Precision (decimal places shown on the slider label) defaults to None
+    # here so the numeric branch can derive it from the resolved step. Any
+    # non-numeric path falls back to 3, matching the historical default.
+    explicit_precision = override.pop("precision", None)
+    precision = 3 if explicit_precision is None else int(explicit_precision)
     sweepable = bool(override.pop("sweepable", name == "freq"))
 
     if isinstance(default, bool):
@@ -134,20 +154,24 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
         is_int = isinstance(default, int) and override.get("kind") != "float"
         kind = override.pop("kind", "int" if is_int else "float")
         d = float(default)
-        # Auto bounds: a generous ±50% window with 100 steps. For an int
-        # default of 0 the multiplicative window collapses, so fall back
-        # to a small absolute range.
+        # Auto bounds: a generous ±50% window. The step gives 0.1%
+        # *relative* resolution (window / 1000) so any scaling factor,
+        # fraction, length, or angle is fine-tunable by hand regardless of
+        # its magnitude — a flat absolute step would be too coarse for
+        # sub-unity fractions and needlessly fine for large values. Rounded
+        # to one significant figure for clean slider stops. For an int
+        # default of 0 the multiplicative window collapses, so fall back to
+        # a small absolute range.
         if d == 0.0:
             lo, hi, step = -1.0, 1.0, 0.1
         else:
             lo = d * 0.5 if d > 0 else d * 1.5
             hi = d * 1.5 if d > 0 else d * 0.5
-            step = max((hi - lo) / 100.0, 1e-6)
+            step = _nice_step(max((hi - lo) / 1000.0, 1e-9))
         if kind == "int":
             lo = float(int(round(lo)))
             hi = float(int(round(hi)))
             step = 1.0
-            precision = 0
         # Phase params (phase_lr, phase_tb, ...) are degrees, converted
         # to a phasor by the array builders via exp(j π · phase / 180).
         # ±180° covers the full unit circle; signed range puts the
@@ -157,7 +181,6 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
         if name.startswith("phase_"):
             lo, hi, step = -180.0, 180.0, 1.0
             unit = unit or "°"
-            precision = 0
         # `design_freq` is the geometry-sizing frequency for
         # freq_based.* designs (wavelength = c / design_freq, then
         # dimensions are wavelength × factors). Wire it into the
@@ -170,10 +193,16 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
         if name == "design_freq":
             unit = unit or "MHz"
             override["linked_to_design_freq"] = True  # keep around
-        # See the precision note above: 0.1% step is the length_factor
-        # default; the override (if any) still wins on the pop() below.
-        if is_length_factor and kind != "int":
-            step = 0.001
+        final_step = float(override.pop("step", step))
+        # Derive display precision from the resolved step (matching its
+        # decimals plus one digit of headroom), unless the design pinned a
+        # precision or this is an int / phase param fixed to whole units.
+        if explicit_precision is not None:
+            resolved_precision = int(explicit_precision)
+        elif kind == "int" or name.startswith("phase_"):
+            resolved_precision = 0
+        else:
+            resolved_precision = _precision_for_step(final_step)
         spec_kwargs = dict(
             name=name,
             label=label,
@@ -181,8 +210,8 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
             kind=kind,
             min=float(override.pop("min", lo)),
             max=float(override.pop("max", hi)),
-            step=float(override.pop("step", step)),
-            precision=precision,
+            step=final_step,
+            precision=resolved_precision,
             unit=unit,
             sweepable=sweepable,
         )
