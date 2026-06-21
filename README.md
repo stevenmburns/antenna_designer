@@ -22,7 +22,7 @@
 | src/antenna\_designer/designs/cebik/g5rv.py                              |       25 |        0 |    100% |           |
 | src/antenna\_designer/designs/cebik/half\_square.py                      |       28 |        0 |    100% |           |
 | src/antenna\_designer/designs/cebik/hb9cv.py                             |       31 |        0 |    100% |           |
-| src/antenna\_designer/designs/cebik/helix.py                             |       39 |        2 |     95% |   101-102 |
+| src/antenna\_designer/designs/cebik/helix.py                             |       39 |        2 |     95% |    99-100 |
 | src/antenna\_designer/designs/cebik/horizontal\_loop.py                  |       29 |        0 |    100% |           |
 | src/antenna\_designer/designs/cebik/inverted\_l.py                       |       28 |        0 |    100% |           |
 | src/antenna\_designer/designs/cebik/jpole.py                             |       27 |        0 |    100% |           |
@@ -60,11 +60,11 @@
 | src/antenna\_designer/designs/freq\_based/inv\_delta\_loop.py            |       30 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/invvee.py                      |       30 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/short\_dipole\_loaded.py       |       11 |        0 |    100% |           |
-| src/antenna\_designer/designs/freq\_based/sterba.py                      |       59 |        1 |     98% |       168 |
+| src/antenna\_designer/designs/freq\_based/sterba.py                      |       59 |        1 |     98% |       166 |
 | src/antenna\_designer/designs/freq\_based/sterba\_center\_driven.py      |       55 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/sterba\_difftl.py              |       84 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/sterba\_driven.py              |       66 |        0 |    100% |           |
-| src/antenna\_designer/designs/freq\_based/sterba\_tl.py                  |       63 |        1 |     98% |       110 |
+| src/antenna\_designer/designs/freq\_based/sterba\_tl.py                  |       63 |        1 |     98% |       108 |
 | src/antenna\_designer/designs/freq\_based/trap\_dipole.py                |       30 |        0 |    100% |           |
 | src/antenna\_designer/designs/freq\_based/trap\_fan\_dipole.py           |       89 |        3 |     97% |240, 297, 303 |
 | src/antenna\_designer/designs/freq\_based/yagi.py                        |       38 |        0 |    100% |           |
