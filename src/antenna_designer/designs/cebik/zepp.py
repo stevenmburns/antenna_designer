@@ -68,8 +68,6 @@ class Builder(AntennaBuilder):
                     "length_frac": {
                         "min": 0.40,
                         "max": 0.55,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "z0_stub": {
                         "min": 300.0,
@@ -80,8 +78,6 @@ class Builder(AntennaBuilder):
                     "stub_len_frac": {
                         "min": 0.1,
                         "max": 0.45,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                 }
             ),

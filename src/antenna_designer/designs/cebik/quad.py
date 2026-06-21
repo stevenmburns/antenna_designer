@@ -61,20 +61,14 @@ class Builder(AntennaBuilder):
                     "driver_circ": {
                         "min": 0.95,
                         "max": 1.08,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "reflector_circ": {
                         "min": 1.0,
                         "max": 1.15,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "spacing_factor": {
                         "min": 0.1,
                         "max": 0.3,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                 }
             ),

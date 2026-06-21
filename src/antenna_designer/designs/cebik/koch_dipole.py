@@ -77,8 +77,6 @@ class Builder(AntennaBuilder):
                     "span_frac": {
                         "min": 0.30,
                         "max": 0.50,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "length_factor": {
                         "min": 0.85,

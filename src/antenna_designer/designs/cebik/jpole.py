@@ -55,14 +55,10 @@ class Builder(AntennaBuilder):
                     "radiator_frac": {
                         "min": 0.45,
                         "max": 0.55,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "tap_frac": {
                         "min": 0.03,
                         "max": 0.3,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                 }
             ),

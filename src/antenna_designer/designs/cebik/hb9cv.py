@@ -63,26 +63,18 @@ class Builder(AntennaBuilder):
                     "rear_factor": {
                         "min": 0.95,
                         "max": 1.08,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "front_factor": {
                         "min": 0.9,
                         "max": 1.03,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "spacing_frac": {
                         "min": 0.08,
                         "max": 0.2,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "phasing_frac": {
                         "min": 0.08,
                         "max": 0.25,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                 }
             ),

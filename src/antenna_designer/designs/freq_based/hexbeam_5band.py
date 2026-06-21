@@ -224,20 +224,14 @@ class Builder(AntennaBuilder):
                         "halfdriver_factor": {
                             "min": 0.9,
                             "max": 1.2,
-                            "step": 0.001,
-                            "precision": 4,
                         },
                         "tipspacer_factor": {
                             "min": 0.05,
                             "max": 0.30,
-                            "step": 0.001,
-                            "precision": 4,
                         },
                         "t0_factor": {
                             "min": 0.05,
                             "max": 0.30,
-                            "step": 0.001,
-                            "precision": 4,
                         },
                     },
                     "n_bands": {
