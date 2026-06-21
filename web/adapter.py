@@ -30,6 +30,7 @@ from __future__ import annotations
 import importlib
 import pathlib
 import time
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
@@ -717,6 +718,53 @@ def _auto_default_view(cls) -> str:
     return "".join(sorted(s[0] for s in spans[:2]))
 
 
+@lru_cache(maxsize=None)
+def _recommended_backend(cls) -> str | None:
+    """Recommend a default solver for the design, or None to let the UI keep
+    its own default (the dense Triangular path).
+
+    Returns "arrayblock" for true grid arrays — multiple electrically separate
+    elements with at least one repeated shape — where the element-aware block
+    solver is dramatically faster than the dense default (e.g. bowtiearray2x4:
+    ~1 s vs ~8 s). Single-element designs, and multi-element designs whose
+    elements are all distinct (Yagi-style), keep the dense default so their
+    basis/results are unchanged. Detection is geometry-only (no solve) and any
+    failure falls back to None.
+
+    Memoised per design class: it already runs only once per design at registry
+    build (the result is baked into the immutable `AntennaExample`, which the
+    /examples endpoint and the frontend read at runtime — a slider change never
+    re-runs it), but `lru_cache` makes that a hard guarantee regardless of
+    call site.
+    """
+    try:
+        from pysim.array_block import _wire_to_element
+
+        builder = _build_builder(cls, {})
+        eng = _make_pysim_engine({}, builder)
+        polylines = [np.asarray(p, dtype=float) for p in eng._polylines]
+    except Exception:
+        return None
+    if len(polylines) < 2:
+        return None
+    wire_elem, n_elem = _wire_to_element(polylines)
+    if n_elem < 2:
+        return None
+    # Signature each element by its points recentred on its own centroid; a
+    # repeated shape (fewer distinct signatures than elements) marks a real
+    # array — exactly what array-block accelerates via per-shape block reuse.
+    sigs = set()
+    for e in range(n_elem):
+        pts = np.vstack(
+            [polylines[w] for w in range(len(polylines)) if wire_elem[w] == e]
+        )
+        pts = pts - pts.mean(axis=0)
+        key = np.round(pts / 1e-4).astype(np.int64)
+        key = key[np.lexsort(key.T)]
+        sigs.add(key.tobytes())
+    return "arrayblock" if len(sigs) < n_elem else None
+
+
 def _make_example(name: str, cls) -> AntennaExample:
     dp = dict(cls.default_params)
     ui = dict(dp.get("ui_params") or {})
@@ -834,6 +882,37 @@ def _make_example(name: str, cls) -> AntennaExample:
                 for z, v in zip(zs, voltages)
             ]
         return out
+
+    def pysim_geometry(req: dict) -> dict:
+        # Geometry-only snapshot: build the engine (cheap — geometry is
+        # resolved in the constructor) and read its wire knot positions
+        # without solving. The frontend draws this immediately on antenna
+        # selection so a large design's shape shows up right away instead of
+        # waiting tens of seconds for the MoM solve. Mirrors pysim_solve's
+        # builder setup but returns zero currents and omits impedance / far
+        # field (the live solve fills those in).
+        design_freq = float(req.get("design_freq_mhz", _design_freq_default(req)))
+        meas_freq = float(req.get("measurement_freq_mhz", design_freq))
+        builder = _build_builder(cls, req)
+        builder.freq = meas_freq
+        if has_design_freq:
+            builder.design_freq = design_freq
+        eng = _make_pysim_engine(req, builder)
+        geom = eng.geometry_distribution()
+        feed_wire_idx, feed_knot_idx = _feed_indices(eng, geom)
+        return {
+            "geometry": name,
+            "wires": _pack_wires(geom),
+            "feed_wire_index": feed_wire_idx,
+            "feed_knot_index": feed_knot_idx,
+            "feed_position": _feed_position(eng, geom),
+            "design_freq_mhz": design_freq,
+            "measurement_freq_mhz": meas_freq,
+            "lambda_design_m": C_LIGHT / (design_freq * 1e6),
+            "ground": bool(req.get("ground", False)),
+            "z0_ohms": target_z0,
+            "preview": True,
+        }
 
     def pynec_build(req: dict) -> dict:
         # web.pynec_backend.pattern() expects this to return a build
@@ -986,6 +1065,8 @@ def _make_example(name: str, cls) -> AntennaExample:
         label=name.replace("_", " "),
         pysim_solve=pysim_solve,
         pysim_sweep=pysim_sweep,
+        pysim_geometry=pysim_geometry,
+        default_backend=_recommended_backend(cls),
         pynec_solve=pynec_solve,
         pynec_build=pynec_build,
         pynec_pattern_excite=pynec_pattern_excite,
