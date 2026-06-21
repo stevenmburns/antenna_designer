@@ -12,10 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from antenna_designer.designs.dipoles.invvee import Builder as InvVee
-from antenna_designer.designs.beams.yagi import Builder as Yagi
-from antenna_designer.engines import PyNECEngine
-from antenna_designer.nec_export import export_nec
+pytest.importorskip("PyNEC")
+
+from antenna_designer.designs.dipoles.invvee import Builder as InvVee  # noqa: E402
+from antenna_designer.designs.beams.yagi import Builder as Yagi  # noqa: E402
+from antenna_designer.engines import PyNECEngine  # noqa: E402
+from antenna_designer.nec_export import export_nec  # noqa: E402
 
 HAVE_NEC2C = shutil.which("nec2c") is not None
 
