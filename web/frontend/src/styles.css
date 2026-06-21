@@ -943,3 +943,67 @@ canvas {
   color: var(--muted);
   font-family: var(--font-mono);
 }
+
+.status-busy {
+  color: var(--accent);
+}
+
+/* Indeterminate "solving" bar across the top of the stage. Hidden (opacity 0)
+   until `.active`; only toggled after the ~300 ms dwell, so quick solves never
+   flash it. A narrow segment sweeps left→right. */
+.solve-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 6;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.solve-bar.active {
+  opacity: 1;
+}
+
+.solve-bar.active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 35%;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+  animation: solve-bar-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes solve-bar-slide {
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Dim panels whose data is being recomputed (gated on the same dwell as the
+   bar). Transition lives on the base elements so it eases both in and out. */
+.carousel-slide,
+.readout {
+  transition: opacity 0.2s ease;
+}
+
+.carousel-slide.stale,
+.readout.stale {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .solve-bar.active::before {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}
