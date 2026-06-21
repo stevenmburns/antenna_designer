@@ -638,8 +638,11 @@ const DEFAULT_BACKEND_OPTS: BackendOptsMap = {
   sinusoidal: { nPerWire: 30, wireRadius: 0.0005, nQpConst: 8 },
   bspline: { ...BSPLINE_DEFAULT_OPTS },
   hmatrix: { ...BSPLINE_DEFAULT_OPTS },
-  arrayblock: { ...BSPLINE_DEFAULT_OPTS },
-  pynec: { nPerWire: 30, wireRadius: 0.0005 },
+  // Arrays auto-select this; 21 segs/wire is the converged, correct-parity
+  // choice for B-spline d=2 (odd → interior knot at the feed). The old
+  // inherited 40 was both too many and the wrong (even) parity.
+  arrayblock: { ...BSPLINE_DEFAULT_OPTS, nPerWire: 21 },
+  pynec: { nPerWire: 21, wireRadius: 0.0005 },
 };
 
 // Three abstract solver slots. Each holds one backend choice and its
@@ -669,7 +672,7 @@ const DEFAULT_SLOTS: Record<Slot, SlotConfig> = {
   },
   C: {
     backend: "pynec",
-    opts: { ...DEFAULT_BACKEND_OPTS.pynec, nPerWire: 41 },
+    opts: { ...DEFAULT_BACKEND_OPTS.pynec },
   },
 };
 
@@ -1249,7 +1252,22 @@ export function App() {
     const cur = slots[activeSlot].backend;
     const upgradable =
       cur === "triangular" || cur === "sinusoidal" || cur === "bspline";
-    if (upgradable && cur !== rec) setSlotBackend(activeSlot, rec);
+    if (upgradable && cur !== rec) {
+      // Reset to the recommended backend's *own* defaults rather than carrying
+      // over the dense slot's segment count — arrays want array-block's 21
+      // segs/wire (converged, correct d=2 parity), not the inherited 40. Keep
+      // the user's wire radius.
+      setSlots((prev) => ({
+        ...prev,
+        [activeSlot]: {
+          backend: rec,
+          opts: {
+            ...DEFAULT_BACKEND_OPTS[rec],
+            wireRadius: prev[activeSlot].opts.wireRadius,
+          } as BackendOptsMap[Backend],
+        },
+      }));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentExample?.name]);
 
