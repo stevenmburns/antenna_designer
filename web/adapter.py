@@ -101,16 +101,16 @@ def _strip_ui(params: dict) -> dict:
 
 
 def _nice_step(raw: float) -> float:
-    """Round a raw step down to a single significant figure so auto-derived
-    sliders land on clean stops (0.0010876 → 0.001, 0.028 → 0.03,
-    0.00005 → 0.00005) instead of ugly fractional grids."""
+    """Snap a raw step to the 1-2-5 series (… 0.001, 0.002, 0.005, 0.01 …)
+    so auto-derived sliders advance in familiar increments instead of odd
+    grids like 0.003 or 0.0007. Picks the nearest 1/2/5·10ⁿ using the
+    conventional log-spaced thresholds (1.5, 3, 7)."""
     if raw <= 0.0:
         return raw
     exp = math.floor(math.log10(raw))
-    mant = round(raw / 10.0**exp)  # nearest integer in [1, 10]
-    if mant >= 10:
-        mant, exp = 1, exp + 1
-    return mant * 10.0**exp
+    mant = raw / 10.0**exp  # in [1, 10)
+    nice = 1.0 if mant < 1.5 else 2.0 if mant < 3.0 else 5.0 if mant < 7.0 else 10.0
+    return nice * 10.0**exp
 
 
 def _precision_for_step(step: float) -> int:
@@ -158,8 +158,8 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
         # *relative* resolution (window / 1000) so any scaling factor,
         # fraction, length, or angle is fine-tunable by hand regardless of
         # its magnitude — a flat absolute step would be too coarse for
-        # sub-unity fractions and needlessly fine for large values. Rounded
-        # to one significant figure for clean slider stops. For an int
+        # sub-unity fractions and needlessly fine for large values. Snapped
+        # to the 1-2-5 series for clean slider stops. For an int
         # default of 0 the multiplicative window collapses, so fall back to
         # a small absolute range.
         if d == 0.0:

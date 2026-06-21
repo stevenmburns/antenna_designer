@@ -15,6 +15,7 @@ variant family).
 from __future__ import annotations
 
 import importlib
+import math
 
 import pytest
 
@@ -270,13 +271,21 @@ def test_has_design_freq_matches_default_params(name):
     [
         (0.0010876, 0.001),
         (0.00099, 0.001),
-        (0.028, 0.03),
+        (0.0023, 0.002),
+        (0.003, 0.005),
+        (0.028, 0.02),
+        (0.06, 0.05),
         (0.00005, 0.00005),
         (0.0, 0.0),
     ],
 )
-def test_nice_step_rounds_to_one_sig_fig(raw, expected):
-    assert _nice_step(raw) == pytest.approx(expected)
+def test_nice_step_snaps_to_one_two_five_series(raw, expected):
+    out = _nice_step(raw)
+    assert out == pytest.approx(expected)
+    if out > 0:
+        # leading significant digit is always 1, 2, or 5
+        mant = round(out / 10 ** math.floor(math.log10(out)))
+        assert mant in (1, 2, 5)
 
 
 @pytest.mark.parametrize(
@@ -291,9 +300,9 @@ def test_precision_tracks_step_decimals(step, expected):
 def test_auto_step_is_about_one_per_mille_relative(default):
     spec = _auto_paramspec("some_factor", default, None)
     rel = spec.step / abs(default)
-    # one-sig-fig rounding spreads it, but it must stay near 0.1% and never
-    # regress to the old 1% auto-step.
-    assert 0.0004 <= rel <= 0.0016
+    # 1-2-5 snapping spreads the target 0.1% to roughly [0.067%, 0.167%],
+    # but it must stay near 0.1% and never regress to the old 1% auto-step.
+    assert 0.0006 <= rel <= 0.0017
 
 
 def test_explicit_step_override_still_wins():
@@ -327,4 +336,6 @@ def test_auto_derived_length_factors_resolve_at_one_per_mille(name):
             continue
         if explicit_step(s.name):
             continue
-        assert s.step / abs(s.default) <= 0.0012, (name, s.name, s.step, s.default)
+        # 1-2-5 snapping caps the relative step at ~0.167%; assert well
+        # under the old 1% to lock in the resolution fix.
+        assert s.step / abs(s.default) <= 0.0018, (name, s.name, s.step, s.default)
