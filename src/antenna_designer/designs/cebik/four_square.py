@@ -88,8 +88,6 @@ class Builder(AntennaBuilder):
                     "length_factor": {
                         "min": 0.8,
                         "max": 1.2,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "side_mag": {
                         "min": 0.5,

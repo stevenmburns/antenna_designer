@@ -64,8 +64,6 @@ class Builder(AntennaBuilder):
                     "length_factor": {
                         "min": 0.96,
                         "max": 0.999,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "n_cells": {
                         "min": 1,
