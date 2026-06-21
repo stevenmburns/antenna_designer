@@ -69,7 +69,6 @@ class Builder(AntennaBuilder):
             # explicit ranges.
             "ui_params": MappingProxyType(
                 {
-                    "length_factor": {"step": 0.001, "precision": 4},
                     "top_aspect": {
                         "min": 0.5,
                         "max": 4.5,

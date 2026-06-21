@@ -77,8 +77,6 @@ class Builder(AntennaBuilder):
                     "length_factor": {
                         "min": 0.7,
                         "max": 1.3,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                 }
             ),

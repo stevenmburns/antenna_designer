@@ -109,7 +109,14 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
     override = dict(override or {})
     label = override.pop("label", name)
     unit = override.pop("unit", None)
-    precision = int(override.pop("precision", 3))
+    # `length_factor`-family params scale wavelength-dependent dimensions
+    # and want fine tuning by default: a 0.1% step (0.001 for a factor near
+    # 1.0) with 4-decimal display. Centralised here so designs get the
+    # convention for free — a design's ui_params can still override either
+    # (e.g. fandipole tunes per-band at 0.0001). Without this the numeric
+    # auto-step below lands at ~1% of the slider range, far too coarse.
+    is_length_factor = "length_factor" in name
+    precision = int(override.pop("precision", 4 if is_length_factor else 3))
     sweepable = bool(override.pop("sweepable", name == "freq"))
 
     if isinstance(default, bool):
@@ -163,6 +170,10 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
         if name == "design_freq":
             unit = unit or "MHz"
             override["linked_to_design_freq"] = True  # keep around
+        # See the precision note above: 0.1% step is the length_factor
+        # default; the override (if any) still wins on the pop() below.
+        if is_length_factor and kind != "int":
+            step = 0.001
         spec_kwargs = dict(
             name=name,
             label=label,

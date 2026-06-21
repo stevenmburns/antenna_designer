@@ -67,8 +67,6 @@ class Builder(AntennaBuilder):
                     "length_factor": {
                         "min": 0.96,
                         "max": 1.05,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "n_cells": {"min": 1, "max": 7, "step": 2},
                     "z0": {"min": 50.0, "max": 600.0, "step": 5.0},
@@ -76,8 +74,6 @@ class Builder(AntennaBuilder):
                     "tl_length_factor": {
                         "min": 0.8,
                         "max": 1.2,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                 }
             ),
