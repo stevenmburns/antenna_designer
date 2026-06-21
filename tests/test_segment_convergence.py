@@ -9,8 +9,10 @@ import pytest
 from antenna_designer.designs.specialty.bowtie import Builder as BowtieBuilder
 from antenna_designer.designs.dipoles.invvee import Builder as InvVeeBuilder
 from antenna_designer.engine import SimulationEngine
-from antenna_designer.engines.pynec import PyNECEngine
-from antenna_designer.engines.pysim import PysimEngine
+
+pytest.importorskip("PyNEC")
+from antenna_designer.engines.pynec import PyNECEngine  # noqa: E402
+from antenna_designer.engines.pysim import PysimEngine  # noqa: E402
 
 
 def test_coerce_n_seg_any_passes_through():

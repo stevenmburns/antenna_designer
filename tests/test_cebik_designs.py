@@ -10,8 +10,11 @@ shape (broadside vs end-on) is checked there too.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from antenna_designer.engines import PyNECEngine
+pytest.importorskip("PyNEC")
+
+from antenna_designer.engines import PyNECEngine  # noqa: E402
 
 
 def _z(builder, ground=None):

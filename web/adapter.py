@@ -43,7 +43,11 @@ from antenna_designer.builder import (
     Array2x2Builder,
     Array2x4Builder,
 )
-from antenna_designer.engines.pynec import PyNECEngine
+
+try:
+    from antenna_designer.engines.pynec import PyNECEngine
+except ImportError:
+    PyNECEngine = None
 from antenna_designer.engines.pysim import PysimEngine
 from pysim import (
     ArrayBlockPySim,

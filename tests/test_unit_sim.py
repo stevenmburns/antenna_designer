@@ -3,6 +3,8 @@ from antenna_designer.designs.dipoles.invvee import Builder
 
 from unittest.mock import patch
 
+from conftest import needs_pynec
+
 
 class FakeSC:
     def get_current_segment_tag(self):
@@ -28,6 +30,7 @@ def mock_geometry(self):
     self.excitation_pairs = [(2, 1, 1 + 0j), (4, 2, 0.5 + 0j)]
 
 
+@needs_pynec
 @patch("antenna_designer.Antenna._build_geometry", new=mock_geometry)
 def test_impedence_with_mock_Antenna():
 

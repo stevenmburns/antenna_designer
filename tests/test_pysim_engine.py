@@ -8,6 +8,8 @@ from antenna_designer.designs.dipoles.invvee import Builder
 from antenna_designer.engines import PyNECEngine, PysimEngine
 from antenna_designer.geometry import flat_wires_to_polylines
 
+from conftest import needs_pynec
+
 
 def test_translator_chains_dipole_into_single_polyline():
     b = Builder(Builder.dipole_params)  # straight half-wave dipole
@@ -45,6 +47,7 @@ def test_pysim_impedance_sweep_shape_and_monotone_resistance():
     assert np.all(np.diff(real) > 0), real
 
 
+@needs_pynec
 def test_pysim_matches_pynec_in_free_space():
     """Free-space cross-check between the two MoM engines on a dipole.
     Disabling PyNEC's gn_card so both solve the same physical problem
@@ -63,6 +66,7 @@ def test_pysim_matches_pynec_in_free_space():
     )
 
 
+@needs_pynec
 @pytest.mark.parametrize(
     "design_module, max_dR, max_dX",
     [
@@ -356,6 +360,7 @@ def test_difftl_transposed_changes_the_solve():
     assert not np.isclose(z, zt), (z, zt)
 
 
+@needs_pynec
 def test_difftl_raises_on_pynec():
     """NEC2's tl_card pins each port to one segment, so a 4-terminal
     differential line is inexpressible — PyNECEngine must say so clearly."""
@@ -479,6 +484,7 @@ def test_pysim_engine_declares_far_field_support():
     assert PysimEngine.supports_far_field is True
 
 
+@needs_pynec
 def test_pysim_far_field_shape_matches_pynec():
     """The FarField shape (rings dims, thetas/phis arrays) has to match
     PyNEC's so plot_patterns, compare_patterns etc. work for both."""
@@ -493,6 +499,7 @@ def test_pysim_far_field_shape_matches_pynec():
     assert len(ff_ps.rings[0]) == 361
 
 
+@needs_pynec
 def test_pysim_free_space_directivity_matches_pynec():
     """Free-space dipole peak directivity — same physical problem under
     two independent MoM solvers. 0.1 dBi headroom is generous for what
@@ -508,6 +515,7 @@ def test_pysim_free_space_directivity_matches_pynec():
     )
 
 
+@needs_pynec
 def test_pysim_pec_ground_directivity_matches_pynec():
     """PEC ground via image method on both sides. Tight agreement
     expected since the physics is identical."""
@@ -539,6 +547,7 @@ def test_pysim_finite_ground_returns_sane_values():
     assert np.all(np.isfinite([ff.max_gain, ff.min_gain]))
 
 
+@needs_pynec
 def test_compare_patterns_accepts_engine_instances(tmp_path):
     """End-to-end: compare_patterns with a mix of pre-built engines
     (so the caller picks ground / backend per item) should run to
@@ -558,6 +567,7 @@ def test_compare_patterns_accepts_engine_instances(tmp_path):
     assert out.exists() and out.stat().st_size > 0
 
 
+@needs_pynec
 def test_compare_patterns_backwards_compatible_with_bare_builders(tmp_path):
     """Passing AntennaBuilder instances (the historical API) must keep
     working — they get wrapped with the default Antenna alias."""
@@ -630,6 +640,7 @@ def test_sweep_gain_accepts_engine_factory(tmp_path):
     assert out.exists() and out.stat().st_size > 0
 
 
+@needs_pynec
 def test_plot_patterns_pins_radial_floor(tmp_path):
     """Without an rlim, matplotlib polar autoscale would smear a
     constant-radius elevation cut across the full radial range. Pin the
@@ -677,6 +688,7 @@ def test_translator_handles_fandipole_high_degree_junctions():
     assert sorted(len(j) for j in out["junctions"]) == [6, 6]
 
 
+@needs_pynec
 def test_pysim_sinusoidal_hentenna_impedance_close_to_pynec():
     """Cross-validation on the hentenna (two tee junctions): pysim's
     Sinusoidal basis agrees with PyNEC's free-space gn_card-disabled
@@ -739,6 +751,7 @@ def test_translator_handles_delta_loop_pure_cycle():
     assert sorted(len(s) for s in out["edge_segments"]) == [1, 3]
 
 
+@needs_pynec
 def test_pysim_sinusoidal_delta_loop_close_to_pynec():
     """Closed-loop cross-validation: PyNEC and Sinusoidal agree on a
     canonical pure-cycle geometry. Tighter bound than the hentenna test
@@ -783,6 +796,7 @@ def test_translator_emits_one_feed_per_excited_tuple():
     assert out["feed_voltage"] == out["feeds"][0][2]
 
 
+@needs_pynec
 def test_pysim_multifeed_bowtie_1x2_matches_pynec():
     """Symmetric in-phase drive on the bowtie 1×2 phased array: per-feed
     Z from PysimEngine must agree with PyNEC, and the two feeds should
@@ -800,6 +814,7 @@ def test_pysim_multifeed_bowtie_1x2_matches_pynec():
     assert abs(z_ps[0] - z_ps[1]) < 1.0
 
 
+@needs_pynec
 def test_pysim_multifeed_bowtie_1x2_phased_matches_pynec():
     """90° phasing makes Z₀ ≠ Z₁ via mutual coupling. Catches feed-
     ordering / voltage-sign bugs that a symmetric drive would mask."""
@@ -817,6 +832,7 @@ def test_pysim_multifeed_bowtie_1x2_phased_matches_pynec():
     assert abs(z_nec[0] - z_nec[1]) > 10.0
 
 
+@needs_pynec
 def test_pysim_multifeed_far_field_matches_pynec():
     """Bowtie 1×2 phased-array peak directivity, two backends. In-phase
     drive gives a broadside lobe; 90° drive squints. Both must agree
@@ -849,6 +865,7 @@ def test_pysim_multifeed_impedance_sweep_shape():
     assert zs.shape == (4, 2), zs.shape
 
 
+@needs_pynec
 def test_current_distribution_peak_matches_one_over_z():
     """Peak |I| over the geometry should equal |1/Z| within solver
     rounding on both backends — Z = V/I with V=1, so the driving-point
@@ -947,6 +964,7 @@ def test_network_spec_rejects_port_at_edge_with_no_named_edge():
         PysimEngine(BadBuilder())
 
 
+@needs_pynec
 def test_pynec_network_matches_pysim_on_delta_looparray():
     """delta_looparray_network on PyNECEngine now goes through multiport-Y
     extraction + the shared NetworkReducer (the EZNEC approach), NOT NEC2's
@@ -970,6 +988,7 @@ def test_pynec_network_matches_pysim_on_delta_looparray():
     assert abs(g_nec - g_ps) < 0.3, (g_nec, g_ps)
 
 
+@needs_pynec
 def test_pynec_virtual_to_virtual_tl_supported():
     """A TL between two PortVirtuals has no NEC2 tl_card mapping, but the
     multiport-Y + NetworkReducer path handles it fine — intermediate virtual
@@ -1006,6 +1025,7 @@ def test_pynec_virtual_to_virtual_tl_supported():
     assert abs(z_nec - z_ps) / abs(z_ps) < 0.05, (z_nec, z_ps)
 
 
+@needs_pynec
 def test_pynec_load_branch_resistor_adds_to_impedance():
     """Load(r=R) on a PyNEC-driven dipole should shift driving-point Z by
     exactly R — ld_card type-0 inserts a series R+L+C at the segment. This
@@ -1040,6 +1060,7 @@ def test_pynec_load_branch_resistor_adds_to_impedance():
     assert abs((z_loaded - z_bare) - 50.0) < 0.5, (z_bare, z_loaded)
 
 
+@needs_pynec
 def test_short_dipole_loaded_cross_engine_impedance():
     """Showcase for the Load branch: a 0.5·λ/2 shortened dipole at 28 MHz
     with a series loading coil at the feed point. Pysim's Sherman-Morrison
@@ -1061,6 +1082,7 @@ def test_short_dipole_loaded_cross_engine_impedance():
     assert abs(z_ps.imag - z_nec.imag) < 30.0, (z_ps, z_nec)
 
 
+@needs_pynec
 def test_short_dipole_loaded_pattern_similar_lower_gain_than_full():
     """A center-loaded shortened dipole radiates the same broadside-peak
     pattern as a full-length dipole but with ~0.4 dB less peak gain
@@ -1099,6 +1121,7 @@ def test_short_dipole_loaded_pattern_similar_lower_gain_than_full():
         assert corr > 0.99, f"{engine_cls.__name__}: pattern correlation {corr:.4f}"
 
 
+@needs_pynec
 def test_pynec_load_branch_rejects_virtual_port():
     """Load on a PortVirtual is rejected — same check as PysimEngine."""
     from antenna_designer import AntennaBuilder
@@ -1136,6 +1159,7 @@ def test_pynec_load_branch_rejects_virtual_port():
         eng.impedance()
 
 
+@needs_pynec
 def test_pynec_network_rejects_port_at_edge_with_no_named_edge():
     """PortAtEdge("loop1") with no `loop1` edge in build_wires() should
     raise a clear error at engine construction time — mirror of the
@@ -1164,6 +1188,7 @@ def test_pynec_network_rejects_port_at_edge_with_no_named_edge():
         PyNECEngine(Builder(), ground=None)
 
 
+@needs_pynec
 def test_trap_dipole_cross_engine_impedance_at_trap_resonance():
     """Trap dipole showcase tuned to design_freq=28 MHz. At trap resonance
     the parallel-LC tank goes Z→∞, interrupting the segment's current
@@ -1212,6 +1237,7 @@ def test_trap_dipole_trap_C_changes_impedance():
     assert abs(z_res - z_det) > 200, (z_res, z_det)
 
 
+@needs_pynec
 def test_trap_dipole_low_band_loaded_into_resonance():
     """At 14 MHz the parallel-LC trap is well below its 28 MHz resonance,
     so it looks inductive in series with the segment. That inductive
