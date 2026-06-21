@@ -38,28 +38,6 @@ def test_physical_cpu_count_is_positive():
     assert server._physical_cpu_count() >= 1
 
 
-def test_read_ground_off_returns_zero_offset():
-    on, h, z = server._read_ground({})
-    assert on is False
-    assert h == 0.0
-    assert z == 0.0
-
-
-def test_read_ground_on_sets_z_offset_to_height():
-    on, h, z = server._read_ground({"ground": True, "height_m": 4.5})
-    assert on is True
-    assert h == 4.5
-    assert z == 4.5
-
-
-def test_read_ground_off_ignores_height():
-    # An explicit height with ground=False shouldn't displace the antenna —
-    # the geometry stays at its native z=0. The frontend toggles ground
-    # independently of the height slider.
-    _on, _h, z = server._read_ground({"ground": False, "height_m": 7.0})
-    assert z == 0.0
-
-
 def test_polyline_knots_dedup_shared_corners():
     poly = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]])
     knots = server._polyline_knots(poly, [2, 3])

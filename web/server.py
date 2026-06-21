@@ -359,18 +359,6 @@ _PEC_GROUND_EPS_R = 1.0e10
 _PEC_GROUND_SIGMA = 0.0
 
 
-def _read_ground(req: dict) -> tuple[bool, float, float]:
-    """Common request parsing: returns (ground_on, height_m, z_offset).
-
-    height_m is the antenna height above ground when ground_on=True; z_offset
-    is what each geometry helper adds to its native (z=0) coordinates.
-    """
-    ground_on = bool(req.get("ground", False))
-    height_m = float(req.get("height_m", 0.0))
-    z_offset = height_m if ground_on else 0.0
-    return ground_on, height_m, z_offset
-
-
 def _polyline_knots(polyline: np.ndarray, npe_list: list[int]) -> np.ndarray:
     """Concatenated per-edge knot positions, with shared corners deduped."""
     parts = []
