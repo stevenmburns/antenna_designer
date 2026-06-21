@@ -1922,6 +1922,14 @@ export function App() {
     return () => window.clearTimeout(t);
   }, [solving]);
 
+  // The progress bar (`showBusy`) honors the min-visible window so it can't
+  // flash, but the *dimming* and the "solving…" label mean "what you're
+  // looking at is stale" — so they must clear the instant the result lands,
+  // even while the bar lingers out its minimum. `solving` flips false
+  // immediately on result-land, so `showBusy && solving` is exactly that: dim
+  // only after the dwell (showBusy) AND while genuinely still solving.
+  const stale = showBusy && solving;
+
   function requestSolve() {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -2298,7 +2306,7 @@ export function App() {
           />
         </div>
 
-        <div className={`readout${showBusy ? " stale" : ""}`}>
+        <div className={`readout${stale ? " stale" : ""}`}>
           <div className="row">
             <span>R</span>
             <span className="val">{result ? `${result.z_in_re.toFixed(2)} Ω` : "—"}</span>
@@ -2372,8 +2380,9 @@ export function App() {
       </aside>
 
       <main className="stage">
-        {/* Indeterminate progress bar: appears only once a solve outlasts the
-            ~300 ms dwell (showBusy), signalling the display isn't current yet. */}
+        {/* Indeterminate progress bar: appears once a solve outlasts the dwell
+            and lingers out its min-visible window (showBusy), so it never
+            flashes — the dim/label (stale) clear earlier, when the result lands. */}
         <div className={`solve-bar${showBusy ? " active" : ""}`} aria-hidden />
         <div className="thumbstrip" ref={thumbStripRef}>
           {VIEWS.filter((v) => v.id !== view).map((v) => (
@@ -2412,7 +2421,7 @@ export function App() {
           ))}
         </div>
         <div
-          className={`carousel-slide${showBusy ? " stale" : ""}`}
+          className={`carousel-slide${stale ? " stale" : ""}`}
           ref={slideRef}
         >
           {view === "antenna" && (
@@ -2501,7 +2510,7 @@ export function App() {
         </div>
         <div className="status">
           ws: {status}
-          {showBusy && <span className="status-busy"> · solving…</span>}
+          {stale && <span className="status-busy"> · solving…</span>}
         </div>
       </main>
     </div>
