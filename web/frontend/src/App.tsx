@@ -1210,6 +1210,13 @@ export function App() {
   const [preview, setPreview] = useState<SolveResponse | null>(null);
   const [status, setStatus] = useState<"connecting" | "open" | "closed">("connecting");
   const [rttMs, setRttMs] = useState<number | null>(null);
+  // True whenever a main solve is outstanding (in flight or queued) — i.e. the
+  // displayed analysis isn't current yet. `showBusy` is the *debounced* view of
+  // it: the progress bar / panel dimming only appear once a solve outlasts
+  // ~300 ms, so fast updates (cache hits, small designs) snap in cleanly
+  // without a flash of busy chrome.
+  const [solving, setSolving] = useState(false);
+  const [showBusy, setShowBusy] = useState(false);
   const [sweep, setSweep] = useState<SweepData | null>(null);
   const [sweepRunning, setSweepRunning] = useState(false);
   // Smith-chart overlay toggles. Both are debounced sweeps that re-fire
@@ -1297,6 +1304,9 @@ export function App() {
   const convergeTimerRef = useRef<number | null>(null);
   const convergeAbortRef = useRef<AbortController | null>(null);
   const previewAbortRef = useRef<AbortController | null>(null);
+  // Timestamp (performance.now) when the busy chrome last became visible, so
+  // the reveal effect can enforce a minimum-visible window. null = not shown.
+  const shownAtRef = useRef<number | null>(null);
   // Latest selected antenna, mirrored into a ref so the (mount-once) WebSocket
   // onmessage handler can drop responses for an antenna the user already
   // switched away from. Updated every render — cheap and always current.
@@ -1870,20 +1880,64 @@ export function App() {
     }
   }
 
+  // Mirror the solve refs into `solving` state so the UI can react. Called
+  // wherever inFlightRef/pendingRef change.
+  function syncSolving() {
+    setSolving(inFlightRef.current || pendingRef.current !== null);
+  }
+
+  // Busy-chrome reveal with two guards:
+  //  - dwell: only show once a solve has been outstanding >BUSY_DWELL_MS. 1 s
+  //    is the classic "flow of thought" threshold — below it users tolerate the
+  //    wait without feedback; at/above it the bar reassures them it's working.
+  //    A solve that finishes sooner clears the timer in cleanup, so the bar
+  //    never flips on for quick updates.
+  //  - min-visible: once shown, keep it up at least BUSY_MIN_VISIBLE_MS so a
+  //    solve that lands just past the dwell can't make it sub-perceptibly
+  //    flash.
+  const BUSY_DWELL_MS = 1000;
+  const BUSY_MIN_VISIBLE_MS = 400;
+  useEffect(() => {
+    if (solving) {
+      const t = window.setTimeout(() => {
+        shownAtRef.current = performance.now();
+        setShowBusy(true);
+      }, BUSY_DWELL_MS);
+      return () => window.clearTimeout(t);
+    }
+    // Solve finished. If the bar never showed (fast solve), hide immediately;
+    // otherwise hold it for the remainder of the minimum-visible window.
+    if (shownAtRef.current === null) {
+      setShowBusy(false);
+      return;
+    }
+    const remaining =
+      BUSY_MIN_VISIBLE_MS - (performance.now() - shownAtRef.current);
+    if (remaining <= 0) {
+      shownAtRef.current = null;
+      setShowBusy(false);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      shownAtRef.current = null;
+      setShowBusy(false);
+    }, remaining);
+    return () => window.clearTimeout(t);
+  }, [solving]);
+
   function requestSolve() {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       pendingRef.current = controlsRef.current;
-      return;
-    }
-    if (inFlightRef.current) {
+    } else if (inFlightRef.current) {
       // Coalesce: latest controls will be picked up when the response arrives.
       pendingRef.current = controlsRef.current;
-      return;
+    } else {
+      inFlightRef.current = true;
+      sendStartRef.current = performance.now();
+      ws.send(JSON.stringify(controlsRef.current));
     }
-    inFlightRef.current = true;
-    sendStartRef.current = performance.now();
-    ws.send(JSON.stringify(controlsRef.current));
+    syncSolving();
   }
 
   useEffect(() => {
@@ -1902,10 +1956,14 @@ export function App() {
     ws.onclose = () => {
       setStatus("closed");
       inFlightRef.current = false;
+      // No solve can progress while disconnected — drop the busy state so the
+      // bar doesn't spin under a "closed" status (reconnect re-arms it).
+      setSolving(false);
     };
     ws.onerror = () => {
       setStatus("closed");
       inFlightRef.current = false;
+      setSolving(false);
     };
     ws.onmessage = (ev) => {
       setRttMs(performance.now() - sendStartRef.current);
@@ -1922,6 +1980,7 @@ export function App() {
         pendingRef.current = null;
         requestSolve();
       }
+      syncSolving();
     };
     return () => ws.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2259,7 +2318,7 @@ export function App() {
           />
         </div>
 
-        <div className="readout">
+        <div className={`readout${showBusy ? " stale" : ""}`}>
           <div className="row">
             <span>R</span>
             <span className="val">{result ? `${result.z_in_re.toFixed(2)} Ω` : "—"}</span>
@@ -2333,6 +2392,9 @@ export function App() {
       </aside>
 
       <main className="stage">
+        {/* Indeterminate progress bar: appears only once a solve outlasts the
+            ~300 ms dwell (showBusy), signalling the display isn't current yet. */}
+        <div className={`solve-bar${showBusy ? " active" : ""}`} aria-hidden />
         <div className="thumbstrip" ref={thumbStripRef}>
           {VIEWS.filter((v) => v.id !== view).map((v) => (
             <button
@@ -2369,7 +2431,10 @@ export function App() {
             </button>
           ))}
         </div>
-        <div className="carousel-slide" ref={slideRef}>
+        <div
+          className={`carousel-slide${showBusy ? " stale" : ""}`}
+          ref={slideRef}
+        >
           {view === "antenna" && (
             <div className="antenna-overlay">
               <div className="projection-toggle">
@@ -2454,7 +2519,10 @@ export function App() {
             multiFeed={currentExample?.multi_feed ?? false}
           />
         </div>
-        <div className="status">ws: {status}</div>
+        <div className="status">
+          ws: {status}
+          {showBusy && <span className="status-busy"> · solving…</span>}
+        </div>
       </main>
     </div>
     </ThemeContext.Provider>
