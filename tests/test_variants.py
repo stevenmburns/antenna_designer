@@ -1,8 +1,10 @@
 import pytest
 
 from antenna_designer.cli import get_builder, list_variants
-from antenna_designer.designs import hexbeam, moxon, twoband_fan_dipole
-from antenna_designer.designs.freq_based import hentenna, delta_loop
+from antenna_designer.designs.beams import hexbeam, moxon
+from antenna_designer.designs.multiband import twoband_fan_dipole
+from antenna_designer.designs.loops import delta_loop
+from antenna_designer.designs.specialty import hentenna
 
 
 def _design_params(inst):
@@ -12,7 +14,7 @@ def _design_params(inst):
 
 
 def test_no_colon_uses_default_params():
-    factory = get_builder("hexbeam")
+    factory = get_builder("beams.hexbeam")
     inst = factory()
     assert _design_params(inst) == dict(hexbeam.Builder.default_params)
 
@@ -41,14 +43,14 @@ def test_renamed_twoband_variant():
     assert _design_params(inst) == dict(twoband_fan_dipole.Builder.s07_params)
 
 
-def test_renamed_freq_based_variant():
-    factory = get_builder("freq_based.hentenna:z100")
+def test_renamed_specialty_variant():
+    factory = get_builder("specialty.hentenna:z100")
     inst = factory()
     assert _design_params(inst) == dict(hentenna.Builder.z100_params)
 
 
 def test_renamed_loop_variant():
-    factory = get_builder("freq_based.delta_loop:z200")
+    factory = get_builder("loops.delta_loop:z200")
     inst = factory()
     assert _design_params(inst) == dict(delta_loop.Builder.z200_params)
 

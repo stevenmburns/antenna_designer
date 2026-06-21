@@ -4,7 +4,7 @@ geometry translator it sits on top of."""
 import numpy as np
 import pytest
 
-from antenna_designer.designs.freq_based.invvee import Builder
+from antenna_designer.designs.dipoles.invvee import Builder
 from antenna_designer.engines import PyNECEngine, PysimEngine
 from antenna_designer.geometry import flat_wires_to_polylines
 
@@ -19,7 +19,7 @@ def test_translator_chains_dipole_into_single_polyline():
     assert out["edge_segments"] == [[21, 3, 21]]
     assert out["feed_wire_index"] == 0
 
-    # Feed sits at the geometric centre of the dipole; for the freq_based
+    # Feed sits at the geometric centre of the dipole; for the design_freq-sized
     # parameterisation the half-arm wire length is driver_y, so the polyline
     # spans 2·driver_y end-to-end and the feed midpoint lands at driver_y.
     wavelength = 299.792458 / b.design_freq
@@ -66,9 +66,9 @@ def test_pysim_matches_pynec_in_free_space():
 @pytest.mark.parametrize(
     "design_module, max_dR, max_dX",
     [
-        ("antenna_designer.designs.invveearray", 1.5, 2.5),
-        ("antenna_designer.designs.moxonarray", 5.0, 2.5),
-        ("antenna_designer.designs.yagiarray", 3.0, 2.0),
+        ("antenna_designer.designs.arrays.invveearray", 1.5, 2.5),
+        ("antenna_designer.designs.arrays.moxonarray", 5.0, 2.5),
+        ("antenna_designer.designs.arrays.yagiarray", 3.0, 2.0),
     ],
 )
 def test_pysim_multi_feed_impedance_matches_pynec(design_module, max_dR, max_dX):
@@ -97,7 +97,7 @@ def test_pysim_multi_feed_impedance_sweep_shape():
     """impedance_sweep on a multi-feed array returns (n_k, n_feeds), not
     (n_k,). The shape normalisation is what lets the rest of the analysis
     code treat single- and multi-feed sweeps uniformly."""
-    from antenna_designer.designs.invveearray import Builder as ArrBuilder
+    from antenna_designer.designs.arrays.invveearray import Builder as ArrBuilder
 
     freqs = np.linspace(28.0, 29.0, 4)
     zs = PysimEngine(ArrBuilder()).impedance_sweep(freqs)
@@ -114,7 +114,7 @@ def test_pysim_tl_card_runs_and_returns_finite_impedance():
     near TL half-wave resonance (the default twist puts one TL at ~0.5λ).
     Validate that the engine produces a finite, passive impedance and
     that the underlying Y matrix is symmetric (reciprocity)."""
-    from antenna_designer.designs.freq_based.delta_looparray_with_tls import (
+    from antenna_designer.designs.arrays.delta_looparray_with_tls import (
         Builder as TLBuilder,
     )
 
@@ -136,7 +136,7 @@ def test_pysim_tl_card_passive_port_floats_correctly():
     """With TLs present, the passive (TL-only) ports must satisfy I_ext=0
     in the reduced solution. Reconstruct V from the impedance() solve and
     verify the constraint at every passive port."""
-    from antenna_designer.designs.freq_based.delta_looparray_with_tls import (
+    from antenna_designer.designs.arrays.delta_looparray_with_tls import (
         Builder as TLBuilder,
     )
 
@@ -167,7 +167,7 @@ def test_pysim_tl_impedance_sweep_matches_per_freq():
     to within solver noise. Exercises the swept-Y → per-k TL stamp →
     driven-port reduction path that was added once compute_y_matrix_swept
     learned about junctions upstream."""
-    from antenna_designer.designs.freq_based.delta_looparray_with_tls import (
+    from antenna_designer.designs.arrays.delta_looparray_with_tls import (
         Builder as TLBuilder,
     )
 
@@ -378,7 +378,7 @@ def _delta_looparray_difftl_builder():
     indexing, 4x4 stamp, nodal reduction) against an independently-validated
     reference array.
     """
-    from antenna_designer.designs.freq_based.delta_looparray_network import (
+    from antenna_designer.designs.arrays.delta_looparray_network import (
         Builder as NetBuilder,
     )
     from antenna_designer.network import (
@@ -432,7 +432,7 @@ def test_difftl_reproduces_tl_array_impedance():
     TL-driven delta_looparray impedance to numerical precision — a real
     radiating-array validation of the 4-terminal element, not just the
     bare admittance matrix."""
-    from antenna_designer.designs.freq_based.delta_looparray_network import (
+    from antenna_designer.designs.arrays.delta_looparray_network import (
         Builder as NetBuilder,
     )
 
@@ -445,7 +445,7 @@ def test_difftl_reproduces_tl_array_far_field():
     """Same geometry + electrically-identical feed network -> identical
     radiated pattern. Confirms the DiffTL path drives the same current
     distribution, not merely the same driving-point Z."""
-    from antenna_designer.designs.freq_based.delta_looparray_network import (
+    from antenna_designer.designs.arrays.delta_looparray_network import (
         Builder as NetBuilder,
     )
 
@@ -463,7 +463,7 @@ def test_difftl_reproduces_tl_array_far_field():
 def test_difftl_reproduces_tl_array_impedance_sweep():
     """Exercises the frequency-dependent (swept Y + per-k 4x4 stamp) DiffTL
     path against the TL reference across the band."""
-    from antenna_designer.designs.freq_based.delta_looparray_network import (
+    from antenna_designer.designs.arrays.delta_looparray_network import (
         Builder as NetBuilder,
     )
 
@@ -657,7 +657,7 @@ def test_translator_handles_hentenna_tee_junctions():
     """Hentenna has two degree-3 nodes (B, D); translator should
     decompose into 3 polylines all running B→D, with one junction at
     each."""
-    from antenna_designer.designs.freq_based.hentenna import Builder as H
+    from antenna_designer.designs.specialty.hentenna import Builder as H
 
     out = flat_wires_to_polylines(H().build_wires())
     assert len(out["polylines"]) == 3
@@ -669,7 +669,7 @@ def test_translator_handles_hentenna_tee_junctions():
 def test_translator_handles_fandipole_high_degree_junctions():
     """Fandipole has two degree-6 nodes (S, T): feed wire + 5 spokes
     on each side. 5 polylines per side + 1 feed = 11 polylines."""
-    from antenna_designer.designs.freq_based.fandipole import Builder as F
+    from antenna_designer.designs.multiband.fandipole import Builder as F
 
     out = flat_wires_to_polylines(F().build_wires())
     assert len(out["polylines"]) == 11
@@ -689,7 +689,7 @@ def test_pysim_sinusoidal_hentenna_impedance_close_to_pynec():
     this test is just verifying that the translator's junction/feed
     mapping is right."""
     from pysim import SinusoidalPySim
-    from antenna_designer.designs.freq_based.hentenna import Builder as H
+    from antenna_designer.designs.specialty.hentenna import Builder as H
 
     b = H()
     z_nec = PyNECEngine(b, ground=None).impedance()[0]
@@ -706,7 +706,7 @@ def test_pysim_sinusoidal_fandipole_runs():
     a plausible value, the multi-wire geometry has too many freedoms
     to set a tight tolerance here."""
     from pysim import SinusoidalPySim
-    from antenna_designer.designs.freq_based.fandipole import Builder as F
+    from antenna_designer.designs.multiband.fandipole import Builder as F
 
     z = PysimEngine(F(), solver=SinusoidalPySim).impedance()[0]
     assert 20 < z.real < 200, z
@@ -718,7 +718,7 @@ def test_translator_handles_bowtie_closed_cycle():
     share one edge per triangle, leaving every node degree-2). Cut at
     the excited edge: feed becomes a 1-edge polyline, the rest becomes
     a 9-edge polyline running the long way back."""
-    from antenna_designer.designs.bowtie import Builder as BT
+    from antenna_designer.designs.specialty.bowtie import Builder as BT
 
     out = flat_wires_to_polylines(BT().build_wires())
     assert len(out["polylines"]) == 2
@@ -730,7 +730,7 @@ def test_translator_handles_bowtie_closed_cycle():
 
 
 def test_translator_handles_delta_loop_pure_cycle():
-    from antenna_designer.designs.freq_based.delta_loop import Builder as DL
+    from antenna_designer.designs.loops.delta_loop import Builder as DL
 
     out = flat_wires_to_polylines(DL().build_wires())
     assert len(out["polylines"]) == 2
@@ -744,7 +744,7 @@ def test_pysim_sinusoidal_delta_loop_close_to_pynec():
     canonical pure-cycle geometry. Tighter bound than the hentenna test
     because there are no tee junctions adding extra basis-family bias."""
     from pysim import SinusoidalPySim
-    from antenna_designer.designs.freq_based.delta_loop import Builder as DL
+    from antenna_designer.designs.loops.delta_loop import Builder as DL
 
     b = DL()
     z_nec = PyNECEngine(b, ground=None).impedance()[0]
@@ -757,7 +757,7 @@ def test_pysim_triangular_bowtie_runs():
     """Triangular handles the bowtie because its feed gap is n_seg=3
     (interior tent basis available). Verifies the closed-loop path
     doesn't trip Triangular's feed-basis lookup."""
-    from antenna_designer.designs.bowtie import Builder as BT
+    from antenna_designer.designs.specialty.bowtie import Builder as BT
 
     z = PysimEngine(BT()).impedance()[0]
     assert 100 < z.real < 300, z
@@ -767,7 +767,7 @@ def test_pysim_triangular_bowtie_runs():
 def test_translator_emits_one_feed_per_excited_tuple():
     """Multi-feed builders (arrays) should produce one entry in `feeds`
     per excited wire tuple, with voltages from the builder phasors."""
-    from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+    from antenna_designer.designs.arrays.bowtiearray1x2 import Builder as B12
 
     b = B12()
     b.phase_lr = 90.0
@@ -788,7 +788,7 @@ def test_pysim_multifeed_bowtie_1x2_matches_pynec():
     Z from PysimEngine must agree with PyNEC, and the two feeds should
     return ~equal Z by symmetry. 5% relative + 3 Ω absolute slack covers
     the basis-vs-NEC gap that pysim's own bowtie-1×2 parity test uses."""
-    from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+    from antenna_designer.designs.arrays.bowtiearray1x2 import Builder as B12
 
     b = B12()
     z_ps = PysimEngine(b).impedance()
@@ -803,7 +803,7 @@ def test_pysim_multifeed_bowtie_1x2_matches_pynec():
 def test_pysim_multifeed_bowtie_1x2_phased_matches_pynec():
     """90° phasing makes Z₀ ≠ Z₁ via mutual coupling. Catches feed-
     ordering / voltage-sign bugs that a symmetric drive would mask."""
-    from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+    from antenna_designer.designs.arrays.bowtiearray1x2 import Builder as B12
 
     b = B12()
     b.phase_lr = 90.0
@@ -825,7 +825,7 @@ def test_pysim_multifeed_far_field_matches_pynec():
     in the multi-feed RHS would show up as a different lobe shape and
     a different peak. 0.1 dBi headroom matches the single-feed dipole
     test; observed delta is ~0.02 dBi on both phasings."""
-    from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+    from antenna_designer.designs.arrays.bowtiearray1x2 import Builder as B12
 
     for phase_lr_deg in (0.0, 90.0):
         b = B12()
@@ -842,7 +842,7 @@ def test_pysim_multifeed_far_field_matches_pynec():
 def test_pysim_multifeed_impedance_sweep_shape():
     """Multi-feed impedance_sweep must return (n_freqs, n_feeds) to
     match PyNECEngine's shape contract."""
-    from antenna_designer.designs.bowtiearray1x2 import Builder as B12
+    from antenna_designer.designs.arrays.bowtiearray1x2 import Builder as B12
 
     freqs = np.linspace(28.0, 29.0, 4)
     zs = PysimEngine(B12()).impedance_sweep(freqs)
@@ -867,10 +867,10 @@ def test_network_spec_matches_legacy_tls_on_delta_looparray():
     an attachment point for tl_card. Same antenna, same TLs, same drive.
     Impedance should agree to within the stub wire's tiny radiative
     contribution (~0.5%), far-field peak essentially identical."""
-    from antenna_designer.designs.freq_based.delta_looparray_with_tls import (
+    from antenna_designer.designs.arrays.delta_looparray_with_tls import (
         Builder as LegacyBuilder,
     )
-    from antenna_designer.designs.freq_based.delta_looparray_network import (
+    from antenna_designer.designs.arrays.delta_looparray_network import (
         Builder as NetBuilder,
     )
 
@@ -890,7 +890,7 @@ def test_network_spec_matches_legacy_tls_on_delta_looparray():
 def test_network_spec_impedance_sweep_matches_per_freq():
     """impedance_sweep() in the network path should match per-freq
     impedance() — exercises the swept Y + per-k branch stamping path."""
-    from antenna_designer.designs.freq_based.delta_looparray_network import (
+    from antenna_designer.designs.arrays.delta_looparray_network import (
         Builder as NetBuilder,
     )
 
@@ -955,7 +955,7 @@ def test_pynec_network_matches_pysim_on_delta_looparray():
     wildly wrong impedance (~100 - j33000); the reducer path instead agrees
     with PysimEngine to within the two MoM formulations' inherent few-percent
     difference, for both impedance and far-field gain."""
-    from antenna_designer.designs.freq_based.delta_looparray_network import (
+    from antenna_designer.designs.arrays.delta_looparray_network import (
         Builder as NetBuilder,
     )
 
@@ -1045,7 +1045,7 @@ def test_short_dipole_loaded_cross_engine_impedance():
     with a series loading coil at the feed point. Pysim's Sherman-Morrison
     Y stamp and PyNEC's ld_card should agree to within their baseline
     free-space dipole tolerance (~1-2 Ω R, tens of Ω X)."""
-    from antenna_designer.designs.freq_based.short_dipole_loaded import (
+    from antenna_designer.designs.dipoles.short_dipole_loaded import (
         Builder as ShortB,
     )
 
@@ -1066,7 +1066,7 @@ def test_short_dipole_loaded_pattern_similar_lower_gain_than_full():
     pattern as a full-length dipole but with ~0.4 dB less peak gain
     (closer to the ideal short-dipole directivity of 1.76 dBi vs the
     half-wave's 2.15 dBi). Confirmed on both engines."""
-    from antenna_designer.designs.freq_based.short_dipole_loaded import (
+    from antenna_designer.designs.dipoles.short_dipole_loaded import (
         Builder as ShortB,
     )
 
@@ -1172,7 +1172,7 @@ def test_trap_dipole_cross_engine_impedance_at_trap_resonance():
     (high R, high X; the resonant trap is hard to cross-validate strictly
     because the engines handle the singular MoM update slightly
     differently)."""
-    from antenna_designer.designs.freq_based.trap_dipole import Builder
+    from antenna_designer.designs.multiband.trap_dipole import Builder
 
     b = Builder()
     b.freq = 28.0
@@ -1196,7 +1196,7 @@ def test_trap_dipole_trap_C_changes_impedance():
     substantially — confirms the parallel-LC Load update actually
     propagates to the driven-port impedance (the bug that motivated
     splitting passive ports into loaded vs floating; see PR notes)."""
-    from antenna_designer.designs.freq_based.trap_dipole import Builder
+    from antenna_designer.designs.multiband.trap_dipole import Builder
 
     b_res = Builder()
     b_res.freq = 28.0
@@ -1218,7 +1218,7 @@ def test_trap_dipole_low_band_loaded_into_resonance():
     loading lengthens the outer arms electrically and pulls the full-
     length antenna near resonance — much lower |X| than the unloaded
     short inner dipole would have on its own at 14 MHz."""
-    from antenna_designer.designs.freq_based.trap_dipole import Builder
+    from antenna_designer.designs.multiband.trap_dipole import Builder
 
     b = Builder()
     b.freq = 14.0
@@ -1242,7 +1242,7 @@ def test_trap_dipole_parallel_lc_resonance_is_finite():
     stamp resolves the 0/∞ analytically (coefficient → 1/Y_kk, the
     open-circuit Schur complement). Pysim must produce a finite impedance
     here — no raise, no NaN/Inf."""
-    from antenna_designer.designs.freq_based.trap_dipole import Builder
+    from antenna_designer.designs.multiband.trap_dipole import Builder
 
     b = Builder()
     b.freq = b.design_freq  # exactly at trap resonance — tank admittance → 0
@@ -1443,8 +1443,8 @@ def test_translator_rejects_geometry_with_no_excitation():
 @pytest.mark.parametrize(
     "design_module",
     [
-        "antenna_designer.designs.invveearray",
-        "antenna_designer.designs.bowtiearray2x4",
+        "antenna_designer.designs.arrays.invveearray",
+        "antenna_designer.designs.arrays.bowtiearray2x4",
     ],
 )
 def test_pysim_arrayblock_matches_dense_bspline(design_module):

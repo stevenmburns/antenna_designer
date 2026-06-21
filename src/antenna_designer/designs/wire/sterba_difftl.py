@@ -1,6 +1,6 @@
 """Sterba curtain, differential-transmission-line variant.
 
-A research/demonstration variant of `freq_based.sterba` that replaces each
+A research/demonstration variant of `wire.sterba` that replaces each
 vertical *twisted-pair* phasing section with a single 4-terminal
 differential transmission line (`network.DiffTL`) — the element NEC2's
 `tl_card` cannot express, so this design is **PysimEngine-only**.
@@ -20,7 +20,7 @@ of its *continuity* (the common mode), reaching ~7 dBi broadside. It is
 NOT a better antenna than the all-wires `sterba` (~10.5 dBi): an ideal
 line has no geometry, so it omits the verticals' near-field coupling to
 the radiators — the last ~3.5 dB genuinely needs real conductors. Use
-`freq_based.sterba` for a real antenna; use this to exercise/inspect the
+`wire.sterba` for a real antenna; use this to exercise/inspect the
 differential-line element.
 
 z0 is the differential-mode impedance (defaulted near the best-gain value,

@@ -32,7 +32,7 @@ class Builder(AntennaBuilder):
     # length_factor=0.967 puts a free-space dipole at 28.47 MHz near
     # resonance (Z ≈ 66 + j1 Ω). Equivalent to the old top-level
     # dipole.py geometry, now reachable as the "dipole" variant on
-    # freq_based.invvee.
+    # dipoles.invvee.
     dipole_params = MappingProxyType(
         {
             "design_freq": 28.47,

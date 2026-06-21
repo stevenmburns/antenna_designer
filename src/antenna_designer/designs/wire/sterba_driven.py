@@ -1,6 +1,6 @@
 """Sterba curtain, explicit-feedpoint variant.
 
-A research variant of `freq_based.sterba` that, like `sterba_difftl`, removes
+A research variant of `wire.sterba` that, like `sterba_difftl`, removes
 the 8 interior vertical riser wires — but instead of stitching each vertical
 *pair* back together with a `DiffTL`, it leaves the horizontal sections
 electrically disconnected and drives them **directly**: an explicit feedpoint

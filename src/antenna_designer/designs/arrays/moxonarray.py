@@ -1,5 +1,5 @@
-from .. import Array2x2Builder
-from . import moxon
+from ... import Array2x2Builder
+from ..beams import moxon
 
 from types import MappingProxyType
 

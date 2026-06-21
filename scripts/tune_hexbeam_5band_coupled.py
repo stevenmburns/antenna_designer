@@ -35,7 +35,7 @@ import argparse
 
 from scipy.optimize import minimize
 
-from antenna_designer.designs.freq_based.hexbeam_5band import Builder
+from antenna_designer.designs.multiband.hexbeam_5band import Builder
 from antenna_designer.engines.pynec import PyNECEngine
 
 

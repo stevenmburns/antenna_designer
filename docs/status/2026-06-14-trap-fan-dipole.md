@@ -3,7 +3,7 @@
 ## Goal
 
 Add a four-band trap fan dipole (17m / 15m / 12m / 10m) to
-`designs/freq_based/`. Two physical spokes from a common feed, each
+`designs/multiband/`. Two physical spokes from a common feed, each
 broken by a parallel-LC trap. Spoke 0 covers 17m/12m; spoke 1 covers
 15m/10m. PR [#69](https://github.com/stevenmburns/antenna_designer/pull/69).
 

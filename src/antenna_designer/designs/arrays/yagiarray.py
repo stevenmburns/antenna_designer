@@ -1,5 +1,5 @@
-from .. import Array2x2Builder
-from .freq_based import yagi
+from ... import Array2x2Builder
+from ..beams import yagi
 
 from types import MappingProxyType
 

@@ -128,7 +128,7 @@ type ExampleDescriptor = {
    *  default. */
   default_backend: Backend | null;
   /** True when the Builder has a `design_freq` param that scales
-   *  geometry (freq_based.* designs). When false, the design-freq
+   *  geometry (design_freq-sized designs). When false, the design-freq
    *  band-tab row is hidden because dragging it would be a no-op. */
   has_design_freq: boolean;
   /** Alternate seed dicts on the Builder, e.g. ["default", "opt"].

@@ -9,7 +9,7 @@ with the expected n_bands counts.
 """
 
 import web.examples  # noqa: F401  — registers examples; primes the adapter
-from antenna_designer.designs.freq_based.fandipole import Builder
+from antenna_designer.designs.multiband.fandipole import Builder
 from web.adapter import _derive_schema, _make_example
 from web.examples._base import ParamGroupSpec, ParamSpec
 

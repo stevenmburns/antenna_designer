@@ -1,5 +1,5 @@
-from .. import Array2x2Builder
-from . import bowtie
+from ... import Array2x2Builder
+from ..dipoles import folded_invvee
 
 from types import MappingProxyType
 
@@ -8,11 +8,11 @@ class Builder(Array2x2Builder):
     default_params = MappingProxyType(
         {
             "freq": 28.47,
-            "slope_top": 0.658,
-            "slope_bot": 0.512,
             "base": 7.0,
-            "length_top": 5.79,
-            "length_bot": 5.70,
+            "length_factor_top": 0.9943,
+            "length_factor_bot": 1.0038,
+            "angle_radians_top": 0.7255,
+            "angle_radians_bot": 0.7246,
             "del_y": 4.0,
             "del_z": 2.0,
             "phase_lr": 0.0,
@@ -21,4 +21,4 @@ class Builder(Array2x2Builder):
     )
 
     def __init__(self, params=None):
-        super().__init__(bowtie.Builder, params)
+        super().__init__(folded_invvee.Builder, params)

@@ -32,7 +32,7 @@ def _far_field(builder, ground=None):
 def test_half_square_resonant_and_low_z():
     """Corner-fed half-square: ~65 ohm, near-resonant at length_factor=1
     (Cebik's max-gain proportions)."""
-    from antenna_designer.designs.cebik.half_square import Builder
+    from antenna_designer.designs.verticals.half_square import Builder
 
     z = _z(Builder())
     assert 50.0 < z.real < 80.0
@@ -41,7 +41,7 @@ def test_half_square_resonant_and_low_z():
 
 def test_half_square_gain_matches_cebik():
     """~4.6-4.7 dBi free-space per Cebik's published models."""
-    from antenna_designer.designs.cebik.half_square import Builder
+    from antenna_designer.designs.verticals.half_square import Builder
 
     ff = _far_field(Builder())
     assert 4.0 < ff.max_gain < 5.5
@@ -50,7 +50,7 @@ def test_half_square_gain_matches_cebik():
 def test_half_square_is_broadside_with_end_nulls():
     """Vertically-polarised, bidirectional broadside off +/-x with deep
     nulls off the ends (Cebik: >10 dB side rejection)."""
-    from antenna_designer.designs.cebik.half_square import Builder
+    from antenna_designer.designs.verticals.half_square import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)  # [theta][phi], dBi
@@ -67,7 +67,7 @@ def test_half_square_feed_wire_carries_current_free_ends_null():
     zeroing them, which would render a zero-current gap right at the feed —
     the current maximum. The two open leg ends, by contrast, are genuine free
     ends and stay at the current null Cebik describes."""
-    from antenna_designer.designs.cebik.half_square import Builder
+    from antenna_designer.designs.verticals.half_square import Builder
 
     cur = PyNECEngine(Builder(), ground=None).current_distribution()
     # Tuple order from build_wires: 0=left leg, 1=feed stub, 2=top, 3=right leg.
@@ -82,7 +82,7 @@ def test_half_square_feed_wire_carries_current_free_ends_null():
 
 def test_half_square_length_factor_tunes_reactance():
     """Reactance climbs monotonically with length_factor through resonance."""
-    from antenna_designer.designs.cebik.half_square import Builder
+    from antenna_designer.designs.verticals.half_square import Builder
 
     x_lo = _z(Builder(dict(Builder.default_params, length_factor=0.96))).imag
     x_mid = _z(Builder(dict(Builder.default_params, length_factor=1.00))).imag
@@ -98,7 +98,7 @@ def test_half_square_length_factor_tunes_reactance():
 def test_bobtail_gain_exceeds_half_square():
     """Three-element curtain: ~5+ dBi broadside, more than the half-square's
     ~4.7 (Cebik: ~5.1-5.2 dBi)."""
-    from antenna_designer.designs.cebik.bobtail import Builder
+    from antenna_designer.designs.verticals.bobtail import Builder
 
     ff = _far_field(Builder())
     assert ff.max_gain > 5.0
@@ -107,7 +107,7 @@ def test_bobtail_gain_exceeds_half_square():
 def test_bobtail_broadside_directivity():
     """Vertically-polarised, sharply bidirectional broadside off +/-x with
     very deep end nulls (3 in-phase verticals)."""
-    from antenna_designer.designs.cebik.bobtail import Builder
+    from antenna_designer.designs.verticals.bobtail import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -121,7 +121,7 @@ def test_bobtail_feed_is_coax_friendly():
     """Tapped at a current maximum on the centre vertical (not the classic
     high-Z base/tank point), the driving point is a low, near-resonant ~50 ohm
     that takes coax directly."""
-    from antenna_designer.designs.cebik.bobtail import Builder
+    from antenna_designer.designs.verticals.bobtail import Builder
 
     z = _z(Builder())
     assert 35.0 < z.real < 70.0
@@ -132,7 +132,7 @@ def test_bobtail_tap_position_sets_impedance():
     """Sliding the tap toward the base (a current null) raises the feed
     resistance -- the standing-wave transformation that lets feed_height_frac
     pick the match, the same trick a shunt/gamma feed uses."""
-    from antenna_designer.designs.cebik.bobtail import Builder
+    from antenna_designer.designs.verticals.bobtail import Builder
 
     r_mid = _z(Builder()).real  # default tap (~0.5) -> ~50 ohm
     r_low = _z(Builder(dict(Builder.default_params, feed_height_frac=0.3))).real
@@ -141,7 +141,7 @@ def test_bobtail_tap_position_sets_impedance():
 
 def test_bobtail_only_centre_element_is_fed():
     """Exactly one driven gap; the outer verticals are passive."""
-    from antenna_designer.designs.cebik.bobtail import Builder
+    from antenna_designer.designs.verticals.bobtail import Builder
 
     feeds = [t for t in Builder().build_wires() if t[3] is not None]
     assert len(feeds) == 1
@@ -157,7 +157,7 @@ def test_bobtail_only_centre_element_is_fed():
 
 def test_quad_forward_gain():
     """~7 dBi forward (Cebik: 6.6-7.5 dBi for the wideband 2-el quad)."""
-    from antenna_designer.designs.cebik.quad import Builder
+    from antenna_designer.designs.loops.quad import Builder
 
     ff = _far_field(Builder())
     assert ff.max_gain > 6.5
@@ -165,7 +165,7 @@ def test_quad_forward_gain():
 
 def test_quad_driver_near_resonant():
     """Driver loop ~1.01 wl is near resonance at the default scale."""
-    from antenna_designer.designs.cebik.quad import Builder
+    from antenna_designer.designs.loops.quad import Builder
 
     z = _z(Builder())
     assert abs(z.imag) < 35.0
@@ -173,7 +173,7 @@ def test_quad_driver_near_resonant():
 
 def test_quad_fires_toward_driver_with_front_to_back():
     """Beam fires +x (toward the driver, away from the reflector at -x)."""
-    from antenna_designer.designs.cebik.quad import Builder
+    from antenna_designer.designs.loops.quad import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -184,7 +184,7 @@ def test_quad_fires_toward_driver_with_front_to_back():
 
 def test_quad_has_two_loops_one_fed():
     """Reflector (passive) + driver (one fed gap) = 2 four-sided loops."""
-    from antenna_designer.designs.cebik.quad import Builder
+    from antenna_designer.designs.loops.quad import Builder
 
     tups = Builder().build_wires()
     feeds = [t for t in tups if t[3] is not None]
@@ -202,7 +202,7 @@ def test_quad_has_two_loops_one_fed():
 def test_lazy_h_stacking_gain():
     """Two stacked in-phase 1 wl elements give ~8 dBi free-space -- well
     above a single ~1 wl element's ~4 dBi (the vertical-stacking gain)."""
-    from antenna_designer.designs.cebik.lazy_h import Builder
+    from antenna_designer.designs.wire.lazy_h import Builder
 
     ff = _far_field(Builder())
     assert ff.max_gain > 7.0
@@ -210,7 +210,7 @@ def test_lazy_h_stacking_gain():
 
 def test_lazy_h_broadside_horizontal():
     """Bidirectional broadside off +/-x with deep end nulls."""
-    from antenna_designer.designs.cebik.lazy_h import Builder
+    from antenna_designer.designs.wire.lazy_h import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -223,7 +223,7 @@ def test_lazy_h_broadside_horizontal():
 def test_lazy_h_two_in_phase_feeds():
     """Two centre feeds, both at y=0, both driven in phase (1+0j); by
     symmetry they present equal feed impedance."""
-    from antenna_designer.designs.cebik.lazy_h import Builder
+    from antenna_designer.designs.wire.lazy_h import Builder
 
     feeds = [t for t in Builder().build_wires() if t[3] is not None]
     assert len(feeds) == 2
@@ -235,7 +235,7 @@ def test_lazy_h_two_in_phase_feeds():
 
 def test_lazy_h_wider_spacing_adds_gain():
     """Expanding the stack toward ~5/8 wl raises gain (W2EEY expansion)."""
-    from antenna_designer.designs.cebik.lazy_h import Builder
+    from antenna_designer.designs.wire.lazy_h import Builder
 
     g_half = _far_field(
         Builder(dict(Builder.default_params, spacing_frac=0.5))
@@ -256,7 +256,7 @@ def test_lpda_broadband_forward_gain():
     band, firing toward the apex (+x). (Feedpoint impedance is not asserted
     -- the ideal lossless crossed feeder makes it unreliable; see module
     docstring.)"""
-    from antenna_designer.designs.cebik.lpda import Builder
+    from antenna_designer.designs.broadband.lpda import Builder
 
     for fr in (24.0, 26.0, 28.57, 30.0):
         b = Builder(dict(Builder.default_params, freq=fr))
@@ -270,7 +270,7 @@ def test_lpda_broadband_forward_gain():
 
 def test_lpda_elements_scale_by_tau():
     """Element half-lengths form a geometric sequence with ratio tau."""
-    from antenna_designer.designs.cebik.lpda import Builder
+    from antenna_designer.designs.broadband.lpda import Builder
 
     b = Builder()
     half, x = b._layout()
@@ -283,7 +283,7 @@ def test_lpda_elements_scale_by_tau():
 def test_lpda_feeder_is_crossed_and_front_driven():
     """Every feeder section is crossed (negative z0) and the source sits on
     the front (shortest) element."""
-    from antenna_designer.designs.cebik.lpda import Builder
+    from antenna_designer.designs.broadband.lpda import Builder
     from antenna_designer.network import TL, Driven
 
     b = Builder()
@@ -304,7 +304,7 @@ def test_lpda_feeder_is_crossed_and_front_driven():
 def test_hb9cv_forward_gain_and_endfire():
     """~6-7 dBi (like a 2-el Yagi) firing toward the front (+x). F/B is real
     but shallow in this ideal-crossed-TL model -- see module docstring."""
-    from antenna_designer.designs.cebik.hb9cv import Builder
+    from antenna_designer.designs.beams.hb9cv import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -317,7 +317,7 @@ def test_hb9cv_forward_gain_and_endfire():
 def test_hb9cv_feed_resistive_inductive():
     """Cebik: feed ~40-55 ohm resistive with inductive reactance. Both
     elements are driven through a single crossed phasing line."""
-    from antenna_designer.designs.cebik.hb9cv import Builder
+    from antenna_designer.designs.beams.hb9cv import Builder
 
     z = _z(Builder())
     assert z.real > 15.0  # positive, real driving-point R
@@ -327,7 +327,7 @@ def test_hb9cv_feed_resistive_inductive():
 def test_hb9cv_both_driven_via_one_crossed_line():
     """No parasite: a single crossed (transposed) phasing line couples the
     two driven element centres; the source sits on the front element."""
-    from antenna_designer.designs.cebik.hb9cv import Builder
+    from antenna_designer.designs.beams.hb9cv import Builder
     from antenna_designer.network import TL, Driven
 
     net = Builder().build_network()
@@ -346,7 +346,7 @@ def test_hb9cv_both_driven_via_one_crossed_line():
 def test_rhombic_unidirectional_when_terminated():
     """The terminating resistor makes the traveling-wave pattern
     unidirectional toward the terminated apex (+x)."""
-    from antenna_designer.designs.cebik.rhombic import Builder
+    from antenna_designer.designs.wire.rhombic import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -359,7 +359,7 @@ def test_rhombic_unidirectional_when_terminated():
 def test_rhombic_termination_creates_the_directivity():
     """Remove the termination (R -> huge) and the F/B collapses: the
     progressive wave is gone and the pattern goes ~bidirectional."""
-    from antenna_designer.designs.cebik.rhombic import Builder
+    from antenna_designer.designs.wire.rhombic import Builder
 
     def fb(r):
         b = Builder(dict(Builder.default_params, term_r=r))
@@ -373,7 +373,7 @@ def test_rhombic_termination_creates_the_directivity():
 def test_rhombic_impedance_tracks_termination():
     """Traveling-wave antenna: the driving-point R sits near the
     termination value, and it scales with it (broadband behaviour)."""
-    from antenna_designer.designs.cebik.rhombic import Builder
+    from antenna_designer.designs.wire.rhombic import Builder
 
     z600 = _z(Builder(dict(Builder.default_params, term_r=600.0)))
     z800 = _z(Builder(dict(Builder.default_params, term_r=800.0)))
@@ -383,7 +383,7 @@ def test_rhombic_impedance_tracks_termination():
 
 def test_rhombic_has_terminating_load_and_feed():
     """One driven feed apex and one resistive Load at the far apex."""
-    from antenna_designer.designs.cebik.rhombic import Builder
+    from antenna_designer.designs.wire.rhombic import Builder
     from antenna_designer.network import Driven, Load
 
     net = Builder().build_network()
@@ -411,7 +411,7 @@ def test_t2fd_broadband_low_swr():
     """The defining T2FD behaviour: a flat SWR curve over a 4:1 frequency
     range (here referenced to the ~850 ohm the terminated geometry settles
     to), unlike a resonant antenna."""
-    from antenna_designer.designs.cebik.t2fd import Builder
+    from antenna_designer.designs.broadband.t2fd import Builder
 
     z0 = 850.0
     swrs = [
@@ -423,7 +423,7 @@ def test_t2fd_broadband_low_swr():
 def test_t2fd_termination_flattens_the_response():
     """Removing the resistor (R -> huge) restores sharp resonances: the
     unterminated max-SWR over the band is far worse than terminated."""
-    from antenna_designer.designs.cebik.t2fd import Builder
+    from antenna_designer.designs.broadband.t2fd import Builder
 
     z0 = 850.0
 
@@ -440,7 +440,7 @@ def test_t2fd_termination_flattens_the_response():
 def test_t2fd_gain_is_reduced_by_loss():
     """Power burned in the terminating resistor drops gain below a resonant
     dipole's ~2.1 dBi -- the bandwidth/efficiency trade."""
-    from antenna_designer.designs.cebik.t2fd import Builder
+    from antenna_designer.designs.broadband.t2fd import Builder
 
     ff = _far_field(Builder())
     assert ff.max_gain < 2.0
@@ -448,7 +448,7 @@ def test_t2fd_gain_is_reduced_by_loss():
 
 def test_t2fd_folded_with_termination():
     """Folded pair (two end shorts), one driven feed, one resistive Load."""
-    from antenna_designer.designs.cebik.t2fd import Builder
+    from antenna_designer.designs.broadband.t2fd import Builder
     from antenna_designer.network import Driven, Load
 
     tups = Builder().build_wires()
@@ -477,7 +477,7 @@ def test_w8jk_bidirectional_endfire_gain():
     """~5.8 dBi firing equally off both +/- x ends (Kraus extended elements);
     the two anti-phase, close-spaced elements make a bidirectional endfire
     beam, not a unidirectional one."""
-    from antenna_designer.designs.cebik.w8jk import Builder
+    from antenna_designer.designs.wire.w8jk import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -491,7 +491,7 @@ def test_w8jk_broadside_and_overhead_nulls():
     """The array signature: deep nulls off the ends (+/- y, broadside to the
     boom) AND overhead (theta = 0, broadside to the array axis) -- the latter
     is what a single dipole would NOT have, proving the 180-deg array action."""
-    from antenna_designer.designs.cebik.w8jk import Builder
+    from antenna_designer.designs.wire.w8jk import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -505,7 +505,7 @@ def test_w8jk_broadside_and_overhead_nulls():
 def test_w8jk_two_antiphase_feeds():
     """Exactly two centre feeds, driven 180 degrees out of phase (+1 and -1),
     one per element -- the defining all-driven, out-of-phase topology."""
-    from antenna_designer.designs.cebik.w8jk import Builder
+    from antenna_designer.designs.wire.w8jk import Builder
 
     feeds = [t for t in Builder().build_wires() if t[3] is not None]
     assert len(feeds) == 2
@@ -522,7 +522,7 @@ def test_phased_verticals_cardioid_front_to_back():
     """The 90-deg feed phasing steers the pattern unidirectionally toward +x
     with a deep rearward null (~6-7 dB F/B here; a current-forcing network
     deepens it further) -- not the figure-8 of a single vertical."""
-    from antenna_designer.designs.cebik.phased_verticals import Builder
+    from antenna_designer.designs.verticals.phased_verticals import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -536,7 +536,7 @@ def test_phased_verticals_phase_does_the_steering():
     """Drive the two verticals IN phase instead and the unidirectional cardioid
     collapses -- proving the directivity comes from the FEED PHASE, not the
     geometry."""
-    from antenna_designer.designs.cebik.phased_verticals import Builder
+    from antenna_designer.designs.verticals.phased_verticals import Builder
 
     in_phase = Builder(dict(Builder.default_params, front_voltage=1 + 0j))
     rings = np.array(_far_field(in_phase).rings)
@@ -547,7 +547,7 @@ def test_phased_verticals_phase_does_the_steering():
 def test_phased_verticals_two_feeds_front_quadrature():
     """Two vertical (z-axis) feeds; the rear is the +1 reference and the front
     is driven near 90 degrees out of phase (a dominant imaginary part)."""
-    from antenna_designer.designs.cebik.phased_verticals import Builder
+    from antenna_designer.designs.verticals.phased_verticals import Builder
 
     feeds = [t for t in Builder().build_wires() if t[3] is not None]
     assert len(feeds) == 2
@@ -566,7 +566,7 @@ def test_phased_verticals_two_feeds_front_quadrature():
 def test_inverted_l_resonant_low_impedance():
     """Top-loaded short vertical: near-resonant (small X) at a low feed
     resistance over its radial counterpoise."""
-    from antenna_designer.designs.cebik.inverted_l import Builder
+    from antenna_designer.designs.verticals.inverted_l import Builder
 
     z = _z(Builder())
     assert 8.0 < z.real < 45.0
@@ -577,7 +577,7 @@ def test_inverted_l_vertical_low_angle_radiation():
     """Mostly vertically polarised: the pattern peaks toward the horizon and
     is deeply nulled overhead -- the signature of a vertical, not a horizontal
     wire."""
-    from antenna_designer.designs.cebik.inverted_l import Builder
+    from antenna_designer.designs.verticals.inverted_l import Builder
 
     rings = np.array(_far_field(Builder()).rings)
     horizon = rings[80:].max()  # near the horizon (theta ~ 90)
@@ -588,7 +588,7 @@ def test_inverted_l_vertical_low_angle_radiation():
 def test_inverted_l_has_riser_top_and_radials():
     """One base feed, a vertical riser, a horizontal top section (the bend),
     and a radial counterpoise."""
-    from antenna_designer.designs.cebik.inverted_l import Builder
+    from antenna_designer.designs.verticals.inverted_l import Builder
 
     tups = Builder().build_wires()
     feeds = [t for t in tups if t[3] is not None]
@@ -610,7 +610,7 @@ def test_inverted_l_has_riser_top_and_radials():
 def test_ocf_impedance_rises_off_center():
     """The defining OCF physics: sliding the feed off-centre raises the
     (resistive) feed impedance well above the ~70 ohm centre value."""
-    from antenna_designer.designs.cebik.ocf_dipole import Builder
+    from antenna_designer.designs.dipoles.ocf_dipole import Builder
 
     r_off = _z(Builder()).real
     r_ctr = _z(Builder(dict(Builder.default_params, feed_frac=0.5))).real
@@ -621,14 +621,14 @@ def test_ocf_impedance_rises_off_center():
 def test_ocf_near_resonant():
     """At the design length the off-centre feed is near resonance (small X),
     so the elevated impedance is essentially resistive."""
-    from antenna_designer.designs.cebik.ocf_dipole import Builder
+    from antenna_designer.designs.dipoles.ocf_dipole import Builder
 
     assert abs(_z(Builder()).imag) < 60.0
 
 
 def test_ocf_feed_is_off_center():
     """Geometry: a single feed with unequal arms (short arm toward -y end)."""
-    from antenna_designer.designs.cebik.ocf_dipole import Builder
+    from antenna_designer.designs.dipoles.ocf_dipole import Builder
 
     tups = Builder().build_wires()
     feeds = [t for t in tups if t[3] is not None]
@@ -646,7 +646,7 @@ def test_vbeam_fires_along_the_bisector():
     """Two ~1 wl legs splayed at the apex put gain (~5 dBi) along the
     bisector (+/- x) with a deep null off the broadside (+/- y) -- the
     long-wire lobes of the two legs aligning."""
-    from antenna_designer.designs.cebik.vbeam import Builder
+    from antenna_designer.designs.wire.vbeam import Builder
 
     rings = np.array(_far_field(Builder()).rings)
     fwd = rings[:, 0].max()  # +x bisector
@@ -660,7 +660,7 @@ def test_vbeam_fires_along_the_bisector():
 def test_vbeam_high_reactive_apex_feed():
     """Long-wire apex feed: high resistance and strongly reactive (open-wire
     fed in practice), unlike a resonant dipole."""
-    from antenna_designer.designs.cebik.vbeam import Builder
+    from antenna_designer.designs.wire.vbeam import Builder
 
     z = _z(Builder())
     assert z.real > 500.0
@@ -670,7 +670,7 @@ def test_vbeam_high_reactive_apex_feed():
 def test_vbeam_two_legs_one_apex_feed():
     """One driven apex gap and two legs of equal length opening symmetrically
     in +/- y."""
-    from antenna_designer.designs.cebik.vbeam import Builder
+    from antenna_designer.designs.wire.vbeam import Builder
 
     tups = Builder().build_wires()
     feeds = [t for t in tups if t[3] is not None]
@@ -690,7 +690,7 @@ def test_bisquare_vertical_broadside():
     """Vertically polarised, fires broadside to the loop plane (off +/- x) with
     the in-plane (+/- y) endfire suppressed -- the in-phase vertical components
     adding while the horizontals cancel."""
-    from antenna_designer.designs.cebik.bisquare import Builder
+    from antenna_designer.designs.loops.bisquare import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -703,7 +703,7 @@ def test_bisquare_vertical_broadside():
 def test_bisquare_high_reactive_corner_feed():
     """A 2 wl loop fed at a corner is a high, reactive feedpoint (open-wire +
     tuner), not a 50 ohm match."""
-    from antenna_designer.designs.cebik.bisquare import Builder
+    from antenna_designer.designs.loops.bisquare import Builder
 
     z = _z(Builder())
     assert abs(z.imag) > 200.0
@@ -712,7 +712,7 @@ def test_bisquare_high_reactive_corner_feed():
 def test_bisquare_is_a_four_sided_loop_one_feed():
     """Four half-wave sides forming one closed loop, with a single driven gap
     at the bottom corner (z minimum)."""
-    from antenna_designer.designs.cebik.bisquare import Builder
+    from antenna_designer.designs.loops.bisquare import Builder
 
     tups = Builder().build_wires()
     feeds = [t for t in tups if t[3] is not None]
@@ -729,7 +729,7 @@ def test_bisquare_is_a_four_sided_loop_one_feed():
 def test_jpole_omnidirectional_vertical():
     """A vertical end-fed half-wave: ~2 dBi, omnidirectional in azimuth (small
     ripple around the peak-elevation ring)."""
-    from antenna_designer.designs.cebik.jpole import Builder
+    from antenna_designer.designs.verticals.jpole import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -742,7 +742,7 @@ def test_jpole_omnidirectional_vertical():
 def test_jpole_stub_matches_to_coax():
     """The quarter-wave stub transforms the very high end-fed impedance down to
     a coax-friendly match (SWR < 2.5 to 50 ohm at the tuned tap)."""
-    from antenna_designer.designs.cebik.jpole import Builder
+    from antenna_designer.designs.verticals.jpole import Builder
 
     assert _swr(_z(Builder()), 50.0) < 2.5
 
@@ -751,7 +751,7 @@ def test_jpole_radiator_continues_above_the_stub():
     """Topology: the half-wave radiator stands on top of one stub leg, so the
     structure's top is a half-wave above the stub top; the feed bridges the two
     close stub legs (different x)."""
-    from antenna_designer.designs.cebik.jpole import Builder
+    from antenna_designer.designs.verticals.jpole import Builder
 
     tups = Builder().build_wires()
     feeds = [t for t in tups if t[3] is not None]
@@ -777,7 +777,7 @@ def test_discone_broadband_match():
     """The defining discone behaviour: a usable match held across a wide band
     ABOVE the cone's quarter-wave cutoff (here ~2:1, 34-65 MHz), unlike a
     resonant vertical."""
-    from antenna_designer.designs.cebik.discone import Builder
+    from antenna_designer.designs.broadband.discone import Builder
 
     swrs = [
         _swr(_z(Builder(dict(Builder.default_params, freq=f))), 50.0)
@@ -789,8 +789,8 @@ def test_discone_broadband_match():
 def test_discone_match_beats_a_resonant_vertical_off_band():
     """A resonant antenna's SWR explodes when you move ~2:1 in frequency; the
     discone's barely moves. Compare the band-edge spread."""
-    from antenna_designer.designs.cebik.discone import Builder
-    from antenna_designer.designs.cebik.jpole import Builder as JBuilder
+    from antenna_designer.designs.broadband.discone import Builder
+    from antenna_designer.designs.verticals.jpole import Builder as JBuilder
 
     def spread(B, lo, hi, z0):
         return _swr(_z(B(dict(B.default_params, freq=hi))), z0) - _swr(
@@ -807,7 +807,7 @@ def test_discone_match_beats_a_resonant_vertical_off_band():
 def test_discone_omni_low_angle_in_band():
     """In-band it is a vertical: omnidirectional in azimuth and low takeoff
     (peak gain near the horizon)."""
-    from antenna_designer.designs.cebik.discone import Builder
+    from antenna_designer.designs.broadband.discone import Builder
 
     b = Builder(dict(Builder.default_params, freq=50.0))
     rings = np.array(_far_field(b).rings)
@@ -820,7 +820,7 @@ def test_discone_omni_low_angle_in_band():
 def test_discone_has_disc_and_cone_one_feed():
     """A disc cage (horizontal radials) above a cone cage (downward radials),
     fed across the apex gap -- exactly one driven segment."""
-    from antenna_designer.designs.cebik.discone import Builder
+    from antenna_designer.designs.broadband.discone import Builder
 
     tups = Builder().build_wires()
     feeds = [t for t in tups if t[3] is not None]
@@ -850,7 +850,7 @@ def test_discone_has_disc_and_cone_one_feed():
 
 def test_helix_resonant_low_z():
     """Helically-loaded short whip: near-resonant, low radiation resistance."""
-    from antenna_designer.designs.cebik.helix import Builder
+    from antenna_designer.designs.specialty.helix import Builder
 
     z = _z(Builder())
     assert 8.0 < z.real < 25.0  # low R of a helically-loaded short vertical
@@ -860,7 +860,7 @@ def test_helix_resonant_low_z():
 def test_helix_is_genuinely_three_dimensional():
     """Unlike every planar design in the catalog, the helix winds through many
     distinct x AND y coordinates -- a true space curve."""
-    from antenna_designer.designs.cebik.helix import Builder
+    from antenna_designer.designs.specialty.helix import Builder
 
     tups = Builder().build_wires()
     xs = {round(p[0], 3) for t in tups for p in (t[0], t[1])}
@@ -871,7 +871,7 @@ def test_helix_is_genuinely_three_dimensional():
 def test_helix_vertically_polarised_omni():
     """Normal-mode helix radiates like a short vertical: omnidirectional in
     azimuth, modest gain."""
-    from antenna_designer.designs.cebik.helix import Builder
+    from antenna_designer.designs.specialty.helix import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -889,7 +889,7 @@ def test_helix_vertically_polarised_omni():
 def test_koch_resonant_reduced_resistance():
     """Iteration-2 Koch dipole at the default span: near resonant, with a
     radiation resistance well below a full-size dipole's ~70 ohm."""
-    from antenna_designer.designs.cebik.koch_dipole import Builder
+    from antenna_designer.designs.dipoles.koch_dipole import Builder
 
     z = _z(Builder())
     assert 25.0 < z.real < 50.0
@@ -900,7 +900,7 @@ def test_koch_iterations_shorten_resonance():
     """The fractal miniaturisation: at a FIXED span the developed length grows
     with iterations, so a straight (it=0) dipole of that span is far too short
     (strongly capacitive) while the it=2 curve is near resonant."""
-    from antenna_designer.designs.cebik.koch_dipole import Builder
+    from antenna_designer.designs.dipoles.koch_dipole import Builder
 
     x_straight = _z(Builder(dict(Builder.default_params, iterations=0))).imag
     x_koch2 = _z(Builder(dict(Builder.default_params, iterations=2))).imag
@@ -911,7 +911,7 @@ def test_koch_is_a_dipole_pattern():
     """Still a horizontally-polarised dipole, broadside-dominant -- though the
     z-directed bumps of the fractal soften the figure-8 a little, so the
     front-to-side ratio is smaller than a straight dipole's."""
-    from antenna_designer.designs.cebik.koch_dipole import Builder
+    from antenna_designer.designs.dipoles.koch_dipole import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -924,7 +924,7 @@ def test_koch_is_a_dipole_pattern():
 def test_koch_one_feed_many_chords():
     """Exactly one driven gap; the it=2 arms are a dense chain of short chords
     (16 per arm) -- the segmentation stress the design exists to apply."""
-    from antenna_designer.designs.cebik.koch_dipole import Builder
+    from antenna_designer.designs.dipoles.koch_dipole import Builder
 
     tups = Builder().build_wires()
     feeds = [t for t in tups if t[3] is not None]
@@ -940,7 +940,7 @@ def test_koch_one_feed_many_chords():
 def test_bruce_vertical_broadside_curtain():
     """Five co-phased risers: vertically polarised, broadside off +/-x with
     deep end nulls (free space)."""
-    from antenna_designer.designs.cebik.bruce import Builder
+    from antenna_designer.designs.verticals.bruce import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -954,7 +954,7 @@ def test_bruce_vertical_broadside_curtain():
 def test_bruce_feed_is_high_z_reactive():
     """The end-riser current-minimum feed is high and strongly reactive -- a
     matching network, not coax, in practice (cf. bisquare/lazy_h)."""
-    from antenna_designer.designs.cebik.bruce import Builder
+    from antenna_designer.designs.verticals.bruce import Builder
 
     z = _z(Builder())
     assert z.real > 150.0  # high resistance
@@ -963,7 +963,7 @@ def test_bruce_feed_is_high_z_reactive():
 
 def test_bruce_riser_count_and_single_feed():
     """n_vert vertical risers (constant-y segments) and exactly one driven gap."""
-    from antenna_designer.designs.cebik.bruce import Builder
+    from antenna_designer.designs.verticals.bruce import Builder
 
     b = Builder()
     tups = b.build_wires()
@@ -988,7 +988,7 @@ def test_bruce_riser_count_and_single_feed():
 def test_four_square_gain_and_front_to_back():
     """Quadrature box fires along the +x,+y diagonal with array gain and a deep
     rearward null."""
-    from antenna_designer.designs.cebik.four_square import Builder
+    from antenna_designer.designs.verticals.four_square import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -1001,7 +1001,7 @@ def test_four_square_gain_and_front_to_back():
 
 def test_four_square_has_four_quadrature_feeds():
     """Exactly four driven gaps: back=+1, front=-1, two equal -90 deg sides."""
-    from antenna_designer.designs.cebik.four_square import Builder
+    from antenna_designer.designs.verticals.four_square import Builder
 
     tups = Builder().build_wires()
     feeds = [t[3] for t in tups if t[3] is not None]
@@ -1015,7 +1015,7 @@ def test_four_square_has_four_quadrature_feeds():
 def test_four_square_steers_by_phase():
     """It is the phasing, not the geometry, that makes it directional: with all
     four corners fed in phase the deep rearward null disappears."""
-    from antenna_designer.designs.cebik.four_square import Builder
+    from antenna_designer.designs.verticals.four_square import Builder
 
     directional = _far_field(Builder())
     rings = np.array(directional.rings)
@@ -1030,7 +1030,7 @@ def test_four_square_steers_by_phase():
 
 def test_horizontal_loop_moderate_resistive_feed():
     """Full-wave loop: ~100-130 ohm, near resonant."""
-    from antenna_designer.designs.cebik.horizontal_loop import Builder
+    from antenna_designer.designs.loops.horizontal_loop import Builder
 
     z = _z(Builder())
     assert 90.0 < z.real < 150.0
@@ -1040,7 +1040,7 @@ def test_horizontal_loop_moderate_resistive_feed():
 def test_horizontal_loop_fires_at_zenith():
     """A flat full-wave loop is broadside to its own plane -> the main lobe is
     overhead (theta=0), the NVIS behaviour, far above a low-elevation cut."""
-    from antenna_designer.designs.cebik.horizontal_loop import Builder
+    from antenna_designer.designs.loops.horizontal_loop import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -1052,7 +1052,7 @@ def test_horizontal_loop_fires_at_zenith():
 
 def test_horizontal_loop_is_closed_single_feed():
     """One driven gap; the rest of the wires close a ~1 wl perimeter loop."""
-    from antenna_designer.designs.cebik.horizontal_loop import Builder
+    from antenna_designer.designs.loops.horizontal_loop import Builder
 
     b = Builder()
     tups = b.build_wires()
@@ -1073,7 +1073,7 @@ def test_horizontal_loop_is_closed_single_feed():
 
 def test_longwire_gain_exceeds_dipole():
     """A ~3.5 wl wire beats a half-wave dipole."""
-    from antenna_designer.designs.cebik.longwire import Builder
+    from antenna_designer.designs.wire.longwire import Builder
 
     assert _far_field(Builder()).max_gain > 4.5
 
@@ -1081,7 +1081,7 @@ def test_longwire_gain_exceeds_dipole():
 def test_longwire_lobes_tilt_toward_the_axis():
     """The pattern is multi-lobe with the strongest lobes tilted toward the
     wire axis (+/- y), NOT broadside (+/- x) as a dipole would be."""
-    from antenna_designer.designs.cebik.longwire import Builder
+    from antenna_designer.designs.wire.longwire import Builder
 
     ff = _far_field(Builder())
     rings = np.array(ff.rings)
@@ -1097,7 +1097,7 @@ def test_longwire_lobes_tilt_toward_the_axis():
 def test_longwire_centre_feed_moderate_z():
     """Centre-fed at a current maximum (odd half-wave count) -> moderate R,
     not the thousands of ohms an end feed or a current-null centre would give."""
-    from antenna_designer.designs.cebik.longwire import Builder
+    from antenna_designer.designs.wire.longwire import Builder
 
     z = _z(Builder())
     assert 80.0 < z.real < 220.0
@@ -1113,7 +1113,7 @@ def test_g5rv_shack_impedance_is_transformed_doublet():
     """The shack-side Z (after the ~half-wave matched line) is the transformed
     centre impedance of a ~1.5 wl doublet -- a reactive ~100-ohm compromise,
     not a 50-ohm match (Cebik's point about the G5RV)."""
-    from antenna_designer.designs.cebik.g5rv import Builder
+    from antenna_designer.designs.broadband.g5rv import Builder
 
     z = _z(Builder())
     assert 80.0 < z.real < 160.0
@@ -1122,7 +1122,7 @@ def test_g5rv_shack_impedance_is_transformed_doublet():
 
 def test_g5rv_doublet_gain():
     """The flat-top radiates as a 1.5 wl doublet (a few dB over a dipole)."""
-    from antenna_designer.designs.cebik.g5rv import Builder
+    from antenna_designer.designs.broadband.g5rv import Builder
 
     assert 2.5 < _far_field(Builder()).max_gain < 5.0
 
@@ -1130,7 +1130,7 @@ def test_g5rv_doublet_gain():
 def test_g5rv_uses_a_tl_branch_and_virtual_shack():
     """The matched line is a single TL branch from a virtual shack port to the
     real doublet-centre port."""
-    from antenna_designer.designs.cebik.g5rv import Builder
+    from antenna_designer.designs.broadband.g5rv import Builder
     from antenna_designer.network import TL, PortVirtual
 
     net = Builder().build_network()
@@ -1147,7 +1147,7 @@ def test_g5rv_uses_a_tl_branch_and_virtual_shack():
 def test_zepp_radiator_is_a_dipole():
     """The half-wave radiator keeps a dipole gain (~2 dBi) regardless of the
     extreme feed -- gain/pattern are the robust outputs."""
-    from antenna_designer.designs.cebik.zepp import Builder
+    from antenna_designer.designs.wire.zepp import Builder
 
     assert 1.8 < _far_field(Builder()).max_gain < 2.6
 
@@ -1156,7 +1156,7 @@ def test_zepp_series_feeder_cannot_match_to_coax():
     """An end-fed half wave is near-total reflection; a LOSSLESS series feeder
     preserves |Gamma|, so the shack impedance stays far from 50 ohm (low R) --
     the historical reason the Zepp ran its tuned feeders to a tuner."""
-    from antenna_designer.designs.cebik.zepp import Builder
+    from antenna_designer.designs.wire.zepp import Builder
 
     z = _z(Builder())
     assert z.real < 10.0  # nowhere near a 50-ohm match
@@ -1177,7 +1177,7 @@ def test_parasitic_loop_quad_agrees_across_engines():
     it). All four bases agree with the PyNEC reference. This was the single
     biggest pysim gap; the test that used to assert it RAISED now asserts it
     SOLVES."""
-    from antenna_designer.designs.cebik.quad import Builder
+    from antenna_designer.designs.loops.quad import Builder
     from antenna_designer.engines import PysimEngine
     from pysim import BSplinePySim, SinusoidalPySim, TriangularPySim
 
@@ -1204,7 +1204,7 @@ def test_terminated_rhombic_is_unidirectional_across_engines():
     pysim develops the same TRAVELING-WAVE unidirectional pattern as PyNEC
     (it was bidirectional, F/B ~1 dB, before the load shaped the current), and
     the radiation efficiency folds the termination loss into GAIN."""
-    from antenna_designer.designs.cebik.rhombic import Builder
+    from antenna_designer.designs.wire.rhombic import Builder
     from antenna_designer.engines import PysimEngine
     from pysim import TriangularPySim
 
@@ -1234,7 +1234,7 @@ def test_pynec_pec_matches_pysim_sinusoidal_on_terminated_loop():
     of an ohm and a fraction of a dB. This pins that clean cross-engine
     reference (turning copper loss back on would offset it by a few tenths of
     a dB, which is exactly why the default is PEC)."""
-    from antenna_designer.designs.cebik.rhombic import Builder
+    from antenna_designer.designs.wire.rhombic import Builder
     from antenna_designer.engines import PysimEngine
     from pysim import SinusoidalPySim
 
@@ -1256,7 +1256,7 @@ def test_t2fd_broadband_gain_agrees_across_engines():
     (two port edges). With the load shaping the current and its loss folded
     into gain, pysim's low broadband gain matches PyNEC instead of reading
     several dB high."""
-    from antenna_designer.designs.cebik.t2fd import Builder
+    from antenna_designer.designs.broadband.t2fd import Builder
     from antenna_designer.engines import PysimEngine
     from pysim import BSplinePySim, SinusoidalPySim, TriangularPySim
 
@@ -1281,7 +1281,7 @@ def test_g5rv_ideal_halfwave_line_is_singular_on_every_engine():
     off the half wave to avoid it."""
     import pytest
 
-    from antenna_designer.designs.cebik.g5rv import Builder
+    from antenna_designer.designs.broadband.g5rv import Builder
 
     with pytest.raises(ValueError):
         _z(Builder(dict(Builder.default_params, match_len_frac=0.5)))
@@ -1291,7 +1291,7 @@ def test_bruce_high_z_feed_is_well_conditioned_across_bases():
     """The Bruce feed is high-Z and reactive, but because the tap sits a little
     off the exact current null the four bases AGREE on it (within a few percent)
     -- high-Z but NOT ill-conditioned."""
-    from antenna_designer.designs.cebik.bruce import Builder
+    from antenna_designer.designs.verticals.bruce import Builder
     from antenna_designer.engines import PysimEngine
     from pysim import SinusoidalPySim, TriangularPySim
 
@@ -1304,7 +1304,7 @@ def test_zepp_current_null_end_feed_is_basis_dependent():
     """Contrast to the Bruce: feeding at a near-OPEN current null (the end of a
     half wave) is ill-conditioned. After the stub transform the shack R agrees
     across bases but the REACTANCE inherits the basis spread."""
-    from antenna_designer.designs.cebik.zepp import Builder
+    from antenna_designer.designs.wire.zepp import Builder
     from antenna_designer.engines import PysimEngine
     from pysim import TriangularPySim
 

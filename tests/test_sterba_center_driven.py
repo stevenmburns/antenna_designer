@@ -1,4 +1,4 @@
-"""Tests for the center-fed-section Sterba variant (freq_based.sterba_center_driven).
+"""Tests for the center-fed-section Sterba variant (wire.sterba_center_driven).
 
 The design deletes the 8 interior risers and exposes the center of each of the
 10 horizontal sections as a feedpoint. These check the build/solve mechanism;
@@ -8,7 +8,7 @@ matched) is measured by scripts/sterba_center_driven_experiment.py.
 
 import numpy as np
 
-from antenna_designer.designs.freq_based import sterba_center_driven
+from antenna_designer.designs.wire import sterba_center_driven
 from antenna_designer.engines import PysimEngine
 
 FF_KW = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)

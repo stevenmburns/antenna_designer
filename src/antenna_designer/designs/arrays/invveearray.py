@@ -1,5 +1,5 @@
-from .. import Array2x2Builder
-from .freq_based import invvee
+from ... import Array2x2Builder
+from ..dipoles import invvee
 
 from types import MappingProxyType
 
@@ -7,7 +7,7 @@ from types import MappingProxyType
 class Builder(Array2x2Builder):
     # Pre-2024 params with the looser slope=0.604 and length=5.084 each;
     # kept for backwards-compat tuning loads. length_factor / angle_radians
-    # are the freq_based.invvee-equivalent values:
+    # are the dipoles.invvee-equivalent values:
     #   length_factor = (length / 2) / (0.25 · λ_design)
     #                 = 2.542 / 2.6325 = 0.9656
     #   angle_radians = atan(slope) = atan(0.604) = 0.5434

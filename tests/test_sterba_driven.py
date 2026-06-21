@@ -1,4 +1,4 @@
-"""Tests for the explicit-feedpoint Sterba variant (freq_based.sterba_driven).
+"""Tests for the explicit-feedpoint Sterba variant (wire.sterba_driven).
 
 The design deletes the 8 interior risers and exposes the 4 ports of each
 junction as independent feedpoints. These tests check the *mechanism* — that
@@ -11,7 +11,7 @@ question the driver script measures, not something pinned here.)
 import numpy as np
 import pytest
 
-from antenna_designer.designs.freq_based import sterba_driven
+from antenna_designer.designs.wire import sterba_driven
 from antenna_designer.engines import PysimEngine
 
 FF_KW = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
