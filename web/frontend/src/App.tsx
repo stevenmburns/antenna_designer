@@ -726,7 +726,6 @@ type SolveRequest = {
   wire_radius: number;
   ground: boolean;
   ground_fast: boolean;
-  height_m: number;
   // V
   angle_deg?: number;
   halfdriver_factor?: number;
@@ -1169,10 +1168,9 @@ export function App() {
   const [designFreq, setDesignFreq] = useState(14.3);
   const [measFreq, setMeasFreq] = useState(14.3);
   const [linkMeas, setLinkMeas] = useState(true);
-  // Ground plane (PyNEC only). Geometry is lifted by heightM when enabled.
+  // PEC ground plane (image method at z = 0).
   const [groundEnabled, setGroundEnabled] = useState(false);
   const [groundFast, setGroundFast] = useState(false);
-  const [heightM, setHeightM] = useState(7.0);
   // Far-field cut angles. The azimuth plot slices the pattern at elevation
   // `azElevDeg`; the elevation plot slices the vertical plane at azimuth
   // bearing `elevAzDeg` (0° = +x). Defaults give the conventional views.
@@ -1334,7 +1332,6 @@ export function App() {
       wire_radius: wireRadius,
       ground: groundActive,
       ground_fast: groundActive && groundFast,
-      height_m: heightM,
     };
     if (backend !== "pynec") {
       base.pysim_model = backend;
@@ -1490,7 +1487,7 @@ export function App() {
     geometry, backend, backendOptsKey,
     currentValuesKey,
     designFreq, measFreq,
-    groundEnabled, groundFast, heightM,
+    groundEnabled, groundFast,
   ]);
 
   // Antenna switch: drop the previous antenna's results immediately so nothing
@@ -1558,7 +1555,7 @@ export function App() {
     geometry, backend, backendOptsKey,
     currentValuesKey,
     designFreq,
-    groundEnabled, groundFast, heightM,
+    groundEnabled, groundFast,
     sweepEnabled,
     currentExample?.sweep_policy.anchor === "meas_freq" ? measFreq : null,
   ]);
@@ -1588,7 +1585,7 @@ export function App() {
     geometry, backend, backendOptsKey,
     currentValuesKey,
     designFreq, measFreq,
-    groundEnabled, groundFast, heightM,
+    groundEnabled, groundFast,
     convergeEnabled,
   ]);
 
@@ -1610,7 +1607,7 @@ export function App() {
     geometry, backend, backendOptsKey,
     currentValuesKey,
     designFreq, measFreq,
-    groundEnabled, groundFast, heightM,
+    groundEnabled, groundFast,
   ]);
 
   async function runSweep() {
@@ -2216,23 +2213,6 @@ export function App() {
             </label>
           )}
         </div>
-
-        {groundEnabled && (
-          <div className="field">
-            <label>
-              <span>height above ground</span>
-              <span>{heightM.toFixed(2)} m</span>
-            </label>
-            <input
-              type="range"
-              min={0.5}
-              max={30}
-              step={0.1}
-              value={heightM}
-              onInput={(e) => setHeightM(Number((e.target as HTMLInputElement).value))}
-            />
-          </div>
-        )}
 
         <div className="field">
           <label>
@@ -3935,8 +3915,8 @@ function CurrentCanvas({
 
       // When ground is enabled and the vertical projection axis is z, expand
       // the visible vertical range to include z=0 so the ground reference
-      // line lands inside the canvas. Without this, high antennas
-      // (height_m ≳ λ/2) push the ground line off-screen.
+      // line lands inside the canvas. Without this, antennas sitting well
+      // above the plane push the ground line off-screen.
       let vEffMin = vMin, vEffMax = vMax;
       if (result.ground && vertAxis === 2) {
         vEffMin = Math.min(vMin, 0);
