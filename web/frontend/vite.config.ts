@@ -11,6 +11,7 @@ export default defineConfig({
       "/sweep": { target: "http://127.0.0.1:8000", changeOrigin: true },
       "/converge": { target: "http://127.0.0.1:8000", changeOrigin: true },
       "/pattern": { target: "http://127.0.0.1:8000", changeOrigin: true },
+      "/geometry": { target: "http://127.0.0.1:8000", changeOrigin: true },
       "/examples": { target: "http://127.0.0.1:8000", changeOrigin: true },
       "/export_nec": { target: "http://127.0.0.1:8000", changeOrigin: true },
     },

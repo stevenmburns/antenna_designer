@@ -689,6 +689,24 @@ async def export_nec_endpoint(req: dict):
     )
 
 
+@app.post("/geometry")
+async def geometry_endpoint(req: dict):
+    """Fast geometry-only snapshot of the selected antenna: wire positions +
+    feed marker, no MoM solve. The frontend fetches this the instant the user
+    picks a new antenna so the shape renders immediately (large arrays take
+    tens of seconds to solve); the live /ws solve then supplies currents,
+    impedance, and far field. Geometry is solver-independent, so this always
+    uses the pysim builder path regardless of the request's `solver`.
+    """
+    geometry = req.get("geometry", next(iter(EXAMPLES)))
+    ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
+    if ex.pysim_geometry is None:
+        return {"available": False}
+    out = await run_in_threadpool(ex.pysim_geometry, req)
+    out["solver"] = "pysim"
+    return out
+
+
 @app.get("/healthz")
 def healthz():
     return {"ok": True}

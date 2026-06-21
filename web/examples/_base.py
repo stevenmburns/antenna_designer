@@ -272,6 +272,10 @@ class AntennaExample:
     label: str
     pysim_solve: SolveFn
     pysim_sweep: SweepFn
+    # Geometry-only snapshot (wires, feed marker; no solve, no currents) for a
+    # fast antenna-shape preview while the real solve runs. Optional so an
+    # example without one degrades to "no preview".
+    pysim_geometry: Optional[SolveFn] = None
     pynec_build: Optional[PynecBuildFn] = None
     pynec_solve: Optional[SolveFn] = None
     # Render the geometry as a NEC2 .nec card deck (str) for the current

@@ -455,6 +455,42 @@ def test_pattern_endpoint_pysim_returns_unavailable(client: TestClient):
     assert r.json() == {"available": False}
 
 
+def test_geometry_endpoint_returns_wires_without_solving(client: TestClient):
+    # The fast antenna-shape preview: wires + feed marker, zero currents, and
+    # no impedance/far-field (those come from the live solve). Geometry is
+    # solver-independent, so it answers even with solver=pynec.
+    r = client.post(
+        "/geometry",
+        json={
+            "geometry": "freq_based.invvee",
+            "design_freq_mhz": 28.47,
+            "measurement_freq_mhz": 28.47,
+            "solver": "pynec",
+        },
+    )
+    assert r.status_code == 200
+    out = r.json()
+    assert out["geometry"] == "freq_based.invvee"
+    assert out["preview"] is True
+    assert out["solver"] == "pysim"
+    assert len(out["wires"]) >= 1
+    # Geometry only — every current is zero, and the solve never ran.
+    assert "z_in_re" not in out
+    for w in out["wires"]:
+        assert len(w["knot_positions"]) > 0
+        assert all(c == 0 for c in w["knot_currents_re"])
+        assert all(c == 0 for c in w["knot_currents_im"])
+    assert "feed_position" in out
+
+
+def test_geometry_endpoint_falls_back_when_geometry_unknown(client: TestClient):
+    r = client.post("/geometry", json={"geometry": "does.not.exist"})
+    assert r.status_code == 200
+    out = r.json()
+    # Falls back to the first registered example rather than erroring.
+    assert "wires" in out and len(out["wires"]) >= 1
+
+
 # ---------------------------------------------------------------------------
 # _solve_z_only — pure helper inlined from converge's per-point loop.
 # ---------------------------------------------------------------------------

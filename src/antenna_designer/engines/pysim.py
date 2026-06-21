@@ -365,6 +365,27 @@ class PysimEngine(SimulationEngine):
             )
         return out
 
+    def geometry_distribution(self):
+        """Per-wire knot positions with zero currents — a cheap geometry-only
+        snapshot that skips the (possibly slow) MoM solve.
+
+        Same shape as `current_distribution()` so the web layer can pack it
+        with the same helper, but it only reads `_polylines` / `_edge_segments`
+        (both built in `__init__`), so it returns in milliseconds even for
+        large arrays. The UI uses it to draw a newly-selected antenna's shape
+        immediately, then fills in the heatmap/waveforms when the real solve
+        lands."""
+        out = []
+        for w_idx, polyline in enumerate(self._polylines):
+            knots = _polyline_knots(polyline, self._edge_segments[w_idx])
+            out.append(
+                WireCurrents(
+                    knot_positions=np.ascontiguousarray(knots),
+                    knot_currents=np.zeros(knots.shape[0], dtype=np.complex128),
+                )
+            )
+        return out
+
     def _segment_dipoles(self, sim, coeffs):
         """Returns (mid, dr, i_mid) — concatenated per-segment midpoints,
         edge vectors, and midpoint currents from the MoM solution."""

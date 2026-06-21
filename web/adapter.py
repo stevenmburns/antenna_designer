@@ -835,6 +835,37 @@ def _make_example(name: str, cls) -> AntennaExample:
             ]
         return out
 
+    def pysim_geometry(req: dict) -> dict:
+        # Geometry-only snapshot: build the engine (cheap — geometry is
+        # resolved in the constructor) and read its wire knot positions
+        # without solving. The frontend draws this immediately on antenna
+        # selection so a large design's shape shows up right away instead of
+        # waiting tens of seconds for the MoM solve. Mirrors pysim_solve's
+        # builder setup but returns zero currents and omits impedance / far
+        # field (the live solve fills those in).
+        design_freq = float(req.get("design_freq_mhz", _design_freq_default(req)))
+        meas_freq = float(req.get("measurement_freq_mhz", design_freq))
+        builder = _build_builder(cls, req)
+        builder.freq = meas_freq
+        if has_design_freq:
+            builder.design_freq = design_freq
+        eng = _make_pysim_engine(req, builder)
+        geom = eng.geometry_distribution()
+        feed_wire_idx, feed_knot_idx = _feed_indices(eng, geom)
+        return {
+            "geometry": name,
+            "wires": _pack_wires(geom),
+            "feed_wire_index": feed_wire_idx,
+            "feed_knot_index": feed_knot_idx,
+            "feed_position": _feed_position(eng, geom),
+            "design_freq_mhz": design_freq,
+            "measurement_freq_mhz": meas_freq,
+            "lambda_design_m": C_LIGHT / (design_freq * 1e6),
+            "ground": bool(req.get("ground", False)),
+            "z0_ohms": target_z0,
+            "preview": True,
+        }
+
     def pynec_build(req: dict) -> dict:
         # web.pynec_backend.pattern() expects this to return a build
         # dict with at least:
@@ -986,6 +1017,7 @@ def _make_example(name: str, cls) -> AntennaExample:
         label=name.replace("_", " "),
         pysim_solve=pysim_solve,
         pysim_sweep=pysim_sweep,
+        pysim_geometry=pysim_geometry,
         pynec_solve=pynec_solve,
         pynec_build=pynec_build,
         pynec_pattern_excite=pynec_pattern_excite,

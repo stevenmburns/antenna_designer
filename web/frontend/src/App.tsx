@@ -1194,6 +1194,12 @@ export function App() {
   // measFreq still follows designFreq via the linkMeas useEffect below.
 
   const [result, setResult] = useState<SolveResponse | null>(null);
+  // Geometry-only snapshot of the just-selected antenna (wires + feed marker,
+  // no currents), fetched fast so a large design's shape renders immediately
+  // instead of waiting tens of seconds for the full solve. Superseded by
+  // `result` the moment the real solve lands; only consulted while result is
+  // null (i.e. right after an antenna switch).
+  const [preview, setPreview] = useState<SolveResponse | null>(null);
   const [status, setStatus] = useState<"connecting" | "open" | "closed">("connecting");
   const [rttMs, setRttMs] = useState<number | null>(null);
   const [sweep, setSweep] = useState<SweepData | null>(null);
@@ -1267,6 +1273,12 @@ export function App() {
   const patternAbortRef = useRef<AbortController | null>(null);
   const convergeTimerRef = useRef<number | null>(null);
   const convergeAbortRef = useRef<AbortController | null>(null);
+  const previewAbortRef = useRef<AbortController | null>(null);
+  // Latest selected antenna, mirrored into a ref so the (mount-once) WebSocket
+  // onmessage handler can drop responses for an antenna the user already
+  // switched away from. Updated every render — cheap and always current.
+  const geometryRef = useRef(geometry);
+  geometryRef.current = geometry;
 
   const wsRef = useRef<WebSocket | null>(null);
   const inFlightRef = useRef(false);
@@ -1447,6 +1459,39 @@ export function App() {
     designFreq, measFreq,
     groundEnabled, groundFast, heightM,
   ]);
+
+  // Antenna switch: drop the previous antenna's results immediately so nothing
+  // stale lingers (the old geometry/impedance/far-field would otherwise stay on
+  // screen for the tens of seconds a large array takes to solve), then fetch a
+  // fast geometry-only preview so the NEW antenna's shape draws right away. The
+  // live /ws solve (fired by the effect above) replaces the preview with the
+  // real currents/impedance/far-field when it lands. Keyed on `geometry` alone:
+  // param/freq tweaks on the *same* antenna keep updating in place (no flicker),
+  // matching the prior behaviour for the fast designs where this isn't a pain.
+  useEffect(() => {
+    setResult(null);
+    setPreview(null);
+    previewAbortRef.current?.abort();
+    const controller = new AbortController();
+    previewAbortRef.current = controller;
+    fetch("/geometry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildRequest()),
+      signal: controller.signal,
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && data.wires && !controller.signal.aborted) {
+          setPreview(data as SolveResponse);
+        }
+      })
+      .catch(() => {
+        /* aborted or offline — the live solve will still render the antenna */
+      });
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geometry]);
 
   // Debounced sweep across measurement freq. Re-runs whenever any antenna
   // parameter changes. Single-band geometries sweep around designFreq, so
@@ -1826,7 +1871,12 @@ export function App() {
       setRttMs(performance.now() - sendStartRef.current);
       const data: SolveResponse = JSON.parse(ev.data);
       inFlightRef.current = false;
-      setResult(data);
+      // Drop a response for an antenna the user already switched away from: a
+      // slow in-flight solve for the previous selection must not stomp the new
+      // antenna's geometry preview (and briefly show the wrong antenna). The
+      // pending solve below still fires so the current selection gets solved.
+      const stale = !!data.geometry && data.geometry !== geometryRef.current;
+      if (!stale) setResult(data);
       // If controls changed while waiting, fire the next solve immediately.
       if (pendingRef.current) {
         pendingRef.current = null;
@@ -2257,6 +2307,7 @@ export function App() {
                   size={thumbSize}
                   fill={false}
                   result={result}
+                  preview={preview}
                   sweep={sweep}
                   converge={converge}
                   pattern={pattern}
@@ -2345,6 +2396,7 @@ export function App() {
             size={chartSize}
             fill={view === "antenna"}
             result={result}
+            preview={preview}
             sweep={sweep}
             converge={converge}
             pattern={pattern}
@@ -2709,6 +2761,7 @@ function ViewPanel({
   size,
   fill,
   result,
+  preview,
   sweep,
   converge,
   pattern,
@@ -2726,6 +2779,7 @@ function ViewPanel({
   size: number;
   fill: boolean;
   result: SolveResponse | null;
+  preview: SolveResponse | null;
   sweep: SweepData | null;
   converge: ConvergeData | null;
   pattern: PatternData | null;
@@ -2740,14 +2794,18 @@ function ViewPanel({
   multiFeed: boolean;
 }) {
   if (view === "antenna") {
+    // Fall back to the geometry-only preview while the real solve is in
+    // flight, but with the current heatmap/waveform overlays forced off —
+    // the preview has no currents, so only the bare wires + feed are drawn.
+    const showingPreview = !result && !!preview;
     return (
       <div className={fill ? "antenna-fill" : "antenna-thumb"}
            style={fill ? undefined : { width: size, height: size }}>
         <CurrentCanvas
-          result={result}
+          result={result ?? preview}
           projection={cameraProjection}
-          showHeatmap={showHeatmap}
-          showEnvelope={showEnvelope}
+          showHeatmap={showingPreview ? false : showHeatmap}
+          showEnvelope={showingPreview ? false : showEnvelope}
         />
       </div>
     );
