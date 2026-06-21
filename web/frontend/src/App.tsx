@@ -142,6 +142,52 @@ type ExampleDescriptor = {
   sweep_policy: SweepPolicy;
 };
 
+// Design names are `family.design` (e.g. "dipoles.invvee"). The selector
+// groups by that family prefix; this fixes display order + labels and keeps
+// any unknown family rendering last under its bare name.
+const FAMILY_ORDER = [
+  "dipoles", "loops", "verticals", "beams", "wire",
+  "broadband", "multiband", "specialty", "arrays",
+] as const;
+const FAMILY_LABELS: Record<string, string> = {
+  dipoles: "Dipoles", loops: "Loops", verticals: "Verticals", beams: "Beams",
+  wire: "Wire / traveling-wave", broadband: "Broadband", multiband: "Multiband",
+  specialty: "Specialty", arrays: "Arrays",
+};
+// Extra search keywords so cryptic or historically-named designs are findable
+// by something other than their terse name (the old pre-regroup names live
+// here too, since names changed in the family reorg).
+const SEARCH_KEYWORDS: Record<string, string> = {
+  "broadband.g5rv": "doublet ladder line multiband all band",
+  "broadband.t2fd": "terminated tilted folded dipole all band",
+  "broadband.lpda": "log periodic dipole array beam",
+  "broadband.discone": "vhf uhf scanner wideband",
+  "wire.zepp": "end fed zeppelin",
+  "wire.rhombic": "traveling wave terminated",
+  "wire.vbeam": "v beam traveling wave",
+  "wire.lazy_h": "lazy-h collinear",
+  "verticals.jpole": "j-pole slim jim",
+  "verticals.bobtail": "bobtail curtain",
+  "beams.yagi": "yagi-uda beam directional",
+  "beams.moxon": "moxon rectangle beam",
+  "loops.quad": "cubical quad loop",
+};
+
+const familyOf = (name: string): string => name.split(".")[0];
+
+function familyRank(fam: string): number {
+  const i = (FAMILY_ORDER as readonly string[]).indexOf(fam);
+  return i === -1 ? FAMILY_ORDER.length : i;
+}
+
+function matchesQuery(ex: ExampleDescriptor, q: string): boolean {
+  if (!q) return true;
+  const hay = `${ex.name} ${ex.label} ${familyOf(ex.name)} ${
+    SEARCH_KEYWORDS[ex.name] ?? ""
+  }`.toLowerCase();
+  return hay.includes(q);
+}
+
 function applyVisibility(spec: SchemaParamSpec, values: ParamValueBag): boolean {
   const v = spec.visible_when;
   if (!v) return true;
@@ -960,6 +1006,9 @@ export function App() {
   // repeat-count down and back up preserves the values.
   const [examples, setExamples] = useState<ExampleDescriptor[]>([]);
   const [examplesError, setExamplesError] = useState<string | null>(null);
+  // Free-text filter for the antenna selector — matches name / label /
+  // family / keywords so users can find a design without knowing its family.
+  const [geomFilter, setGeomFilter] = useState<string>("");
   const [paramValues, setParamValues] = useState<Record<string, ParamValueBag>>({});
   // Per-geometry variant selection (which `<name>_params` dict on the
   // Builder to seed from). Falls back to the example's variants[0]
@@ -995,17 +1044,45 @@ export function App() {
     return () => { cancelled = true; };
   }, []);
 
-  // Auto-select the first example once /examples resolves, and recover if
+  // Auto-select a sensible default once /examples resolves, and recover if
   // the current selection disappears (e.g. backend dropped an example).
+  // dipoles.invvee is the canonical simple antenna (also the CLI default);
+  // fall back to the first example if it isn't registered.
   useEffect(() => {
     if (examples.length === 0) return;
     if (!examples.some((e) => e.name === geometry)) {
-      setGeometry(examples[0].name);
+      const preferred = examples.find((e) => e.name === "dipoles.invvee");
+      setGeometry((preferred ?? examples[0]).name);
     }
   }, [examples, geometry]);
 
   const currentExample = examples.find((e) => e.name === geometry);
   const currentValues = paramValues[geometry] ?? {};
+
+  // Selector contents: filter by the search box (always keeping the current
+  // selection visible so the <select> value stays valid), then group by
+  // family in FAMILY_ORDER.
+  const geomQuery = geomFilter.trim().toLowerCase();
+  const geomGroups = (() => {
+    const visible = examples.filter(
+      (ex) => ex.name === geometry || matchesQuery(ex, geomQuery),
+    );
+    const byFam = new Map<string, ExampleDescriptor[]>();
+    for (const ex of visible) {
+      const fam = familyOf(ex.name);
+      (byFam.get(fam) ?? byFam.set(fam, []).get(fam)!).push(ex);
+    }
+    return [...byFam.entries()]
+      .map(([fam, items]) => ({
+        fam,
+        label: FAMILY_LABELS[fam] ?? fam,
+        items: items.sort((a, b) => a.label.localeCompare(b.label)),
+      }))
+      .sort((a, b) => familyRank(a.fam) - familyRank(b.fam));
+  })();
+  const geomMatchCount = examples.filter((ex) =>
+    matchesQuery(ex, geomQuery),
+  ).length;
   const currentVariant =
     variantByGeom[geometry] ?? currentExample?.variants?.[0] ?? "default";
 
@@ -2061,22 +2138,45 @@ export function App() {
         </div>
 
         <div className="geometry-select-row">
-          <label className="geometry-select-label" htmlFor="geometry-select">
+          <label className="geometry-select-label" htmlFor="geometry-filter">
             antenna
           </label>
+          <input
+            id="geometry-filter"
+            className="geometry-filter"
+            type="search"
+            placeholder="search name, family, keyword…"
+            value={geomFilter}
+            onChange={(e) => setGeomFilter(e.target.value)}
+            aria-label="filter antennas"
+          />
+        </div>
+        <div className="geometry-select-row">
           <select
             id="geometry-select"
             className="geometry-select"
             value={geometry}
             onChange={(e) => setGeometry(e.target.value)}
+            size={geomQuery ? Math.min(12, geomMatchCount + geomGroups.length) : undefined}
           >
-            {examples.map((ex) => (
-              <option key={ex.name} value={ex.name}>
-                {ex.label}
-              </option>
+            {geomGroups.map((g) => (
+              <optgroup key={g.fam} label={g.label}>
+                {g.items.map((ex) => (
+                  <option key={ex.name} value={ex.name}>
+                    {ex.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
+        {geomQuery && (
+          <div className="geometry-filter-hint">
+            {geomMatchCount === 0
+              ? "no antennas match — showing current selection only"
+              : `${geomMatchCount} match${geomMatchCount === 1 ? "" : "es"}`}
+          </div>
+        )}
         {examplesError && (
           <div className="examples-error">
             Failed to load /examples: {examplesError}
