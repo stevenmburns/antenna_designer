@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/antenna_designer/designs/freq_based/sterba_tl.py: 78%</title>
+    <title>Coverage for src/antenna_designer/designs/freq_based/sterba_tl.py: 98%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>src<span class="sep">/</span>antenna_designer<span class="sep">/</span>designs<span class="sep">/</span>freq_based<span class="sep">/</span>sterba_tl.py</b>:
-            <span class="pc_cov">78%</span>
+            <span class="pc_cov">98%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">63 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">49<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">14<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">62<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">1<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_754900a85f4d789e_trap_dipole_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.14.1">coverage.py v7.14.1</a>,
-            created at 2026-06-21 02:49 +0000
+            created at 2026-06-21 05:28 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -217,28 +217,28 @@
     <p class="pln"><span class="n"><a id="t135" href="#t135">135</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t136" href="#t136">136</a></span><span class="t">    <span class="key">def</span> <span class="nam">build_network</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t137" href="#t137">137</a></span><span class="t">        <span class="com"># build_wires must run first to populate _tl_length / _junctions_y.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t138" href="#t138">138</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">build_wires</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t139" href="#t139">139</a></span><span class="t">        <span class="nam">n</span> <span class="op">=</span> <span class="nam">int</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">n_cells</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t140" href="#t140">140</a></span><span class="t">        <span class="nam">n_sections</span> <span class="op">=</span> <span class="nam">n</span> <span class="op">+</span> <span class="num">2</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t141" href="#t141">141</a></span><span class="t">        <span class="nam">z0</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">z0</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t142" href="#t142">142</a></span><span class="t">        <span class="nam">length</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_tl_length</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t138" href="#t138">138</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">build_wires</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t139" href="#t139">139</a></span><span class="t">        <span class="nam">n</span> <span class="op">=</span> <span class="nam">int</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">n_cells</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t140" href="#t140">140</a></span><span class="t">        <span class="nam">n_sections</span> <span class="op">=</span> <span class="nam">n</span> <span class="op">+</span> <span class="num">2</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t141" href="#t141">141</a></span><span class="t">        <span class="nam">z0</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">z0</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t142" href="#t142">142</a></span><span class="t">        <span class="nam">length</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_tl_length</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t143" href="#t143">143</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t144" href="#t144">144</a></span><span class="t">        <span class="nam">ports</span> <span class="op">=</span> <span class="op">{</span><span class="str">"feed"</span><span class="op">:</span> <span class="nam">PortAtEdge</span><span class="op">(</span><span class="str">"feed"</span><span class="op">)</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t145" href="#t145">145</a></span><span class="t">        <span class="nam">branches</span> <span class="op">=</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t144" href="#t144">144</a></span><span class="t">        <span class="nam">ports</span> <span class="op">=</span> <span class="op">{</span><span class="str">"feed"</span><span class="op">:</span> <span class="nam">PortAtEdge</span><span class="op">(</span><span class="str">"feed"</span><span class="op">)</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t145" href="#t145">145</a></span><span class="t">        <span class="nam">branches</span> <span class="op">=</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t146" href="#t146">146</a></span><span class="t">        <span class="com"># One TL per junction j (1..n_sections-1): connects the right-end</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t147" href="#t147">147</a></span><span class="t">        <span class="com"># port of section j-1 to the left-end port of section j &#8212; the</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t148" href="#t148">148</a></span><span class="t">        <span class="com"># half-wave vertical phasing line, now ideal.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t149" href="#t149">149</a></span><span class="t">        <span class="key">for</span> <span class="nam">j</span> <span class="key">in</span> <span class="nam">range</span><span class="op">(</span><span class="num">1</span><span class="op">,</span> <span class="nam">n_sections</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t150" href="#t150">150</a></span><span class="t">            <span class="nam">a</span><span class="op">,</span> <span class="nam">b</span> <span class="op">=</span> <span class="fst">f"</span><span class="fst">p</span><span class="op">{</span><span class="nam">j</span><span class="op">}</span><span class="fst">_a</span><span class="fst">"</span><span class="op">,</span> <span class="fst">f"</span><span class="fst">p</span><span class="op">{</span><span class="nam">j</span><span class="op">}</span><span class="fst">_b</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t151" href="#t151">151</a></span><span class="t">            <span class="nam">ports</span><span class="op">[</span><span class="nam">a</span><span class="op">]</span> <span class="op">=</span> <span class="nam">PortAtEdge</span><span class="op">(</span><span class="nam">a</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t152" href="#t152">152</a></span><span class="t">            <span class="nam">ports</span><span class="op">[</span><span class="nam">b</span><span class="op">]</span> <span class="op">=</span> <span class="nam">PortAtEdge</span><span class="op">(</span><span class="nam">b</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t153" href="#t153">153</a></span><span class="t">            <span class="nam">branches</span><span class="op">.</span><span class="nam">append</span><span class="op">(</span><span class="nam">TL</span><span class="op">(</span><span class="nam">a</span><span class="op">=</span><span class="nam">a</span><span class="op">,</span> <span class="nam">b</span><span class="op">=</span><span class="nam">b</span><span class="op">,</span> <span class="nam">z0</span><span class="op">=</span><span class="nam">z0</span><span class="op">,</span> <span class="nam">length</span><span class="op">=</span><span class="nam">length</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t149" href="#t149">149</a></span><span class="t">        <span class="key">for</span> <span class="nam">j</span> <span class="key">in</span> <span class="nam">range</span><span class="op">(</span><span class="num">1</span><span class="op">,</span> <span class="nam">n_sections</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t150" href="#t150">150</a></span><span class="t">            <span class="nam">a</span><span class="op">,</span> <span class="nam">b</span> <span class="op">=</span> <span class="fst">f"</span><span class="fst">p</span><span class="op">{</span><span class="nam">j</span><span class="op">}</span><span class="fst">_a</span><span class="fst">"</span><span class="op">,</span> <span class="fst">f"</span><span class="fst">p</span><span class="op">{</span><span class="nam">j</span><span class="op">}</span><span class="fst">_b</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t151" href="#t151">151</a></span><span class="t">            <span class="nam">ports</span><span class="op">[</span><span class="nam">a</span><span class="op">]</span> <span class="op">=</span> <span class="nam">PortAtEdge</span><span class="op">(</span><span class="nam">a</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t152" href="#t152">152</a></span><span class="t">            <span class="nam">ports</span><span class="op">[</span><span class="nam">b</span><span class="op">]</span> <span class="op">=</span> <span class="nam">PortAtEdge</span><span class="op">(</span><span class="nam">b</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t153" href="#t153">153</a></span><span class="t">            <span class="nam">branches</span><span class="op">.</span><span class="nam">append</span><span class="op">(</span><span class="nam">TL</span><span class="op">(</span><span class="nam">a</span><span class="op">=</span><span class="nam">a</span><span class="op">,</span> <span class="nam">b</span><span class="op">=</span><span class="nam">b</span><span class="op">,</span> <span class="nam">z0</span><span class="op">=</span><span class="nam">z0</span><span class="op">,</span> <span class="nam">length</span><span class="op">=</span><span class="nam">length</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t154" href="#t154">154</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t155" href="#t155">155</a></span><span class="t">        <span class="key">return</span> <span class="nam">Network</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t156" href="#t156">156</a></span><span class="t">            <span class="nam">ports</span><span class="op">=</span><span class="nam">ports</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t157" href="#t157">157</a></span><span class="t">            <span class="nam">branches</span><span class="op">=</span><span class="nam">branches</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t158" href="#t158">158</a></span><span class="t">            <span class="nam">sources</span><span class="op">=</span><span class="op">[</span><span class="nam">Driven</span><span class="op">(</span><span class="nam">port</span><span class="op">=</span><span class="str">"feed"</span><span class="op">,</span> <span class="nam">voltage</span><span class="op">=</span><span class="num">1</span> <span class="op">+</span> <span class="num">0j</span><span class="op">)</span><span class="op">]</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t159" href="#t159">159</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t155" href="#t155">155</a></span><span class="t">        <span class="key">return</span> <span class="nam">Network</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t156" href="#t156">156</a></span><span class="t">            <span class="nam">ports</span><span class="op">=</span><span class="nam">ports</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t157" href="#t157">157</a></span><span class="t">            <span class="nam">branches</span><span class="op">=</span><span class="nam">branches</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t158" href="#t158">158</a></span><span class="t">            <span class="nam">sources</span><span class="op">=</span><span class="op">[</span><span class="nam">Driven</span><span class="op">(</span><span class="nam">port</span><span class="op">=</span><span class="str">"feed"</span><span class="op">,</span> <span class="nam">voltage</span><span class="op">=</span><span class="num">1</span> <span class="op">+</span> <span class="num">0j</span><span class="op">)</span><span class="op">]</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t159" href="#t159">159</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -248,7 +248,7 @@
             <a class="nav" href="z_754900a85f4d789e_trap_dipole_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.14.1">coverage.py v7.14.1</a>,
-            created at 2026-06-21 02:49 +0000
+            created at 2026-06-21 05:28 +0000
         </p>
     </div>
 </footer>
