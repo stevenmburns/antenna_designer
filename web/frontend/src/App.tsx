@@ -122,6 +122,11 @@ type ExampleDescriptor = {
   /** The freq this antenna is naturally designed for. Used by the
    *  band-snap-on-example-change effect; null = no preferred freq. */
   default_freq_mhz: number | null;
+  /** Recommended solver backend for this design (e.g. "arrayblock" for grid
+   *  arrays). The active slot's backend is seeded from this on selection
+   *  unless the user has manually picked a backend. null = keep the UI
+   *  default. */
+  default_backend: Backend | null;
   /** True when the Builder has a `design_freq` param that scales
    *  geometry (freq_based.* designs). When false, the design-freq
    *  band-tab row is hidden because dragging it would be a no-op. */
@@ -1114,6 +1119,9 @@ export function App() {
   // and tune each one independently from its gear menu.
   const [activeSlot, setActiveSlot] = useState<Slot>("A");
   const [slots, setSlots] = useState<Record<Slot, SlotConfig>>(DEFAULT_SLOTS);
+  // Set once the user picks a backend by hand; after that we stop auto-seeding
+  // the per-antenna recommended solver so their choice sticks.
+  const backendTouchedRef = useRef(false);
   const [gearOpen, setGearOpen] = useState<Slot | null>(null);
   const activeConfig = slots[activeSlot];
   const backend = activeConfig.backend;
@@ -1222,6 +1230,21 @@ export function App() {
   // Explicit user override sticks until the next geometry change.
   useEffect(() => {
     if (currentExample) setCameraProjection(currentExample.default_view);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentExample?.name]);
+
+  // Seed the active slot's solver from the example's recommendation on antenna
+  // selection — e.g. grid arrays default to the array-block accelerator, which
+  // is ~8x faster than the dense Triangular default. Only *upgrades* a dense
+  // pysim backend; an explicit PyNEC pick, an already-accelerated backend, or
+  // any hand-picked choice (backendTouchedRef) is left untouched.
+  useEffect(() => {
+    const rec = currentExample?.default_backend;
+    if (!rec || backendTouchedRef.current || !BACKEND_ORDER.includes(rec)) return;
+    const cur = slots[activeSlot].backend;
+    const upgradable =
+      cur === "triangular" || cur === "sinusoidal" || cur === "bspline";
+    if (upgradable && cur !== rec) setSlotBackend(activeSlot, rec);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentExample?.name]);
 
@@ -2298,7 +2321,10 @@ export function App() {
             slot={gearOpen}
             backend={slots[gearOpen].backend}
             opts={slots[gearOpen].opts}
-            onChangeBackend={(b) => setSlotBackend(gearOpen, b)}
+            onChangeBackend={(b) => {
+              backendTouchedRef.current = true;
+              setSlotBackend(gearOpen, b);
+            }}
             onPatch={(patch) => updateSlotOpts(gearOpen, patch)}
             onReset={() => resetSlot(gearOpen)}
             onClose={() => setGearOpen(null)}

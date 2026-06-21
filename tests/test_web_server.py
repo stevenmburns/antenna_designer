@@ -483,6 +483,20 @@ def test_geometry_endpoint_returns_wires_without_solving(client: TestClient):
     assert "feed_position" in out
 
 
+def test_examples_carry_default_backend(client: TestClient):
+    # Every example exposes default_backend (str | null). Grid arrays recommend
+    # the array-block accelerator; single-element designs keep the UI default
+    # (null) so their basis/results are unchanged.
+    payload = client.get("/examples").json()
+    by_name = {e["name"]: e for e in payload["examples"]}
+    for e in payload["examples"]:
+        assert "default_backend" in e
+        assert e["default_backend"] in (None, "arrayblock")
+    assert by_name["bowtiearray2x4"]["default_backend"] == "arrayblock"
+    # A plain single-element design keeps the default.
+    assert by_name["bowtie"]["default_backend"] is None
+
+
 def test_geometry_endpoint_falls_back_when_geometry_unknown(client: TestClient):
     r = client.post("/geometry", json={"geometry": "does.not.exist"})
     assert r.status_code == 200

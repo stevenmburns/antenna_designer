@@ -810,6 +810,7 @@ def examples_endpoint():
                 ),
                 "default_view": ex.default_view,
                 "default_freq_mhz": ex.default_freq_mhz,
+                "default_backend": ex.default_backend,
                 "has_design_freq": ex.has_design_freq,
                 "variants": list(ex.variants),
                 "variant_values": dict(ex.variant_values),
