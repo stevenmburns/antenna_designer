@@ -86,8 +86,6 @@ class Builder(AntennaBuilder):
                     "feed_height_frac": {
                         "min": 0.1,
                         "max": 0.7,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "length_factor": {
                         "min": 0.9,

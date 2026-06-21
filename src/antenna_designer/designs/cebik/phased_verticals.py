@@ -67,14 +67,10 @@ class Builder(AntennaBuilder):
                     "elem_frac": {
                         "min": 0.4,
                         "max": 0.6,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "spacing_frac": {
                         "min": 0.15,
                         "max": 0.35,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                 }
             ),

@@ -56,8 +56,6 @@ class Builder(AntennaBuilder):
                     "leg_frac": {
                         "min": 0.75,
                         "max": 2.0,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "half_apex_deg": {
                         "min": 20.0,

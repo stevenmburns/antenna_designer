@@ -64,8 +64,6 @@ class Builder(AntennaBuilder):
                     "cone_frac": {
                         "min": 0.2,
                         "max": 0.35,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "disc_ratio": {
                         "min": 0.5,

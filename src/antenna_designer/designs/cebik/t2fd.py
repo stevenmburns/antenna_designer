@@ -67,8 +67,6 @@ class Builder(AntennaBuilder):
                     "spacing_frac": {
                         "min": 0.004,
                         "max": 0.03,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "tilt_deg": {"min": 0.0, "max": 45.0, "step": 1.0, "precision": 1},
                     "term_r": {"min": 200.0, "max": 800.0, "step": 10.0},

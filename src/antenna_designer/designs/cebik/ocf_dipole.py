@@ -50,14 +50,10 @@ class Builder(AntennaBuilder):
                     "length_frac": {
                         "min": 0.44,
                         "max": 0.52,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "feed_frac": {
                         "min": 0.1,
                         "max": 0.5,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                 }
             ),

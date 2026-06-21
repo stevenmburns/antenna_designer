@@ -67,8 +67,6 @@ class Builder(AntennaBuilder):
                     "top_frac": {
                         "min": 1.0,
                         "max": 2.0,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                     "z0_match": {
                         "min": 200.0,
@@ -79,8 +77,6 @@ class Builder(AntennaBuilder):
                     "match_len_frac": {
                         "min": 0.1,
                         "max": 0.9,
-                        "step": 0.001,
-                        "precision": 4,
                     },
                 }
             ),

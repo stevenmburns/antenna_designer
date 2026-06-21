@@ -79,8 +79,8 @@ class Builder(AntennaBuilder):
                     "target_z0": 50.0,
                     "default_view": "xy",
                     "n_elements": {"min": 4, "max": 16, "step": 1},
-                    "tau": {"min": 0.8, "max": 0.95, "step": 0.001, "precision": 4},
-                    "sigma": {"min": 0.03, "max": 0.18, "step": 0.001, "precision": 4},
+                    "tau": {"min": 0.8, "max": 0.95},
+                    "sigma": {"min": 0.03, "max": 0.18},
                     "length_factor": {
                         "min": 0.85,
                         "max": 1.05,
