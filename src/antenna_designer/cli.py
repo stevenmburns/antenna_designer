@@ -81,13 +81,23 @@ def resolve_class(s):
         return res
 
     # Designs live under a family subpackage (designs/<family>/<name>.py).
-    # Basenames are globally unique, so a bare name like "moxon" can still be
-    # resolved by searching each family — the family prefix ("beams.moxon")
-    # is accepted by the branch above but not required.
+    # A bare name like "moxon" can still be resolved by searching each family
+    # — the family prefix ("beams.moxon") is accepted by the branch above but
+    # not required. Basenames are unique today, but if two families ever
+    # define the same name, refuse to guess: report both and make the caller
+    # qualify it (the qualified form resolves in the branch above).
+    matches = []
     for fam in _design_families():
         cand = ["antenna_designer", "designs", fam] + lst
         if (res := try_to_resolve_list(cand)) is not None:
-            return res
+            matches.append((fam, res))
+    if len(matches) > 1:
+        qualified = ", ".join(f"{fam}.{'.'.join(lst)}" for fam, _ in matches)
+        raise ValueError(
+            f"ambiguous design {s!r}: matches {qualified} — qualify it with the family"
+        )
+    if matches:
+        return matches[0][1]
 
     return None
 

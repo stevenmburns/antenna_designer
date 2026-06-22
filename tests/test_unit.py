@@ -1,3 +1,5 @@
+import pytest
+
 from antenna_designer.designs.dipoles.invvee import Builder
 # from icecream import ic
 
@@ -27,6 +29,37 @@ def test_resolve_class():
     assert check(resolve_class("subdir.moxon.Builder"))
 
     assert check(resolve_class("dipoles.invvee"))
+
+
+def test_resolve_class_ambiguous_bare_name(monkeypatch):
+    """A bare name that resolves under more than one family must error with
+    the candidates rather than silently picking the first."""
+    import importlib
+    import types as _types
+
+    # The package re-exports a cli() function, shadowing the submodule
+    # attribute — fetch the actual module object explicitly.
+    cli = importlib.import_module("antenna_designer.cli")
+
+    monkeypatch.setattr(cli, "_design_families", lambda: ["fam_a", "fam_b"])
+
+    class _B:
+        pass
+
+    def fake_import(name):
+        if name in (
+            "antenna_designer.designs.fam_a.dupe",
+            "antenna_designer.designs.fam_b.dupe",
+        ):
+            m = _types.ModuleType(name)
+            m.Builder = _B
+            return m
+        raise ModuleNotFoundError(name)
+
+    monkeypatch.setattr(cli, "import_module", fake_import)
+
+    with pytest.raises(ValueError, match="ambiguous"):
+        cli.resolve_class("dupe")
 
 
 def test_unit_params():

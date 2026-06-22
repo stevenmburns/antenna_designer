@@ -142,17 +142,21 @@ type ExampleDescriptor = {
   sweep_policy: SweepPolicy;
 };
 
+// A user design that failed to load, reported by GET /examples.
+type DesignLoadError = { name: string; file: string; message: string };
+
 // Design names are `family.design` (e.g. "dipoles.invvee"). The selector
 // groups by that family prefix; this fixes display order + labels and keeps
 // any unknown family rendering last under its bare name.
 const FAMILY_ORDER = [
-  "dipoles", "loops", "verticals", "beams", "wire",
+  "user", "dipoles", "loops", "verticals", "beams", "wire",
   "broadband", "multiband", "specialty", "arrays",
 ] as const;
 const FAMILY_LABELS: Record<string, string> = {
-  dipoles: "Dipoles", loops: "Loops", verticals: "Verticals", beams: "Beams",
-  wire: "Wire / traveling-wave", broadband: "Broadband", multiband: "Multiband",
-  specialty: "Specialty", arrays: "Arrays",
+  user: "Your designs", dipoles: "Dipoles", loops: "Loops",
+  verticals: "Verticals", beams: "Beams", wire: "Wire / traveling-wave",
+  broadband: "Broadband", multiband: "Multiband", specialty: "Specialty",
+  arrays: "Arrays",
 };
 // Extra search keywords so cryptic or historically-named designs are findable
 // by something other than their terse name (the old pre-regroup names live
@@ -1006,6 +1010,9 @@ export function App() {
   // repeat-count down and back up preserves the values.
   const [examples, setExamples] = useState<ExampleDescriptor[]>([]);
   const [examplesError, setExamplesError] = useState<string | null>(null);
+  // User designs that failed to load (bad Python, no Builder, geometry error).
+  // Surfaced from /examples so the author / Claude can see and fix them.
+  const [loadErrors, setLoadErrors] = useState<DesignLoadError[]>([]);
   // Free-text filter for the antenna selector — matches name / label /
   // family / keywords so users can find a design without knowing its family.
   const [geomFilter, setGeomFilter] = useState<string>("");
@@ -1025,6 +1032,7 @@ export function App() {
         const list: ExampleDescriptor[] = j.examples ?? [];
         setExamples(list);
         setExamplesError(null);
+        setLoadErrors(Array.isArray(j.errors) ? j.errors : []);
         // Walk each example's schema and pre-seed defaults — including
         // pre-allocated group instance arrays — so the sliders have
         // something to render against on first show.
@@ -2180,6 +2188,25 @@ export function App() {
         {examplesError && (
           <div className="examples-error">
             Failed to load /examples: {examplesError}
+          </div>
+        )}
+        {loadErrors.length > 0 && (
+          <div className="design-load-errors" role="alert">
+            <div className="design-load-errors-title">
+              {loadErrors.length} design
+              {loadErrors.length === 1 ? "" : "s"} failed to load
+            </div>
+            <ul>
+              {loadErrors.map((err) => (
+                <li key={err.name}>
+                  <code>{err.name}</code> — {err.message}
+                  <span className="design-load-errors-file">{err.file}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="design-load-errors-hint">
+              Fix the file and refresh. See CLAUDE.md in your designs folder.
+            </div>
           </div>
         )}
 

@@ -109,8 +109,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from starlette.websockets import WebSocketState
 
-from . import pynec_backend
+from . import pynec_backend, user_designs
 from .examples import REGISTRY as EXAMPLES
+
+# Scaffold the user-design folder (TEMPLATE.py + CLAUDE.md on first run) and
+# load any existing user designs into the registry at startup. They are also
+# refreshed on every GET /examples so edits appear without a restart.
+user_designs.ensure_scaffold()
+user_designs.refresh()
 
 
 # Target per-chunk wall time for the adaptive pysim /sweep chunking. The
@@ -710,7 +716,11 @@ def examples_endpoint():
     its `multi_feed` flag (affects the response handling for arrays of
     feeds) plus a result_schema that may mix scalar ResultFieldSpec
     rows with ResultGroupSpec repeat groups.
+
+    Reloads user designs first (live edits without a restart) and returns
+    any that failed to load under `errors`, so the UI can show them.
     """
+    load_errors = user_designs.refresh()
 
     def _serialize_schema_item(item) -> dict:
         # Discriminate by attribute: ParamGroupSpec has `params`, ParamSpec
@@ -812,7 +822,7 @@ def examples_endpoint():
             }
         )
     out.sort(key=lambda e: e["label"])
-    return {"examples": out}
+    return {"examples": out, "errors": load_errors}
 
 
 @app.websocket("/ws")

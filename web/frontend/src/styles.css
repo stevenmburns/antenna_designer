@@ -428,6 +428,48 @@ button:focus-visible,
   font-size: var(--text-sm);
 }
 
+.design-load-errors {
+  margin: var(--space-4) 0;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--r-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.design-load-errors-title {
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.design-load-errors ul {
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.design-load-errors li {
+  margin: var(--space-2) 0;
+}
+
+.design-load-errors code {
+  font-family: var(--font-mono);
+}
+
+.design-load-errors-file {
+  display: block;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  word-break: break-all;
+}
+
+.design-load-errors-hint {
+  margin-top: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
 .geometry-tabs button {
   flex: 1;
   background: var(--inset);
