@@ -74,7 +74,10 @@ jobs:
       # catalogs). Keeps representative engine/solver coverage + all
       # load/schema/unit tests. No coverage instrumentation on PRs.
       if: github.event_name == 'pull_request'
-      run: pytest -m "not antenna_computation_check" tests/
+      # `python -m pytest` (not bare `pytest`) so CWD is on sys.path and the
+      # top-level `web/` package imports — same reason the main-lane command
+      # below uses the `-m pytest` form.
+      run: python -m pytest -m "not antenna_computation_check" tests/
 
     - name: Full suite + coverage (push to main only)
       # The complete suite, including the per-design solver catalogs, with
