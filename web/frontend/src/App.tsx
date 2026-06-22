@@ -579,6 +579,11 @@ type SolveResponse = {
    *  prefer them over the example fields when present. */
   multi_feed?: boolean;
   default_view?: Projection;
+  /** Recommended solver backend for this design (e.g. "arrayblock" for grid
+   *  arrays). Carried on the geometry preview so the frontend can seed the
+   *  backend from it and *then* fire the first solve, instead of the descriptor
+   *  racing the preview. Absent / null = no recommendation. */
+  default_backend?: Backend | null;
   /** Set when the solve/geometry request failed — e.g. a user design's
    *  build_wires() raised. Carries a short, formatted message (type + file +
    *  line). Mutually exclusive with a normal result payload. */
@@ -1309,6 +1314,12 @@ export function App() {
   // selection now (the builder isn't run at registration), so this banner is
   // where they surface. Cleared on every antenna switch.
   const [solveError, setSolveError] = useState<string | null>(null);
+  // Name of the geometry whose preview has landed (and seeded the backend).
+  // Gates the first solve after an antenna switch: we want preview → seed
+  // backend → solve, not preview racing the solve. Reset to null on every
+  // switch; the preview's .then sets it. Slider drags on the *same* antenna
+  // keep solving freely (it stays equal to `geometry`).
+  const [previewReady, setPreviewReady] = useState<string | null>(null);
   // Whether to render the per-feed (multi-feed) UI. Prefer the value the
   // server folds into the live solve / geometry response — authoritative for
   // user designs, which derive it lazily — and fall back to the example
@@ -1350,23 +1361,27 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentExample?.name]);
 
-  // Seed the active slot's solver from the example's recommendation on antenna
-  // selection — e.g. grid arrays default to the array-block accelerator, which
-  // is ~8x faster than the dense Triangular default. Only *upgrades* a dense
-  // pysim backend; an explicit PyNEC pick, an already-accelerated backend, or
-  // any hand-picked choice (backendTouchedRef) is left untouched.
-  useEffect(() => {
-    const rec = currentExample?.default_backend;
+  // Seed the active slot's solver from a design's recommendation — e.g. grid
+  // arrays default to the array-block accelerator, ~8x faster than the dense
+  // Triangular default. Called from the geometry preview's .then (which carries
+  // `default_backend`), so the backend is in place before the gated first solve
+  // fires — no descriptor-vs-preview race, and no dependency on /examples
+  // having the value (it works the same if a design's hints go lazy). Only
+  // *upgrades* a dense pysim backend; an explicit PyNEC pick, an already-
+  // accelerated backend, or any hand-picked choice (backendTouchedRef) is left
+  // untouched. The decision reads `prev` inside the updater so it's never stale.
+  function seedBackendFromPreview(rec: Backend | null | undefined) {
     if (!rec || backendTouchedRef.current || !BACKEND_ORDER.includes(rec)) return;
-    const cur = slots[activeSlot].backend;
-    const upgradable =
-      cur === "triangular" || cur === "sinusoidal" || cur === "bspline";
-    if (upgradable && cur !== rec) {
+    setSlots((prev) => {
+      const cur = prev[activeSlot].backend;
+      const upgradable =
+        cur === "triangular" || cur === "sinusoidal" || cur === "bspline";
+      if (!upgradable || cur === rec) return prev;
       // Reset to the recommended backend's *own* defaults rather than carrying
       // over the dense slot's segment count — arrays want array-block's 21
       // segs/wire (converged, correct d=2 parity), not the inherited 40. Keep
       // the user's wire radius.
-      setSlots((prev) => ({
+      return {
         ...prev,
         [activeSlot]: {
           backend: rec,
@@ -1375,10 +1390,9 @@ export function App() {
             wireRadius: prev[activeSlot].opts.wireRadius,
           } as BackendOptsMap[Backend],
         },
-      }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentExample?.name]);
+      };
+    });
+  }
 
   // Schema-driven design-freq link: when the active example has any
   // leaf marked `linked_to_design_freq`, sync the global designFreq
@@ -1607,11 +1621,16 @@ export function App() {
   const controlsRef = useRef<SolveRequest>(buildRequest());
 
   useEffect(() => {
+    // Hold the first solve after an antenna switch until that antenna's preview
+    // has landed and seeded the backend (previewReady === geometry). Param/freq
+    // tweaks on the *same* antenna keep solving freely — previewReady stays
+    // equal to geometry until the next switch resets it to null.
+    if (previewReady !== geometry) return;
     controlsRef.current = buildRequest();
     requestSolve();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    geometry, backend, backendOptsKey,
+    geometry, previewReady, backend, backendOptsKey,
     currentValuesKey,
     designFreq, measFreq,
     groundEnabled, groundFast,
@@ -1629,9 +1648,13 @@ export function App() {
     setResult(null);
     setPreview(null);
     setSolveError(null);
+    setPreviewReady(null); // close the solve gate until this antenna's preview lands
     previewAbortRef.current?.abort();
     const controller = new AbortController();
     previewAbortRef.current = controller;
+    // Capture the geometry this run is for, so the gate is released for the
+    // right antenna even if `geometry` changed by the time the fetch resolves.
+    const forGeometry = geometry;
     fetch("/geometry", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1640,15 +1663,15 @@ export function App() {
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (!data || controller.signal.aborted) return;
-        if (data.error) {
-          // build_wires raised while building the preview — surface it; the
-          // live solve will report the same thing, but the preview gets here
-          // first so the user sees the cause without a blank stage.
+        if (controller.signal.aborted) return;
+        if (data && data.error) {
+          // build_wires raised while building the preview — surface it and
+          // leave the gate closed: a live solve would just reproduce the same
+          // error, so there's nothing to render. (The error banner shows it.)
           setSolveError(data.error as string);
           return;
         }
-        if (data.wires) {
+        if (data && data.wires) {
           setPreview(data as SolveResponse);
           // A deferred (user) design derives its natural view only when the
           // builder first runs — which is this preview. Snap the camera to it
@@ -1657,10 +1680,21 @@ export function App() {
           // from currentExample.default_view, so there's no visible flip.
           const dv = (data as SolveResponse).default_view;
           if (dv) setCameraProjection(dv);
+          // Seed the solver backend from the preview *before* releasing the
+          // gate, batched in this same commit, so the first solve reads the
+          // seeded backend (arrays go straight to array-block, never a slow
+          // dense first solve).
+          seedBackendFromPreview((data as SolveResponse).default_backend);
         }
+        // Release the gate: preview resolved (with or without drawable wires,
+        // e.g. an `available:false` geometry) — let the first solve fire.
+        setPreviewReady(forGeometry);
       })
       .catch(() => {
-        /* aborted or offline — the live solve will still render the antenna */
+        // Aborted or offline. If this run wasn't superseded, still release the
+        // gate so the live solve renders the antenna (its own error path
+        // surfaces anything that goes wrong there).
+        if (!controller.signal.aborted) setPreviewReady(forGeometry);
       });
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps

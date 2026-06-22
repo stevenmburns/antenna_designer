@@ -684,6 +684,16 @@ def test_solve_response_carries_z0_ohms_for_array_design():
     assert out["z0_ohms"] == 100.0
 
 
+def test_geometry_preview_carries_default_backend(client: TestClient):
+    # The frontend seeds its solver from the preview's default_backend (and
+    # then fires the first solve), so the recommendation must ride on the
+    # /geometry response — array-block for a grid array, None otherwise.
+    arr = client.post("/geometry", json={"geometry": "arrays.bowtiearray2x4"}).json()
+    assert arr["default_backend"] == "arrayblock"
+    dip = client.post("/geometry", json={"geometry": "dipoles.invvee"}).json()
+    assert dip["default_backend"] is None
+
+
 def test_phase_param_slider_range_spans_full_unit_circle():
     # phase_lr / phase_tb default to 0.0; without the adapter's
     # phase_*-name special case the auto-derive falls back to (-1, 1)
