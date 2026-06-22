@@ -17,6 +17,14 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
+[project.optional-dependencies]
+# Web UI: the FastAPI server (web.server:app) needs an ASGI server with
+# WebSocket support — the live-solve channel at /ws is a WS upgrade.
+# Bare `uvicorn` ships without ws support and fails the handshake at
+# runtime; `uvicorn[standard]` pulls in websockets + httptools + uvloop
+# (uvloop is no-op on Windows).
+web = ["uvicorn[standard]"]
+
 [project.urls]
 Homepage = "https://github.com/stevenmburns/antenna_designer"
 Issues = "https://github.com/stevenmburns/antenna_designer/issues"

@@ -10,6 +10,7 @@ knots with per-knot complex currents and the feed lives on one of the wires —
 so the frontend draws every geometry the same way.
 
 Run: uvicorn web.server:app --reload
+(needs uvicorn[standard] — /ws is a WebSocket upgrade.)
 """
 
 from __future__ import annotations
