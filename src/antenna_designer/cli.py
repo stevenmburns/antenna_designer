@@ -11,6 +11,7 @@ from . import (
     optimize,
 )
 from .engines import PyNECEngine, PysimEngine
+from .user_designs import USER_NS, resolve_user_design
 
 from pysim import (
     TriangularPySim,
@@ -98,6 +99,14 @@ def resolve_class(s):
         )
     if matches:
         return matches[0][1]
+
+    # User-authored designs (local plugin folder), addressed explicitly as
+    # "user.<name>". Kept to its own namespace on purpose: a bare name never
+    # resolves to a user file, so a user design can't shadow a built-in. Load
+    # errors propagate so someone debugging their own file sees the real cause.
+    if len(lst) == 2 and lst[0] == USER_NS:
+        if (res := resolve_user_design(lst[1])) is not None:
+            return res
 
     return None
 
