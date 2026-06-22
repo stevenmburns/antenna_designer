@@ -26,6 +26,11 @@ def test_resolve_class():
     assert check(resolve_class("freq_based_dipole"))
     assert not check(resolve_class("fail"))
 
+    # A bare, unqualified basename still resolves via the family-subpackage
+    # fallback (interactive convenience). Integration tests use the explicit
+    # "family.name" form; this keeps the fallback itself covered.
+    assert check(resolve_class("hexbeam"))
+
     assert check(resolve_class("subdir.moxon.Builder"))
 
     assert check(resolve_class("dipoles.invvee"))
