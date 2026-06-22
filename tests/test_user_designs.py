@@ -65,13 +65,18 @@ def test_valid_design_registers(userdir):
     assert REGISTRY["user.my_dipole"].name == "user.my_dipole"
 
 
-def test_broken_geometry_reports_error_without_crashing(userdir):
+def test_broken_geometry_loads_but_fails_on_solve(userdir):
+    # build_wires is no longer run at registration (lazy: the builder only runs
+    # when the design is selected/solved), so a geometry error does NOT block
+    # loading — the design registers, and the error surfaces on solve instead
+    # of in the load panel. Load-level errors (syntax/import/no-Builder) are
+    # still caught at registration; see the tests below.
     (userdir / "oops.py").write_text(BROKEN_BUILD)
     errors = user_designs.refresh()
-    assert "user.oops" not in REGISTRY
-    assert len(errors) == 1
-    assert errors[0]["name"] == "user.oops"
-    assert "NameError" in errors[0]["message"]
+    assert errors == []
+    assert "user.oops" in REGISTRY
+    with pytest.raises(NameError):
+        REGISTRY["user.oops"].pysim_solve({})
 
 
 def test_missing_builder_reports_error(userdir):
@@ -82,8 +87,9 @@ def test_missing_builder_reports_error(userdir):
 
 
 def test_one_bad_design_does_not_block_a_good_one(userdir):
+    # A load-level failure (no Builder) is isolated to its own file.
     (userdir / "good.py").write_text(VALID)
-    (userdir / "bad.py").write_text(BROKEN_BUILD)
+    (userdir / "bad.py").write_text(NO_BUILDER)
     errors = user_designs.refresh()
     assert "user.good" in REGISTRY
     assert {e["name"] for e in errors} == {"user.bad"}
@@ -95,7 +101,7 @@ def test_reload_picks_up_edits(userdir):
     assert user_designs.refresh() == []
     assert "user.d" in REGISTRY
 
-    f.write_text(BROKEN_BUILD)  # break it
+    f.write_text(NO_BUILDER)  # break it at load level (no Builder)
     errors = user_designs.refresh()
     assert "user.d" not in REGISTRY
     assert errors and errors[0]["name"] == "user.d"

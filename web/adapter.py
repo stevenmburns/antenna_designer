@@ -809,13 +809,45 @@ def _recommended_backend(cls) -> str | None:
     return "arrayblock" if len(sigs) < n_elem else None
 
 
-def _make_example(name: str, cls) -> AntennaExample:
+def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExample:
     dp = dict(cls.default_params)
     ui = dict(dp.get("ui_params") or {})
 
-    default_view = _ui_scalar(dp, "default_view", _auto_default_view(cls))
-    target_z0 = float(_ui_scalar(dp, "target_z0", _auto_target_z0(cls)))
-    multi_feed = bool(_ui_scalar(dp, "multi_feed", _auto_multi_feed(cls)))
+    # UI hints that need the built geometry — multi_feed, default_view, the
+    # array target_z0, and the recommended array-block backend — are derived
+    # by running the builder. They're computed once and memoised in `hints()`.
+    #
+    # Built-in designs prime them eagerly at registration (defer_hints=False)
+    # so /examples and the array-block seed are correct up front. User designs
+    # defer them (defer_hints=True): a slow or hanging build_wires never runs at
+    # startup or on a page refresh — only when that design is actually selected
+    # and solved, where the builder runs anyway and the closures fold the hints
+    # into the solve/geometry response. A design can pin any hint statically in
+    # ui_params to override the derived value.
+    view_override = _ui_scalar(dp, "default_view", None)
+    z0_override = _ui_scalar(dp, "target_z0", None)
+    multi_feed_override = _ui_scalar(dp, "multi_feed", None)
+
+    _hints: dict[str, Any] = {}
+
+    def hints() -> dict[str, Any]:
+        if not _hints:
+            _hints["default_view"] = (
+                str(view_override)
+                if view_override is not None
+                else _auto_default_view(cls)
+            )
+            _hints["target_z0"] = float(
+                z0_override if z0_override is not None else _auto_target_z0(cls)
+            )
+            _hints["multi_feed"] = bool(
+                multi_feed_override
+                if multi_feed_override is not None
+                else _auto_multi_feed(cls)
+            )
+            _hints["default_backend"] = _recommended_backend(cls)
+        return _hints
+
     meas_range = (
         ui.get("meas_freq_range")
         if not isinstance(ui.get("meas_freq_range"), dict)
@@ -901,7 +933,12 @@ def _make_example(name: str, cls) -> AntennaExample:
             "height_m": 0.0,
             "ground_eps_r": _PEC_GROUND_EPS_R,
             "ground_sigma": _PEC_GROUND_SIGMA,
-            "z0_ohms": target_z0,
+            "z0_ohms": hints()["target_z0"],
+            # Geometry-derived UI hints, folded into the response so user
+            # designs (which defer them) get correct values the moment they're
+            # selected, without running the builder at registration.
+            "multi_feed": hints()["multi_feed"],
+            "default_view": hints()["default_view"],
             # Fraction of input power actually radiated (1.0 unless the design
             # has resistive loads, e.g. a terminated rhombic / T2FD). The
             # server's far-field normaliser multiplies directivity by this so
@@ -909,7 +946,7 @@ def _make_example(name: str, cls) -> AntennaExample:
             # populated it on the engine.
             "radiation_efficiency": float(getattr(eng, "_excited_efficiency", 1.0)),
         }
-        if multi_feed and len(zs) > 1:
+        if hints()["multi_feed"] and len(zs) > 1:
             # Pull per-feed drive voltages off the engine so the frontend
             # can render each feed's phase indicator. PysimEngine stores
             # _feeds = [(polyline_idx, arclength, voltage)]; fall back to
@@ -954,7 +991,12 @@ def _make_example(name: str, cls) -> AntennaExample:
             "measurement_freq_mhz": meas_freq,
             "lambda_design_m": C_LIGHT / (design_freq * 1e6),
             "ground": bool(req.get("ground", False)),
-            "z0_ohms": target_z0,
+            "z0_ohms": hints()["target_z0"],
+            # Carry the geometry-derived hints on the fast preview too: it's the
+            # first request fired on selection, so a deferred user design gets
+            # its multi_feed / default_view here, before the live solve lands.
+            "multi_feed": hints()["multi_feed"],
+            "default_view": hints()["default_view"],
             "preview": True,
         }
 
@@ -1043,13 +1085,15 @@ def _make_example(name: str, cls) -> AntennaExample:
             "height_m": 0.0,
             "ground_eps_r": _PEC_GROUND_EPS_R,
             "ground_sigma": _PEC_GROUND_SIGMA,
-            "z0_ohms": target_z0,
+            "z0_ohms": hints()["target_z0"],
+            "multi_feed": hints()["multi_feed"],
+            "default_view": hints()["default_view"],
             # Same directivity->gain factor as the pysim path, so switching
             # engines in the UI keeps the far-field plot meaning GAIN.
             # current_distribution() set it from the solved load currents.
             "radiation_efficiency": float(getattr(eng, "_excited_efficiency", 1.0)),
         }
-        if multi_feed and len(zs) > 1:
+        if hints()["multi_feed"] and len(zs) > 1:
             # PyNECEngine.excitation_pairs is [(tag, sub_seg, voltage)];
             # pull the voltage off each so per-feed phase comes through.
             voltages = [v for _t, _s, v in (eng.excitation_pairs or [])]
@@ -1098,11 +1142,27 @@ def _make_example(name: str, cls) -> AntennaExample:
         primary = zs[:, 0]
         re = primary.real.tolist()
         im = primary.imag.tolist()
-        if multi_feed and zs.shape[1] > 1:
+        if hints()["multi_feed"] and zs.shape[1] > 1:
             feeds_re = zs.real.tolist()  # (n_freqs, n_feeds) list of lists
             feeds_im = zs.imag.tolist()
             return re, im, feeds_re, feeds_im
         return re, im
+
+    # Static fields served by /examples. Built-ins prime hints() now (eager,
+    # unchanged behaviour); user designs ship provisional values — overrides if
+    # declared, else neutral defaults — and the real values arrive with the
+    # first solve/geometry response (see the closures above).
+    if defer_hints:
+        field_multi_feed = (
+            bool(multi_feed_override) if multi_feed_override is not None else False
+        )
+        field_default_view = str(view_override) if view_override is not None else "xy"
+        field_default_backend = None
+    else:
+        h = hints()
+        field_multi_feed = h["multi_feed"]
+        field_default_view = h["default_view"]
+        field_default_backend = h["default_backend"]
 
     return AntennaExample(
         name=name,
@@ -1110,17 +1170,17 @@ def _make_example(name: str, cls) -> AntennaExample:
         pysim_solve=pysim_solve,
         pysim_sweep=pysim_sweep,
         pysim_geometry=pysim_geometry,
-        default_backend=_recommended_backend(cls),
+        default_backend=field_default_backend,
         pynec_solve=pynec_solve,
         pynec_build=pynec_build,
         pynec_pattern_excite=pynec_pattern_excite,
         nec_export=nec_export,
-        multi_feed=multi_feed,
+        multi_feed=field_multi_feed,
         param_schema=param_schema,
         bands=bands,
         meas_freq_range_mhz=tuple(meas_range) if meas_range else None,
         sweep_policy=sweep_policy,
-        default_view=default_view,
+        default_view=field_default_view,
         default_freq_mhz=float(dp["freq"]) if "freq" in dp else None,
         has_design_freq=has_design_freq,
         variants=variants,
