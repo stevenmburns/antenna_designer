@@ -573,6 +573,12 @@ type SolveResponse = {
    *  50 Ω when the server doesn't supply one. Bowtie array returns 100 Ω
    *  because each element is designed for a 100 Ω feedline. */
   z0_ohms?: number;
+  /** Geometry-derived UI hints folded into the solve/geometry response.
+   *  User designs defer these (the builder runs lazily on selection), so the
+   *  authoritative values arrive here rather than on the /examples descriptor;
+   *  prefer them over the example fields when present. */
+  multi_feed?: boolean;
+  default_view?: Projection;
 };
 
 // Backend selector — PySim model variants + PyNEC. Per-backend
@@ -1294,6 +1300,15 @@ export function App() {
   // `result` the moment the real solve lands; only consulted while result is
   // null (i.e. right after an antenna switch).
   const [preview, setPreview] = useState<SolveResponse | null>(null);
+  // Whether to render the per-feed (multi-feed) UI. Prefer the value the
+  // server folds into the live solve / geometry response — authoritative for
+  // user designs, which derive it lazily — and fall back to the example
+  // descriptor (eager built-ins) before the first response lands.
+  const effectiveMultiFeed =
+    result?.multi_feed ??
+    preview?.multi_feed ??
+    currentExample?.multi_feed ??
+    false;
   const [status, setStatus] = useState<"connecting" | "open" | "closed">("connecting");
   const [rttMs, setRttMs] = useState<number | null>(null);
   // True whenever a main solve is outstanding (in flight or queued) — i.e. the
@@ -1617,6 +1632,13 @@ export function App() {
       .then((data) => {
         if (data && data.wires && !controller.signal.aborted) {
           setPreview(data as SolveResponse);
+          // A deferred (user) design derives its natural view only when the
+          // builder first runs — which is this preview. Snap the camera to it
+          // here, once per selection (this effect is keyed on `geometry`). For
+          // eager built-ins the value matches the provisional one already set
+          // from currentExample.default_view, so there's no visible flip.
+          const dv = (data as SolveResponse).default_view;
+          if (dv) setCameraProjection(dv);
         }
       })
       .catch(() => {
@@ -2468,7 +2490,7 @@ export function App() {
               result={result as Record<string, unknown> | null}
             />
           )}
-          {currentExample?.multi_feed && result?.feeds && result.feeds.length > 1 && (
+          {effectiveMultiFeed && result?.feeds && result.feeds.length > 1 && (
             <div className="feeds-table">
               <div className="feeds-table-header">per-feed Z (V/I)</div>
               {result.feeds.map((f, i) => (
@@ -2558,7 +2580,7 @@ export function App() {
                   cameraProjection={cameraProjection}
                   showHeatmap={showHeatmap}
                   showEnvelope={showEnvelope}
-                  multiFeed={currentExample?.multi_feed ?? false}
+                  multiFeed={effectiveMultiFeed}
                 />
               </div>
               <div className="thumb-label">{v.label}</div>
@@ -2650,7 +2672,7 @@ export function App() {
             cameraProjection={cameraProjection}
             showHeatmap={showHeatmap}
             showEnvelope={showEnvelope}
-            multiFeed={currentExample?.multi_feed ?? false}
+            multiFeed={effectiveMultiFeed}
           />
         </div>
         <div className="status">
