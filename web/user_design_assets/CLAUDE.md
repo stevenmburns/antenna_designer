@@ -27,6 +27,7 @@ Start from `TEMPLATE.py` in this folder — copy it, rename it, edit it.
 The same file also works from the command line: once `my_dipole.py` is in
 this folder, run e.g. `antenna_designer draw --builder user.my_dipole` (or
 `sweep`, `pattern`, …). Always address it with the `user.` prefix.
+`antenna_designer list` shows every available design name (yours included).
 
 ## `default_params`
 
