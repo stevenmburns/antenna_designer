@@ -11,7 +11,7 @@ from . import (
     optimize,
 )
 from .engines import PyNECEngine, PysimEngine
-from .user_designs import USER_NS, resolve_user_design
+from .user_designs import USER_NS, iter_design_files, resolve_user_design
 
 from pysim import (
     TriangularPySim,
@@ -131,6 +131,32 @@ def _design_families():
 
 
 _DESIGN_FAMILIES = None
+
+
+def list_builtin_designs() -> list[str]:
+    """Every built-in design as a sorted ``family.name`` dotted path.
+
+    A pure filesystem walk over ``antenna_designer.designs`` — every family
+    ``*.py`` defines a ``Builder``, so the listing matches what ``resolve_class``
+    can resolve, without importing the modules.
+    """
+    import os
+
+    import antenna_designer.designs as _d
+
+    names: list[str] = []
+    for root in list(getattr(_d, "__path__", [])):
+        for fam in os.listdir(root):
+            if fam.startswith(("_", ".")):
+                continue
+            fam_dir = os.path.join(root, fam)
+            if not os.path.isdir(fam_dir):
+                continue
+            for fn in os.listdir(fam_dir):
+                if not fn.endswith(".py") or fn.startswith("_"):
+                    continue
+                names.append(f"{fam}.{fn[:-3]}")
+    return sorted(set(names))
 
 
 def list_variants(cls):
@@ -579,6 +605,56 @@ def cli(arguments=None):
             print(f"wrote {args.out}")
         else:
             print(deck, end="")
+
+    p.set_defaults(func=f)
+
+    p = subparsers.add_parser(
+        "list", help="List available antenna designs (built-in and user)"
+    )
+    p.add_argument(
+        "filter",
+        nargs="?",
+        default=None,
+        help="Case-insensitive substring; only matching design names are shown.",
+    )
+    group = p.add_mutually_exclusive_group()
+    group.add_argument(
+        "--builtin-only", action="store_true", help="Only the built-in designs."
+    )
+    group.add_argument(
+        "--user-only", action="store_true", help="Only the user-authored designs."
+    )
+
+    def f(args):
+        from itertools import groupby
+
+        q = args.filter.lower() if args.filter else None
+
+        def keep(name):
+            return q is None or q in name.lower()
+
+        sections: list[tuple[str, list[str]]] = []
+        if not args.user_only:
+            names = [n for n in list_builtin_designs() if keep(n)]
+            for fam, grp in groupby(names, key=lambda n: n.split(".")[0]):
+                sections.append((fam, list(grp)))
+        if not args.builtin_only:
+            users = [f"{USER_NS}.{stem}" for stem, _ in iter_design_files()]
+            users = sorted(u for u in users if keep(u))
+            if users:
+                sections.append((USER_NS, users))
+
+        if not sections:
+            where = f" matching {args.filter!r}" if q else ""
+            print(f"no designs{where}")
+            return
+
+        for i, (fam, members) in enumerate(sections):
+            if i:
+                print()
+            print(f"{fam}")
+            for name in members:
+                print(f"  {name}")
 
     p.set_defaults(func=f)
 
