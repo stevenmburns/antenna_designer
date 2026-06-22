@@ -27,6 +27,18 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: "3.12"
+        cache: pip
+        cache-dependency-path: pyproject.toml
+    - name: Set up ccache
+      # Caches object files for the pysim C++ accelerator (built from source in
+      # the "Install pysim" step). The action masquerades gcc/g++ on PATH, so
+      # setuptools' default compiler invocation routes through ccache with no
+      # CC/CXX overrides. Cold runs see no benefit; warm runs (the common case,
+      # when _accelerators.cpp is unchanged) skip the recompile.
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ccache-${{ runner.os }}-py312
+        max-size: 200M
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
