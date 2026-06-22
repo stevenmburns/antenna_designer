@@ -76,11 +76,16 @@ def refresh() -> list[dict]:
         name = f"{USER_NS}.{stem}"
         try:
             cls = load_builder(path)
-            # Smoke-test: construct, then actually build the geometry so a
-            # typo / bad shape in build_wires surfaces here (at load, in the UI
-            # panel) instead of only when the design is solved.
-            cls().build_wires()
-            REGISTRY[name] = adapter._make_example(name, cls)
+            # Construct (cheap — validates default_params) but do NOT run
+            # build_wires here: registration must not execute a user's geometry
+            # code, so a slow or hanging builder can't stall startup or a page
+            # refresh. defer_hints=True pushes every build_wires-derived hint to
+            # the first solve/geometry of this design. Geometry errors therefore
+            # surface on selection (via the solve/geometry error path) rather
+            # than in this load panel — import/syntax/construction errors still
+            # surface here.
+            cls()
+            REGISTRY[name] = adapter._make_example(name, cls, defer_hints=True)
         except Exception as exc:  # noqa: BLE001 — surface, don't crash
             errors.append(
                 {
