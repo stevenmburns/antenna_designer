@@ -16,7 +16,8 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from web import server
+from web import server, user_designs
+from web.examples import REGISTRY
 
 
 # ---------------------------------------------------------------------------
@@ -694,7 +695,6 @@ def test_phase_param_slider_range_spans_full_unit_circle():
         "antenna_designer.designs.arrays.bowtiearray"
     ).Builder.default_params
     assert "phase_lr" in schema and "phase_tb" in schema
-    from web.examples import REGISTRY
 
     by_name = {s.name: s for s in REGISTRY["arrays.bowtiearray"].param_schema}
     lr = by_name["phase_lr"]
@@ -813,6 +813,59 @@ def test_ws_endpoint_returns_cleanly_on_client_disconnect(client: TestClient):
     # context manager.
     with client.websocket_connect("/ws"):
         pass  # context exit closes the socket
+
+
+_BROKEN_USER_DESIGN = """
+from types import MappingProxyType
+from antenna_designer import AntennaBuilder
+
+class Builder(AntennaBuilder):
+    default_params = MappingProxyType({"freq": 14.0})
+
+    def build_wires(self):
+        return 1 / 0  # ZeroDivisionError when geometry is built
+"""
+
+
+@pytest.fixture
+def broken_user_design():
+    """Install a user design that loads fine but raises in build_wires, so it
+    registers (geometry is deferred) yet fails on the first solve/geometry."""
+    d = user_designs.default_user_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / "wsboom.py"
+    f.write_text(_BROKEN_USER_DESIGN)
+    user_designs.refresh()
+    yield "user.wsboom"
+    f.unlink(missing_ok=True)
+    user_designs.refresh()
+    for k in [k for k in REGISTRY if k.startswith("user.")]:
+        del REGISTRY[k]
+
+
+def test_geometry_endpoint_surfaces_build_error(client, broken_user_design):
+    # A deferred user design that raises in build_wires fails at selection, not
+    # at load. /geometry must return the cause (200, not 500) so the frontend
+    # can show it instead of a blank stage.
+    r = client.post("/geometry", json={"geometry": broken_user_design})
+    assert r.status_code == 200
+    body = r.json()
+    assert "ZeroDivisionError" in body["error"]
+    assert "wsboom.py" in body["error"]
+
+
+def test_ws_solve_error_keeps_socket_alive(client, broken_user_design):
+    # A solve that raises must surface as an error frame, NOT tear down the
+    # socket — otherwise every subsequent slider-driven solve is lost.
+    with client.websocket_connect("/ws") as ws:
+        ws.send_text(__import__("json").dumps({"geometry": broken_user_design}))
+        bad = __import__("json").loads(ws.receive_text())
+        assert "ZeroDivisionError" in bad["error"]
+        # Same socket still serves a healthy design.
+        ws.send_text(__import__("json").dumps({"geometry": "dipoles.invvee"}))
+        good = __import__("json").loads(ws.receive_text())
+    assert good["geometry"] == "dipoles.invvee"
+    assert "wires" in good
 
 
 def test_solve_z_only_returns_primary_z_and_no_feeds_for_dipole():

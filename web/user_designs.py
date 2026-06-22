@@ -9,6 +9,7 @@ load errors for the "failed to load" UI panel.
 
 from __future__ import annotations
 
+import os
 import shutil
 import traceback
 from pathlib import Path
@@ -30,6 +31,7 @@ __all__ = [
     "user_design_dirs",
     "ensure_scaffold",
     "refresh",
+    "format_solve_error",
 ]
 
 _ASSETS = Path(__file__).resolve().parent / "user_design_assets"
@@ -57,6 +59,33 @@ def _format_error(path: Path, exc: Exception) -> str:
     tb = traceback.extract_tb(exc.__traceback__)
     here = [fr for fr in tb if fr.filename == str(path)]
     where = f" (line {here[-1].lineno})" if here else ""
+    return f"{type(exc).__name__}: {exc}{where}"
+
+
+def format_solve_error(exc: BaseException) -> str:
+    """Format a solve/geometry-time exception for the UI error banner.
+
+    Geometry now builds lazily on selection, so a user design's build_wires()
+    error surfaces here rather than in the load panel. Point at the deepest
+    frame inside a user-design folder when the failure came from someone's own
+    file (the common case); otherwise fall back to just type + message.
+    """
+    tb = traceback.extract_tb(exc.__traceback__)
+    dirs: list[str] = []
+    for d in user_design_dirs():
+        try:
+            dirs.append(str(d.resolve()))
+        except OSError:
+            dirs.append(str(d))
+    frame = None
+    for fr in tb:
+        try:
+            fp = str(Path(fr.filename).resolve())
+        except OSError:
+            fp = fr.filename
+        if any(fp == d or fp.startswith(d + os.sep) for d in dirs):
+            frame = fr  # keep the deepest (last) frame in a user folder
+    where = f" ({Path(frame.filename).name}, line {frame.lineno})" if frame else ""
     return f"{type(exc).__name__}: {exc}{where}"
 
 

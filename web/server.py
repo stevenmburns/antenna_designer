@@ -697,7 +697,13 @@ async def geometry_endpoint(req: dict):
     ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
     if ex.pysim_geometry is None:
         return {"available": False}
-    out = await run_in_threadpool(ex.pysim_geometry, req)
+    try:
+        out = await run_in_threadpool(ex.pysim_geometry, req)
+    except Exception as exc:  # noqa: BLE001 — a user design's build_wires can raise
+        # Geometry builds lazily on selection now, so a broken user design
+        # fails here rather than at load. Return the cause (200, not 500) so the
+        # frontend can show it in the solve-error banner instead of a blank stage.
+        return {"geometry": geometry, "error": user_designs.format_solve_error(exc)}
     out["solver"] = "pysim"
     return out
 
@@ -832,7 +838,16 @@ async def ws_endpoint(ws: WebSocket):
         while True:
             raw = await ws.receive_text()
             req = json.loads(raw)
-            result = await run_in_threadpool(solve, req)
+            try:
+                result = await run_in_threadpool(solve, req)
+            except Exception as exc:  # noqa: BLE001 — a user design's build_wires can raise
+                # A solve that raises must not tear down the socket (that drops
+                # every subsequent slider-driven solve). Send the cause so the
+                # frontend shows it in the solve-error banner, then keep serving.
+                result = {
+                    "geometry": req.get("geometry"),
+                    "error": user_designs.format_solve_error(exc),
+                }
             # The client can disconnect *during* the solve (rapid
             # slider drag tears down the React effect's WS and opens
             # a fresh one before our threadpool finishes). When that
