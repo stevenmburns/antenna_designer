@@ -23,7 +23,10 @@ classifiers = [
 # Bare `uvicorn` ships without ws support and fails the handshake at
 # runtime; `uvicorn[standard]` pulls in websockets + httptools + uvloop
 # (uvloop is no-op on Windows).
-web = ["uvicorn[standard]"]
+# psutil powers _physical_cpu_count() in web.server — portable across
+# Windows/macOS/Linux. Falls back to os.cpu_count() if missing, which
+# misfires on chips without HT (pins to half the actual cores).
+web = ["uvicorn[standard]", "psutil"]
 
 [project.urls]
 Homepage = "https://github.com/stevenmburns/antenna_designer"

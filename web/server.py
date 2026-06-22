@@ -51,31 +51,21 @@ def _physical_cpu_count() -> int:
     core contend for execution units rather than overlap. Ad-hoc bench on
     KBL-R 4C/8T showed 4-thread runs ~15% faster than 8-thread runs of the
     swept-ground hot path. Pin to physical-core count to skip that loss.
+
+    Uses psutil for a portable answer (Windows/macOS/Linux). The previous
+    /proc/cpuinfo + "assume 2 HT siblings" fallback misfired on chips
+    without HT (e.g. Intel N-series E-core SoCs), pinning to half the
+    actual core count.
     """
     try:
-        cores = set()
-        phys, coreid = None, None
-        with open("/proc/cpuinfo") as f:
-            for line in f:
-                key, _, val = line.partition(":")
-                key = key.strip()
-                val = val.strip()
-                if key == "physical id":
-                    phys = val
-                elif key == "core id":
-                    coreid = val
-                elif not line.strip() and phys is not None and coreid is not None:
-                    cores.add((phys, coreid))
-                    phys, coreid = None, None
-        if phys is not None and coreid is not None:
-            cores.add((phys, coreid))
-        if cores:
-            return len(cores)
-    except OSError:
+        import psutil
+
+        n = psutil.cpu_count(logical=False)
+        if n:
+            return n
+    except ImportError:
         pass
-    # Fallback: assume 2 HT siblings per core on x86. Wrong on chips without
-    # HT, but in that case the caller can override via the env var.
-    return max(1, (os.cpu_count() or 1) // 2)
+    return max(1, os.cpu_count() or 1)
 
 
 _NPROC = str(_physical_cpu_count())
