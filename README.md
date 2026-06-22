@@ -132,14 +132,10 @@ sudo apt-get install \
     python3-pip \
     python3-venv \
     python3-dev \
-    # C++ Dependencies
+    # C++ build deps for the pysim accelerator (PyNEC ships as a prebuilt wheel)
     g++ \
-    gfortran \
-    swig3.0 \
-    git \
     build-essential \
-    automake \
-    libtool
+    git
 ```
 
 2. Create a virtual environment and collect python dependencies
@@ -150,25 +146,23 @@ pip install --upgrade pip
 pip install setuptools numpy scipy pytest matplotlib icecream scikit-rf
 ```
 
-3. Clone repo, update the submodules (for python-necpp) and install from sources (can't do just a pip install PyNEC). Do this in the virtual environment.
+3. Clone the repo and install the two engines (PyNEC + pysim). Do this in the virtual environment.
 ```bash
 git clone https://github.com/stevenmburns/antenna_designer
 cd antenna_designer
-git submodule init
-git submodule update --remote
-pushd python-necpp
-git submodule init
-git submodule update --remote
-cd PyNEC
-ln -sfn ../necpp_src .
-pushd ../necpp_src
-make -f Makefile.git
-/configure --without-lapack
-popd
-swig3.0 -Wall -v -c++ -python PyNEC.i
-python setup.py build
-python setup.py install
-popd
+
+# PyNEC: install the self-contained wheel from the python-necpp fork's release
+# (OpenBLAS is vendored, so no BLAS/SWIG/autotools toolchain is needed).
+# --no-index avoids upstream PyNEC on PyPI, whose builds are broken on current
+# Python and which lacks the fork's BLAS/OpenMP work.
+pip install PyNEC --no-index \
+    --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.1
+
+# pysim (the MoM engine) is still a git submodule; its C++ accelerator builds
+# from source (needs g++ + pybind11; install pybind11 if you haven't).
+pip install pybind11
+git submodule update --init pysim
+pip install --no-build-isolation -e ./pysim
 ```
 
 4. Install an editable version of this repo (inside virtual enviroment and in the cloned repository directory)
@@ -192,7 +186,7 @@ To run some of the test in docker, try:
 docker run -it stevenmburns/antenna_designer /bin/bash -c "source /opt/.venv/bin/activate && cd /opt/antenna_designer && pytest -vv --durations=0 -- tests/" 
 ```
 
-The tests (including a build of python-necpp from sources) are also running in Github Actions on every push and pull request:
+The tests are also running in Github Actions on every push and pull request (PyNEC from the release wheel, pysim built from its submodule):
 
 [![Test Python package](https://github.com/stevenmburns/antenna_design/actions/workflows/test.yml/badge.svg)](https://github.com/stevenmburns/antenna_design/actions/workflows/test.yml)
 
