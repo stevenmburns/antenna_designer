@@ -24,25 +24,31 @@ def test_cli_draw():
 
 @needs_pynec
 def test_cli_sweep():
-    ant.cli(f"sweep --param tipspacer_factor --builder moxon --npoints 2{o}".split())
     ant.cli(
-        f"sweep --gain --param tipspacer_factor --npoints 2 --builder moxon{o}".split()
+        f"sweep --param tipspacer_factor --builder beams.moxon --npoints 2{o}".split()
+    )
+    ant.cli(
+        f"sweep --gain --param tipspacer_factor --npoints 2 --builder beams.moxon{o}".split()
     )
 
     ant.cli(f"sweep --markers 28.57 --npoints 0{o}".split())
-    ant.cli(f"sweep --markers 28.57 --npoints 0 --builder invveearray{o}".split())
-    ant.cli(f"sweep --markers 28.57 --npoints 2 --builder invveearray{o}".split())
-    ant.cli(f"sweep --npoints 2 --builder invveearray{o}".split())
+    ant.cli(
+        f"sweep --markers 28.57 --npoints 0 --builder arrays.invveearray{o}".split()
+    )
+    ant.cli(
+        f"sweep --markers 28.57 --npoints 2 --builder arrays.invveearray{o}".split()
+    )
+    ant.cli(f"sweep --npoints 2 --builder arrays.invveearray{o}".split())
 
     ant.cli(f"sweep --markers 28.57 --npoints 0{o} --use_smithchart --z0=50".split())
     ant.cli(
-        f"sweep --markers 28.57 --npoints 0 --builder invveearray{o} --use_smithchart --z0=50".split()
+        f"sweep --markers 28.57 --npoints 0 --builder arrays.invveearray{o} --use_smithchart --z0=50".split()
     )
     ant.cli(
-        f"sweep --markers 28.57 --npoints 2 --builder invveearray{o} --use_smithchart --z0=50".split()
+        f"sweep --markers 28.57 --npoints 2 --builder arrays.invveearray{o} --use_smithchart --z0=50".split()
     )
     ant.cli(
-        f"sweep --npoints 2 --builder invveearray{o} --use_smithchart --z0=50".split()
+        f"sweep --npoints 2 --builder arrays.invveearray{o} --use_smithchart --z0=50".split()
     )
 
 
@@ -65,8 +71,8 @@ def test_cli_pattern():
 @needs_pynec
 def test_cli_compare_patterns():
     ant.cli(f"compare_patterns{o}".split())
-    ant.cli(f"compare_patterns --builders dipoles.invvee moxon{o}".split())
-    ant.cli(f"compare_patterns --builders dipoles.invvee hexbeam{o}".split())
+    ant.cli(f"compare_patterns --builders dipoles.invvee beams.moxon{o}".split())
+    ant.cli(f"compare_patterns --builders dipoles.invvee beams.hexbeam{o}".split())
 
 
 def test_cli_engine_flag():

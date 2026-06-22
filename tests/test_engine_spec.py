@@ -137,14 +137,14 @@ def test_broadcast_mismatch_raises():
 @needs_pynec
 def test_cli_compare_patterns_three_by_three_paired():
     ant.cli(
-        f"compare_patterns --builders dipoles.invvee:dipole dipoles.invvee bowtie "
+        f"compare_patterns --builders dipoles.invvee:dipole dipoles.invvee specialty.bowtie "
         f"--engines pynec pysim:triangular pysim:sinusoidal{O}".split()
     )
 
 
 def test_cli_compare_patterns_three_builders_one_engine():
     ant.cli(
-        f"compare_patterns --builders dipoles.invvee:dipole dipoles.invvee bowtie --engines pysim{O}".split()
+        f"compare_patterns --builders dipoles.invvee:dipole dipoles.invvee specialty.bowtie --engines pysim{O}".split()
     )
 
 
