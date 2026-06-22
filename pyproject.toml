@@ -29,6 +29,18 @@ web = ["uvicorn[standard]"]
 Homepage = "https://github.com/stevenmburns/antenna_designer"
 Issues = "https://github.com/stevenmburns/antenna_designer/issues"
 
+[tool.pytest.ini_options]
+markers = [
+    # Tests that run an antenna solver across a *catalog* of named designs
+    # (e.g. tests/test_cebik_designs.py) — the same solve code path repeated
+    # design after design. Representative solver/engine coverage stays
+    # unmarked and runs on every PR; this marker quarantines the per-design
+    # repetition to the full main-only run, so the registry can grow toward
+    # many designs without inflating PR feedback. Deselect with
+    # `-m "not antenna_computation_check"`.
+    "antenna_computation_check: solves a named design as part of broad per-design catalog coverage (run on main, not per-PR)",
+]
+
 [tool.ruff]
 # pysim is a submodule with its own config.
 extend-exclude = ["pysim"]
