@@ -33,42 +33,22 @@ jobs:
         pip install setuptools numpy scipy pytest matplotlib icecream scikit.rf coverage pybind11 fastapi httpx
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: Install swig + LAPACKE/OpenBLAS + autotools
-      # The fork's PyNEC links a real LAPACK backend. Use lapacke (reference
-      # LAPACKE + OpenBLAS pthread) — plain apt packages, unlike the default
-      # ATLAS or the MKL backend. Do NOT add libatlas-base-dev: it Provides
-      # the same libblas/liblapack alternatives as liblapacke-dev and the two
-      # conflict on Ubuntu. autoconf/automake/libtool/m4 are needed because the
-      # necpp build regenerates the (now-gitignored) libtool macros via
-      # libtoolize.
+    - name: Install PyNEC from the python-necpp release wheel
+      # PyNEC is no longer built from a submodule — install the self-contained
+      # wheel (OpenBLAS vendored via scipy-openblas32) from the python-necpp
+      # fork's GitHub Release. --no-index so upstream PyNEC on PyPI (broken
+      # builds on current Python, missing our BLAS/OpenMP work) can never
+      # shadow it; numpy is already installed above.
       run: |
-        sudo apt-get update -qq
-        sudo apt-get install -y swig3.0 autoconf automake libtool m4 \
-          libopenblas-pthread-dev liblapacke-dev
-
-    - name: Compile PyNEC (lapacke backend)
-      # LAPACK code path is enabled by setup.py -D macros, so necpp_src's
-      # configure stays --without-lapack (it only generates config.h).
-      env:
-        PYNEC_BACKEND: lapacke
-      run: |
-        git submodule init
-        git submodule update --remote
-        cd python-necpp
-        git submodule init
-        git submodule update --remote
-        cd PyNEC
-        ln -s ../necpp_src .
-        pushd ../necpp_src
-        make -f Makefile.git
-        ./configure --without-lapack
-        popd
-        swig3.0 -Wall -v -c++ -python PyNEC.i
-        python setup.py build
-        python setup.py install
+        pip install PyNEC --no-index \
+          --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.1
 
     - name: Install pysim (vendored MoM engine)
+      # pysim is still a submodule; its C++ accelerator builds from source here.
+      # --remote tracks pysim's main; --no-build-isolation so setup.py sees the
+      # numpy + pybind11 installed above.
       run: |
+        git submodule update --init --remote pysim
         pip install --no-build-isolation -e ./pysim
 
     - name: Test with pytest
@@ -80,77 +60,3 @@ jobs:
       uses: py-cov-action/python-coverage-comment-action@v3
       with:
         GITHUB_TOKEN: ${{ github.token }}
-
-  build-mkl:
-    # Same build + tests as `build`, but links PyNEC against Intel MKL (the
-    # production backend). Verifies the MKL link path still builds and that
-    # necpp's LAPACKE_zgetrf/zgetrs calls resolve against MKL's mkl_lapacke.h.
-    #
-    # Gated to push-to-main only: MKL isn't pre-installed on GitHub runners and
-    # the ~1 GB intel-oneapi-mkl-classic-devel install adds ~3 min per run, so
-    # running it per-PR would burn CI minutes for marginal coverage. The
-    # post-merge run on main catches MKL-path regressions without slowing PRs.
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.12"
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install setuptools numpy scipy pytest matplotlib icecream scikit.rf coverage pybind11 fastapi httpx
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-    - name: Install swig + autotools + Intel oneAPI MKL classic
-      run: |
-        wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
-          | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
-        echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
-          | sudo tee /etc/apt/sources.list.d/oneAPI.list
-        sudo apt-get update -qq
-        sudo apt-get install -y swig3.0 autoconf automake libtool m4 \
-          intel-oneapi-mkl-classic-devel
-
-    - name: Compile PyNEC (MKL backend)
-      env:
-        PYNEC_BACKEND: mkl
-        MKLROOT: /opt/intel/oneapi/mkl/latest
-      run: |
-        git submodule init
-        git submodule update --remote
-        cd python-necpp
-        git submodule init
-        git submodule update --remote
-        cd PyNEC
-        ln -s ../necpp_src .
-        pushd ../necpp_src
-        make -f Makefile.git
-        ./configure --without-lapack
-        popd
-        swig3.0 -Wall -v -c++ -python PyNEC.i
-        python setup.py build
-        python setup.py install
-
-    - name: Verify PyNEC is linked against MKL
-      run: |
-        so=$(python -c "import _PyNEC; print(_PyNEC.__file__)")
-        ldd "$so" | grep -q libmkl_core || { echo "ERROR: PyNEC not linked against MKL"; ldd "$so"; exit 1; }
-        echo "OK — PyNEC is linked against MKL:"
-        ldd "$so" | grep -i mkl
-
-    - name: Install pysim (vendored MoM engine)
-      run: |
-        pip install --no-build-isolation -e ./pysim
-
-    - name: Test with pytest
-      # OPENBLAS_NUM_THREADS=1 keeps numpy/scipy's idle BLAS pool from
-      # contending with MKL for cores during the solve.
-      env:
-        OPENBLAS_NUM_THREADS: "1"
-      run: |
-        pip install -e .
-        python -m pytest tests/  # -m puts CWD on sys.path so the top-level web/ package imports

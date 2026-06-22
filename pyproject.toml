@@ -31,7 +31,7 @@ Issues = "https://github.com/stevenmburns/antenna_designer/issues"
 
 [tool.ruff]
 # pysim is a submodule with its own config.
-extend-exclude = ["python-necpp", "pysim"]
+extend-exclude = ["pysim"]
 
 [tool.ruff.lint]
 ignore = ["E741"]

@@ -10,14 +10,10 @@ RUN apt-get -qq update && DEBIAN_FRONTEND=noninterative apt-get -qq install \
     python3-pip \
     python3-venv \
     python3-dev \
-    # C++ Dependencies
+    # C++ build deps for the pysim accelerator (PyNEC ships as a prebuilt wheel)
     g++ \
-    gfortran \
-    swig3.0 \
     git \
     build-essential \
-    automake \
-    libtool \
 &&    apt-get -qq clean
 
 FROM antenna_designer_base AS antenna_designer_base_with_python
@@ -29,7 +25,7 @@ RUN \
     /bin/bash -c "python3 -m venv /opt/.venv && \
     source /opt/.venv/bin/activate && \
     pip install --upgrade pip -q && \
-    pip install setuptools numpy scipy pytest matplotlib icecream scikit-rf -q"
+    pip install setuptools numpy scipy pytest matplotlib icecream scikit-rf coverage pybind11 fastapi httpx -q"
 
 FROM antenna_designer_base_with_python AS antenna_designer
 
@@ -37,21 +33,8 @@ COPY . /opt/antenna_designer
 
 RUN \
     /bin/bash -c "source /opt/.venv/bin/activate && \
-    cd /opt && \
-    cd antenna_designer && \
-    git submodule init && \
-    git submodule update --remote && \
-    pushd python-necpp && \    
-    git submodule init && \
-    git submodule update --remote && \
-    cd PyNEC && \
-    ln -s ../necpp_src . && \
-    pushd ../necpp_src && \
-    make -f Makefile.git && \
-    ./configure --without-lapack && \
-    popd && \
-    swig3.0 -Wall -v -c++ -python PyNEC.i && \
-    python setup.py build && \
-    python setup.py install && \
-    popd && \
+    cd /opt/antenna_designer && \
+    pip install PyNEC --no-index --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.1 && \
+    git submodule update --init pysim && \
+    pip install --no-build-isolation -e ./pysim && \
     pip install -e ."
