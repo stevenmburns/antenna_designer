@@ -579,6 +579,10 @@ type SolveResponse = {
    *  prefer them over the example fields when present. */
   multi_feed?: boolean;
   default_view?: Projection;
+  /** Set when the solve/geometry request failed — e.g. a user design's
+   *  build_wires() raised. Carries a short, formatted message (type + file +
+   *  line). Mutually exclusive with a normal result payload. */
+  error?: string;
 };
 
 // Backend selector — PySim model variants + PyNEC. Per-backend
@@ -1300,6 +1304,11 @@ export function App() {
   // `result` the moment the real solve lands; only consulted while result is
   // null (i.e. right after an antenna switch).
   const [preview, setPreview] = useState<SolveResponse | null>(null);
+  // Set when the selected design fails to solve/build — most often a user
+  // design whose build_wires() raises. Geometry errors are deferred to
+  // selection now (the builder isn't run at registration), so this banner is
+  // where they surface. Cleared on every antenna switch.
+  const [solveError, setSolveError] = useState<string | null>(null);
   // Whether to render the per-feed (multi-feed) UI. Prefer the value the
   // server folds into the live solve / geometry response — authoritative for
   // user designs, which derive it lazily — and fall back to the example
@@ -1619,6 +1628,7 @@ export function App() {
   useEffect(() => {
     setResult(null);
     setPreview(null);
+    setSolveError(null);
     previewAbortRef.current?.abort();
     const controller = new AbortController();
     previewAbortRef.current = controller;
@@ -1630,7 +1640,15 @@ export function App() {
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data && data.wires && !controller.signal.aborted) {
+        if (!data || controller.signal.aborted) return;
+        if (data.error) {
+          // build_wires raised while building the preview — surface it; the
+          // live solve will report the same thing, but the preview gets here
+          // first so the user sees the cause without a blank stage.
+          setSolveError(data.error as string);
+          return;
+        }
+        if (data.wires) {
           setPreview(data as SolveResponse);
           // A deferred (user) design derives its natural view only when the
           // builder first runs — which is this preview. Snap the camera to it
@@ -2104,7 +2122,18 @@ export function App() {
       // antenna's geometry preview (and briefly show the wrong antenna). The
       // pending solve below still fires so the current selection gets solved.
       const stale = !!data.geometry && data.geometry !== geometryRef.current;
-      if (!stale) setResult(data);
+      if (!stale) {
+        if (data.error) {
+          // A solve that raised (e.g. a user design's build_wires) — show the
+          // message and clear stale plot data rather than rendering an empty
+          // result on top of the last antenna.
+          setSolveError(data.error);
+          setResult(null);
+        } else {
+          setSolveError(null);
+          setResult(data);
+        }
+      }
       // If controls changed while waiting, fire the next solve immediately.
       if (pendingRef.current) {
         pendingRef.current = null;
@@ -2551,6 +2580,16 @@ export function App() {
             and lingers out its min-visible window (showBusy), so it never
             flashes — the dim/label (stale) clear earlier, when the result lands. */}
         <div className={`solve-bar${showBusy ? " active" : ""}`} aria-hidden />
+        {solveError && (
+          <div className="solve-error" role="alert">
+            <span className="solve-error-title">This design failed to solve</span>
+            <code className="solve-error-message">{solveError}</code>
+            <span className="solve-error-hint">
+              Fix the design and adjust a control to retry. For user designs see
+              CLAUDE.md in your designs folder.
+            </span>
+          </div>
+        )}
         <div className="thumbstrip" ref={thumbStripRef}>
           {VIEWS.filter((v) => v.id !== view).map((v) => (
             <button

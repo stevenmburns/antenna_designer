@@ -79,6 +79,18 @@ def test_broken_geometry_loads_but_fails_on_solve(userdir):
         REGISTRY["user.oops"].pysim_solve({})
 
 
+def test_format_solve_error_points_at_user_file(userdir):
+    # The on-solve error banner (server.py) formats exceptions via this helper;
+    # it should name the user's file + line, not framework internals.
+    (userdir / "boom.py").write_text(BROKEN_BUILD)
+    user_designs.refresh()
+    with pytest.raises(NameError) as ei:
+        REGISTRY["user.boom"].pysim_solve({})
+    msg = user_designs.format_solve_error(ei.value)
+    assert "NameError" in msg
+    assert "boom.py" in msg and "line" in msg
+
+
 def test_missing_builder_reports_error(userdir):
     (userdir / "nobuilder.py").write_text(NO_BUILDER)
     errors = user_designs.refresh()
