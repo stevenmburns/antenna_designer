@@ -995,8 +995,12 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
             # Carry the geometry-derived hints on the fast preview too: it's the
             # first request fired on selection, so a deferred user design gets
             # its multi_feed / default_view here, before the live solve lands.
+            # default_backend lets the frontend seed the array-block solver from
+            # the preview and then fire the first solve — no /examples-descriptor
+            # dependency, so this stays correct if a design's hints go lazy.
             "multi_feed": hints()["multi_feed"],
             "default_view": hints()["default_view"],
+            "default_backend": hints()["default_backend"],
             "preview": True,
         }
 
