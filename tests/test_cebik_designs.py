@@ -14,6 +14,11 @@ import pytest
 
 pytest.importorskip("PyNEC")
 
+# Whole-file: every test here solves a named Cebik design via the PyNEC engine
+# (per-design catalog coverage). Quarantined off the per-PR fast lane and run
+# in the full main-only suite. See the marker definition in pyproject.toml.
+pytestmark = pytest.mark.antenna_computation_check
+
 from antenna_designer.engines import PyNECEngine  # noqa: E402
 
 
