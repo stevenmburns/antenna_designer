@@ -8,7 +8,7 @@ recomputes the far field with the interior-riser segment currents zeroed. If
 the verticals truly only phase the curtain (and don't radiate), both the
 pattern and the max gain should be essentially unchanged.
 
-Implementation: subclass PysimEngine and mask the riser segments in
+Implementation: subclass MomwireEngine and mask the riser segments in
 `_segment_dipoles`, which `far_field` uses for BOTH the radiated-power
 normalisation and the pattern grid — so the directivity stays self-consistent.
 
@@ -20,7 +20,7 @@ import sys
 import numpy as np
 
 from antenna_designer.designs.wire.sterba import Builder
-from antenna_designer.engines import PysimEngine
+from antenna_designer.engines import MomwireEngine
 from antenna_designer.far_field import plot_patterns
 
 FF_KW = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
@@ -35,8 +35,8 @@ def _interior_junction_ys(b):
     return np.array([yb[k] for k in range(1, n + 2)]), h  # the n+1 interior junctions
 
 
-class RiserMaskedEngine(PysimEngine):
-    """PysimEngine that drops the interior vertical-riser segment currents from
+class RiserMaskedEngine(MomwireEngine):
+    """MomwireEngine that drops the interior vertical-riser segment currents from
     the far-field integration (everything else — including the solve — is
     identical to the parent)."""
 
@@ -66,7 +66,7 @@ def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "sterba_riser_masked_pattern.png"
 
     b = Builder()
-    full = PysimEngine(b, ground=None)
+    full = MomwireEngine(b, ground=None)
     masked = RiserMaskedEngine(Builder(), ground=None)
 
     ff_full = full.far_field(**FF_KW)

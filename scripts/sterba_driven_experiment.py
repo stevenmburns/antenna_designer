@@ -18,7 +18,7 @@ import sys
 import numpy as np
 
 from antenna_designer.designs.wire import sterba, sterba_driven
-from antenna_designer.engines import PysimEngine
+from antenna_designer.engines import MomwireEngine
 
 FF_KW = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
 GROUND = None  # free space, to compare against the reference's 10.501 dBi
@@ -56,7 +56,7 @@ def reference_sampler():
     where sample returns the complex current at the knot nearest coord."""
     ref = sterba.Builder()
     # Keep geometry identical to the driven variant (same defaults already).
-    eng = PysimEngine(ref, ground=GROUND)
+    eng = MomwireEngine(ref, ground=GROUND)
     gain = eng.far_field(**FF_KW).max_gain
     cd = eng.current_distribution()
     print(
@@ -81,7 +81,7 @@ def run(active, ref_gain, sample):
     name_to_pt = {nm: pt for pt, nm in jname.items()}
 
     # Pass 1: target currents from the reference at each active port.
-    eng0 = PysimEngine(b0, ground=GROUND)
+    eng0 = MomwireEngine(b0, ground=GROUND)
     wl = 299.792458 / b0.design_freq
     Y = eng0._compute_y_matrix(wl)
     port_to_idx = eng0._reducer.port_to_idx
@@ -104,7 +104,7 @@ def run(active, ref_gain, sample):
     p2 = _shared_params(active)
     p2["feed_voltages"] = {nm: complex(V[port_to_idx[nm]]) for nm in ports}
     b = sterba_driven.Builder(p2)
-    eng = PysimEngine(b, ground=GROUND)
+    eng = MomwireEngine(b, ground=GROUND)
     gain = eng.far_field(**FF_KW).max_gain
     coh = _broadside_coherence(eng.current_distribution())
 

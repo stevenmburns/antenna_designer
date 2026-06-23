@@ -355,8 +355,12 @@ def test_difftl_solves_end_to_end_on_momwire():
 
 
 def test_difftl_transposed_changes_the_solve():
-    z = MomwireEngine(_difftl_demo_builder(transposed=False), ground=None).impedance()[0]
-    zt = MomwireEngine(_difftl_demo_builder(transposed=True), ground=None).impedance()[0]
+    z = MomwireEngine(_difftl_demo_builder(transposed=False), ground=None).impedance()[
+        0
+    ]
+    zt = MomwireEngine(_difftl_demo_builder(transposed=True), ground=None).impedance()[
+        0
+    ]
     assert not np.isclose(z, zt), (z, zt)
 
 
@@ -442,7 +446,9 @@ def test_difftl_reproduces_tl_array_impedance():
     )
 
     z_tl = MomwireEngine(NetBuilder(), ground=None).impedance()[0]
-    z_diff = MomwireEngine(_delta_looparray_difftl_builder(), ground=None).impedance()[0]
+    z_diff = MomwireEngine(_delta_looparray_difftl_builder(), ground=None).impedance()[
+        0
+    ]
     assert abs(z_tl - z_diff) < 1e-9, f"TL {z_tl}, DiffTL {z_diff}"
 
 
@@ -1357,9 +1363,9 @@ def test_load_branch_resistor_adds_to_impedance():
     from antenna_designer.network import Load
 
     z_bare = MomwireEngine(_load_dipole_builder(name_feed=True)).impedance()[0]
-    z_loaded = MomwireEngine(_load_dipole_builder(Load(port="feed", r=50.0))).impedance()[
-        0
-    ]
+    z_loaded = MomwireEngine(
+        _load_dipole_builder(Load(port="feed", r=50.0))
+    ).impedance()[0]
     assert abs((z_loaded - z_bare) - 50.0) < 1e-6, (z_bare, z_loaded)
 
 
@@ -1385,7 +1391,9 @@ def test_load_branch_inductor_adds_reactance():
     l = 1e-6
     omega = 2 * np.pi * 28.0e6
     z_bare = MomwireEngine(_load_dipole_builder(name_feed=True)).impedance()[0]
-    z_loaded = MomwireEngine(_load_dipole_builder(Load(port="feed", l=l))).impedance()[0]
+    z_loaded = MomwireEngine(_load_dipole_builder(Load(port="feed", l=l))).impedance()[
+        0
+    ]
     assert abs((z_loaded - z_bare).real) < 1e-6, (z_bare, z_loaded)
     assert abs((z_loaded - z_bare).imag - omega * l) < 1e-3, (z_bare, z_loaded)
 

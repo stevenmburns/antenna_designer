@@ -24,7 +24,7 @@ import numpy as np
 from scipy.optimize import minimize
 
 from antenna_designer import AntennaBuilder, Transform, TransformStack
-from antenna_designer.engines.pysim import PysimEngine
+from antenna_designer.engines.momwire import MomwireEngine
 
 
 class BroadsideTuningBuilder(AntennaBuilder):
@@ -90,7 +90,7 @@ def evaluate(b):
     phi=0 along +x; broadside (perpendicular to array axis) is therefore
     phi=0 or 180, and end-fire is phi=90 or 270.
     """
-    e = PysimEngine(b)
+    e = MomwireEngine(b)
     zs = e.impedance()
     ff = e.far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
     rings = np.array(ff.rings)

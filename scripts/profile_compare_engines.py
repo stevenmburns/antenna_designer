@@ -2,10 +2,10 @@
 both the fandipole and trap_fan_dipole designs.
 
 Engines compared:
-  Tri   — pysim TriangularPySim
-  Bs1   — pysim BSplinePySim(degree=1)
-  Bs2   — pysim BSplinePySim(degree=2)
-  Sin   — pysim SinusoidalPySim
+  Tri   — momwire TriangularSolver
+  Bs1   — momwire BSplineSolver(degree=1)
+  Bs2   — momwire BSplineSolver(degree=2)
+  Sin   — momwire SinusoidalSolver
   PyNEC — antenna_designer.engines.pynec.PyNECEngine (ground="free")
 
 Each cell is the mean wall-clock of impedance() across the design's
@@ -59,7 +59,7 @@ import sys  # noqa: E402
 import time  # noqa: E402
 
 sys.path.insert(0, "/home/smburns/antennas/antenna_designer/src")
-sys.path.insert(0, "/home/smburns/antennas/antenna_designer/pysim/src")
+sys.path.insert(0, "/home/smburns/antennas/antenna_designer/momwire/src")
 
 from antenna_designer.designs.multiband.fandipole import (  # noqa: E402
     Builder as FanBuilder,
@@ -68,8 +68,8 @@ from antenna_designer.designs.multiband.trap_fan_dipole import (  # noqa: E402
     Builder as TrapBuilder,
 )
 from antenna_designer.engines.pynec import PyNECEngine  # noqa: E402
-from antenna_designer.engines.pysim import PysimEngine  # noqa: E402
-from pysim import BSplinePySim, SinusoidalPySim, TriangularPySim  # noqa: E402
+from antenna_designer.engines.momwire import MomwireEngine  # noqa: E402
+from momwire import BSplineSolver, SinusoidalSolver, TriangularSolver  # noqa: E402
 
 
 NSEGS = (21, 41, 81)
@@ -83,12 +83,12 @@ FAN_BANDS = (14.300, 18.1575, 21.383, 24.97, 28.47)
 FAN_WARMUP = 13.0
 
 
-def make_pysim_solver(solver_cls, solver_kwargs):
+def make_momwire_solver(solver_cls, solver_kwargs):
     def solve(builder_cls, n, f):
         b = builder_cls()
         b.nominal_nsegs = n
         b.freq = f
-        PysimEngine(b, solver=solver_cls, solver_kwargs=solver_kwargs).impedance()
+        MomwireEngine(b, solver=solver_cls, solver_kwargs=solver_kwargs).impedance()
 
     return solve
 
@@ -101,10 +101,10 @@ def solve_pynec(builder_cls, n, f):
 
 
 ENGINES = [
-    ("Tri", make_pysim_solver(TriangularPySim, None)),
-    ("Bs1", make_pysim_solver(BSplinePySim, {"degree": 1})),
-    ("Bs2", make_pysim_solver(BSplinePySim, {"degree": 2})),
-    ("Sin", make_pysim_solver(SinusoidalPySim, None)),
+    ("Tri", make_momwire_solver(TriangularSolver, None)),
+    ("Bs1", make_momwire_solver(BSplineSolver, {"degree": 1})),
+    ("Bs2", make_momwire_solver(BSplineSolver, {"degree": 2})),
+    ("Sin", make_momwire_solver(SinusoidalSolver, None)),
     ("PyNEC", solve_pynec),
 ]
 

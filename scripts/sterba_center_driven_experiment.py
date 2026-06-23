@@ -21,7 +21,7 @@ import sys
 import numpy as np
 
 from antenna_designer.designs.wire import sterba, sterba_center_driven
-from antenna_designer.engines import PysimEngine
+from antenna_designer.engines import MomwireEngine
 from antenna_designer.far_field import plot_patterns
 
 FF_KW = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
@@ -85,13 +85,13 @@ def _moments(cd, exts):
 def _drive(builder_cls, ports, V):
     p = dict(builder_cls.default_params)
     p["feed_voltages"] = {nm: complex(V[i]) for i, nm in enumerate(ports)}
-    return PysimEngine(builder_cls(p), ground=GROUND)
+    return MomwireEngine(builder_cls(p), ground=GROUND)
 
 
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "sterba_center_driven_pattern.png"
 
-    eng_ref = PysimEngine(sterba.Builder(), ground=GROUND)
+    eng_ref = MomwireEngine(sterba.Builder(), ground=GROUND)
     ff_ref = eng_ref.far_field(**FF_KW)
     cd_ref = eng_ref.current_distribution()
 
