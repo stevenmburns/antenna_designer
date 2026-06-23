@@ -7,7 +7,7 @@
 | src/antennaknobs/\_\_init\_\_.py                                  |       13 |        2 |     85% |     50-51 |
 | src/antennaknobs/\_\_main\_\_.py                                  |        0 |        0 |    100% |           |
 | src/antennaknobs/builder.py                                       |      220 |        0 |    100% |           |
-| src/antennaknobs/cli.py                                           |      303 |       29 |     90% |154, 173, 187, 201, 215-223, 422, 591-607 |
+| src/antennaknobs/cli.py                                           |      301 |       26 |     91% |154, 173, 207, 221-229, 428, 597-611 |
 | src/antennaknobs/core.py                                          |        6 |        0 |    100% |           |
 | src/antennaknobs/designs/\_\_init\_\_.py                          |        0 |        0 |    100% |           |
 | src/antennaknobs/designs/arrays/\_\_init\_\_.py                   |        0 |        0 |    100% |           |
@@ -101,7 +101,7 @@
 | src/antennaknobs/sweep.py                                         |      123 |        7 |     94% |   105-116 |
 | src/antennaknobs/transform.py                                     |       42 |        1 |     98% |        62 |
 | src/antennaknobs/user\_designs.py                                 |       61 |        5 |     92% |33, 43, 59, 81, 86 |
-| **TOTAL**                                                         | **4182** |  **137** | **97%** |           |
+| **TOTAL**                                                         | **4180** |  **134** | **97%** |           |
 
 
 ## Setup coverage badge
