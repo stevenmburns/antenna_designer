@@ -15,6 +15,14 @@ import react from "@vitejs/plugin-react";
 // keeping it separate leaves Vite's own HMR socket untouched.
 export default defineConfig({
   plugins: [react()],
+  // Build the production bundle straight into the `web` Python package
+  // (web/static), so it ships as package data in the antennaknobs wheel and
+  // server.py can mount it at "/". emptyOutDir is required because the target
+  // is outside this Vite root (web/frontend).
+  build: {
+    outDir: "../static",
+    emptyOutDir: true,
+  },
   server: {
     port: 5173,
     proxy: {

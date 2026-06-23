@@ -48,13 +48,26 @@ solve per round-trip, so the solver is never buried under stale requests.
 
 ### Running it
 
-The workbench is a FastAPI backend plus a React (Vite) frontend. In development
-you run the two together (two terminals):
+The workbench is a FastAPI backend plus a React (Vite) frontend.
+
+**Installed (no Node needed).** A wheel install bundles the pre-built frontend,
+so one process serves the whole app:
+
+```bash
+pip install "antennaknobs[web]"
+uvicorn web.server:app                   # open http://127.0.0.1:8000
+```
+
+The backend serves the UI at `/` and the JSON/`/ws` API on the same origin;
+`/docs` is the interactive API explorer.
+
+**Development (two terminals, hot-reload).** When editing the frontend, run the
+Vite dev server alongside the backend so you get HMR:
 
 ```bash
 # Terminal 1 — backend (from the repo root, in your .venv)
 pip install -e ".[web]"
-uvicorn web.server:app --reload          # serves on http://127.0.0.1:8000
+uvicorn web.server:app --reload          # API on http://127.0.0.1:8000
 
 # Terminal 2 — frontend dev server
 cd web/frontend
@@ -63,10 +76,9 @@ npm run dev                              # open http://localhost:5173
 ```
 
 The Vite dev server proxies the API and the `/ws` live-solve channel to the
-backend on port 8000, so you only ever open `http://localhost:5173`.
-
-For a production bundle, `npm run build` (output in `web/frontend/dist/`) and
-serve it behind the FastAPI app.
+backend on port 8000, so you only ever open `http://localhost:5173`. (A source
+checkout has no pre-built bundle, so the backend alone runs API-only until you
+`npm run build` — which writes `web/static/`, the same bundle the wheel ships.)
 
 > The `[web]` extra pulls in `uvicorn[standard]`, which includes the WebSocket
 > support the live-solve channel needs — plain `uvicorn` fails the `/ws`
