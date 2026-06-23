@@ -1,9 +1,22 @@
+import pytest
+
 import antennaknobs as ant
 
 from conftest import needs_pynec
 
 o = " --fn /dev/null"
 # o = ''
+
+
+def test_cli_unknown_builder_is_clear_error():
+    # A mistyped builder must fail with a clear message + non-zero exit, not a
+    # `TypeError: 'NoneType' object is not callable` from calling the unresolved
+    # (None) builder. `draw` resolves the builder first, before any engine.
+    with pytest.raises(SystemExit) as exc:
+        ant.cli(f"draw --builder dipoles.invee{o}".split())
+    msg = str(exc.value)
+    assert "unknown builder" in msg
+    assert "dipoles.invee" in msg
 
 
 def test_cli_draw():
