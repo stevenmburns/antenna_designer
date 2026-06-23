@@ -2416,7 +2416,10 @@ export function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <h1>Antenna Designer</h1>
+          <div className="brand">
+            <h1>AntennaKNoBs</h1>
+            <span className="byline">by KK7KNB</span>
+          </div>
           <div className="header-actions">
             <div className="gear-menu-wrap">
               <button
