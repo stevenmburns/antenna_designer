@@ -45,18 +45,19 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install setuptools numpy scipy pytest matplotlib icecream scikit.rf coverage pybind11 fastapi httpx
+        pip install setuptools numpy scipy pytest matplotlib icecream scikit-rf coverage pybind11 fastapi httpx
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
     - name: Install PyNEC from the python-necpp release wheel
       # PyNEC is no longer built from a submodule — install the self-contained
       # wheel (OpenBLAS vendored via scipy-openblas32) from the python-necpp
-      # fork's GitHub Release. --no-index so upstream PyNEC on PyPI (broken
-      # builds on current Python, missing our BLAS/OpenMP work) can never
+      # fork's GitHub Release. The fork's distribution name is `pynec-accel`
+      # (import name stays `PyNEC`). --no-index so upstream PyNEC/pynec on PyPI
+      # (broken builds on current Python, missing our BLAS/OpenMP work) can never
       # shadow it; numpy is already installed above.
       run: |
-        pip install PyNEC --no-index \
-          --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.1
+        pip install pynec-accel --no-index \
+          --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.3
 
     - name: Install momwire (vendored MoM engine)
       # momwire is still a submodule; its C++ accelerator builds from source here.

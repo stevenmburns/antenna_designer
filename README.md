@@ -317,10 +317,11 @@ against NEC2.
 
 ```bash
 # The self-contained wheel from the python-necpp fork's release (OpenBLAS
-# vendored). --no-index avoids upstream PyNEC on PyPI, whose builds are broken
-# on current Python and lack the fork's BLAS/OpenMP work.
-pip install PyNEC --no-index \
-    --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.1
+# vendored). The fork is distributed as `pynec-accel` (the import name stays
+# `import PyNEC`); --no-index avoids upstream PyNEC/pynec on PyPI, whose builds
+# are broken on current Python and lack the fork's BLAS/OpenMP work.
+pip install pynec-accel --no-index \
+    --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.3
 ```
 
 **4. Install AntennaKNoBs**
