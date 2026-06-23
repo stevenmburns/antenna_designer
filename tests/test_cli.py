@@ -1,4 +1,4 @@
-import antenna_designer as ant
+import antennaknobs as ant
 
 from conftest import needs_pynec
 

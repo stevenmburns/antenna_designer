@@ -1,7 +1,7 @@
-"""Export an antenna_designer builder to a NEC2 card deck (``.nec``).
+"""Export an antennaknobs builder to a NEC2 card deck (``.nec``).
 
 NEC tools (xnec2c, 4nec2, EZNEC, nec2c, …) all speak the NEC ``.nec`` card
-format, but antenna_designer has only ever *consumed* NEC cards (via PyNEC's
+format, but antennaknobs has only ever *consumed* NEC cards (via PyNEC's
 card API) — it could not emit them. This module closes that gap.
 
 The deck is built by reusing :class:`PyNECEngine`'s already-resolved geometry:
@@ -80,7 +80,7 @@ def export_nec(
     freq = builder.freq if freq is None else float(freq)
 
     title = title or f"{type(builder).__module__}.{type(builder).__qualname__}"
-    lines = [f"CM {title}", "CM exported by antenna_designer.nec_export", "CE"]
+    lines = [f"CM {title}", "CM exported by antennaknobs.nec_export", "CE"]
 
     # --- geometry: one GW per resolved wire tuple, then GE ---
     for tag, t in enumerate(eng.tups, start=1):

@@ -15,7 +15,7 @@ import time
 import traceback
 
 DESIGNS_DIR = (
-    pathlib.Path(__file__).resolve().parents[1] / "src" / "antenna_designer" / "designs"
+    pathlib.Path(__file__).resolve().parents[1] / "src" / "antennaknobs" / "designs"
 )
 
 
@@ -29,7 +29,7 @@ def list_design_modules() -> list[str]:
 
 
 def bench_one(name: str, n_iter: int = 1000) -> dict:
-    mod = importlib.import_module(f"antenna_designer.designs.{name}")
+    mod = importlib.import_module(f"antennaknobs.designs.{name}")
     cls = getattr(mod, "Builder", None)
     if cls is None:
         return {"name": name, "status": "no Builder class"}

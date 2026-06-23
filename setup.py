@@ -1,6 +1,6 @@
 from setuptools import setup
 
 setup(
-    packages=["antenna_designer"],
+    packages=["antennaknobs"],
     package_dir={"": "src/"},
 )

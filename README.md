@@ -16,9 +16,9 @@ Its built-in engine is **momwire**, a new in-house set of method-of-moments
 engines. You can *optionally* add **PyNEC** (the battle-tested NEC2 engine) as a
 second backend and solve the same design both ways to trust the answer.
 
-[![Test Python package](https://github.com/stevenmburns/antenna_designer/actions/workflows/test.yml/badge.svg)](https://github.com/stevenmburns/antenna_designer/actions/workflows/test.yml)
-[![Ruff](https://github.com/stevenmburns/antenna_designer/actions/workflows/ruff.yml/badge.svg)](https://github.com/stevenmburns/antenna_designer/actions/workflows/ruff.yml)
-[![Coverage](https://raw.githubusercontent.com/stevenmburns/antenna_designer/python-coverage-comment-action-data/badge.svg)](https://github.com/stevenmburns/antenna_designer/actions/workflows/test.yml)
+[![Test Python package](https://github.com/stevenmburns/antennaknobs/actions/workflows/test.yml/badge.svg)](https://github.com/stevenmburns/antennaknobs/actions/workflows/test.yml)
+[![Ruff](https://github.com/stevenmburns/antennaknobs/actions/workflows/ruff.yml/badge.svg)](https://github.com/stevenmburns/antennaknobs/actions/workflows/ruff.yml)
+[![Coverage](https://raw.githubusercontent.com/stevenmburns/antennaknobs/python-coverage-comment-action-data/badge.svg)](https://github.com/stevenmburns/antennaknobs/actions/workflows/test.yml)
 
 ---
 
@@ -104,7 +104,7 @@ point — agreement between independent engines is your confidence check.
 In Python, instantiate an engine directly:
 
 ```python
-from antenna_designer.engines import PyNECEngine, MomwireEngine
+from antennaknobs.engines import PyNECEngine, MomwireEngine
 from momwire import BSplineSolver
 
 engine = PyNECEngine(builder)
@@ -118,7 +118,7 @@ array-block engines are newer and aimed at large arrays. **PyNEC** is an
 *optional* second backend — the `python-necpp` fork, distributed as a
 self-contained wheel (OpenBLAS vendored, so no SWIG/BLAS/autotools toolchain is
 required at install time). It is licensed **GPL-2.0** and installed separately
-from its own release; antenna_designer (MIT) neither bundles nor depends on it,
+from its own release; antennaknobs (MIT) neither bundles nor depends on it,
 and loads it only if present.
 
 ---
@@ -187,8 +187,8 @@ design-explore-compare loop is a short script. This optimizes an inverted-V
 dipole at several heights and overlays the resulting patterns:
 
 ```python
-import antenna_designer as ant
-from antenna_designer.designs.dipoles.invvee import Builder
+import antennaknobs as ant
+from antennaknobs.designs.dipoles.invvee import Builder
 
 p = dict(Builder.default_params)
 bounds = ((p['length_factor'] * .8, p['length_factor'] * 1.25), (0, 1))
@@ -208,38 +208,38 @@ ant.compare_patterns(builders)
 
 ## Command-line usage
 
-Everything is under `python -m antenna_designer <subcommand>`. Designs are named
+Everything is under `python -m antennaknobs <subcommand>`. Designs are named
 `family.name` (with an optional `:variant`) — run `list` to see them all.
 
 ```bash
 # Draw a Moxon's wire geometry to a file
-python -m antenna_designer draw --builder beams.moxon --fn moxon.png
+python -m antennaknobs draw --builder beams.moxon --fn moxon.png
 
 # Sweep frequency and plot impedance on a Smith chart
-python -m antenna_designer sweep --builder beams.moxon --param freq \
+python -m antennaknobs sweep --builder beams.moxon --param freq \
     --use_smithchart --npoints 21 --fn moxon_smith.png
 
 # Far-field pattern of a Yagi, solved with momwire
-python -m antenna_designer pattern --builder beams.yagi --engine momwire:triangular
+python -m antennaknobs pattern --builder beams.yagi --engine momwire:triangular
 
 # Overlay patterns of three beams
-python -m antenna_designer compare_patterns \
+python -m antennaknobs compare_patterns \
     --builders beams.moxon beams.hexbeam beams.yagi --fn beams.png
 
 # Cross-check one design across two backends
-python -m antenna_designer compare_patterns \
+python -m antennaknobs compare_patterns \
     --builders beams.moxon beams.moxon --engines pynec momwire:bspline --fn check.png
 
 # Optimize length and arm angle of an inverted-V dipole for a 50 Ω match
-python -m antenna_designer optimize --builder dipoles.invvee \
+python -m antennaknobs optimize --builder dipoles.invvee \
     --params length_factor angle_radians
 
 # Export a NEC2 card deck for use in external tools
-python -m antenna_designer export --builder beams.hexbeam --out hexbeam.nec
+python -m antennaknobs export --builder beams.hexbeam --out hexbeam.nec
 
 # List the available designs (optionally filter)
-python -m antenna_designer list
-python -m antenna_designer list dipole
+python -m antennaknobs list
+python -m antennaknobs list dipole
 ```
 
 Shared flags: `--engine` (backend, see above), `--ground`
@@ -254,7 +254,7 @@ commands:
 ### Available designs
 
 Roughly 70 built-in designs across nine families — run
-`python -m antenna_designer list` for the authoritative list:
+`python -m antennaknobs list` for the authoritative list:
 
 | Family | Examples |
 |---|---|
@@ -291,8 +291,8 @@ sudo apt-get install \
 **2. Clone and create a virtual environment**
 
 ```bash
-git clone https://github.com/stevenmburns/antenna_designer
-cd antenna_designer
+git clone https://github.com/stevenmburns/antennaknobs
+cd antennaknobs
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
@@ -311,7 +311,7 @@ pip install --no-build-isolation -e ./momwire
 **3b. (Optional) Install PyNEC for cross-validation**
 
 PyNEC is an optional second backend — **GPL-2.0**, installed separately from its
-own release, and never bundled with or required by antenna_designer. Skip it and
+own release, and never bundled with or required by antennaknobs. Skip it and
 momwire is still fully functional; install it only if you want to cross-check
 against NEC2.
 

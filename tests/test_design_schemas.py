@@ -46,7 +46,7 @@ DESIGN_NAMES = sorted(REGISTRY.keys())
 
 
 def _builder_cls(name: str):
-    mod = importlib.import_module(f"antenna_designer.designs.{name}")
+    mod = importlib.import_module(f"antennaknobs.designs.{name}")
     return mod.Builder
 
 

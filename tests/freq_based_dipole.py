@@ -1,4 +1,4 @@
-from antenna_designer import AntennaBuilder
+from antennaknobs import AntennaBuilder
 
 from types import MappingProxyType
 

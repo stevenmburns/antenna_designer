@@ -26,7 +26,7 @@ from .examples import REGISTRY as EXAMPLES
 
 C_LIGHT = 299_792_458.0
 
-# Typical "average" earth, matching antenna_designer/sim.py.
+# Typical "average" earth, matching antennaknobs/sim.py.
 GROUND_DIELECTRIC = 10.0
 GROUND_CONDUCTIVITY = 0.002
 

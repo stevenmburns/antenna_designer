@@ -12,7 +12,7 @@ from web.examples import REGISTRY
 
 VALID = """
 from types import MappingProxyType
-from antenna_designer import AntennaBuilder
+from antennaknobs import AntennaBuilder
 
 class Builder(AntennaBuilder):
     label = "Test dipole"
@@ -30,7 +30,7 @@ class Builder(AntennaBuilder):
 
 BROKEN_BUILD = """
 from types import MappingProxyType
-from antenna_designer import AntennaBuilder
+from antennaknobs import AntennaBuilder
 
 class Builder(AntennaBuilder):
     default_params = MappingProxyType({"freq": 14.0})
@@ -46,7 +46,7 @@ NO_BUILDER = "x = 1\n"
 def userdir(tmp_path, monkeypatch):
     """A clean temp user-design dir; strips any user.* from the shared
     REGISTRY before and after so tests don't leak into each other."""
-    monkeypatch.setenv("ANTENNA_DESIGNER_USER_DIR", str(tmp_path))
+    monkeypatch.setenv("ANTENNAKNOBS_USER_DIR", str(tmp_path))
 
     def _clear():
         for k in [k for k in REGISTRY if k.startswith("user.")]:
@@ -131,7 +131,7 @@ def test_template_file_is_skipped(userdir):
 
 def test_scaffold_creates_assets(tmp_path, monkeypatch):
     target = tmp_path / "designs"
-    monkeypatch.setenv("ANTENNA_DESIGNER_USER_DIR", str(target))
+    monkeypatch.setenv("ANTENNAKNOBS_USER_DIR", str(target))
     user_designs.ensure_scaffold()
     assert (target / "TEMPLATE.py").is_file()
     assert (target / "CLAUDE.md").is_file()

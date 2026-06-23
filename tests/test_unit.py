@@ -1,13 +1,13 @@
 import pytest
 
-from antenna_designer.designs.dipoles.invvee import Builder
+from antennaknobs.designs.dipoles.invvee import Builder
 # from icecream import ic
 
 from types import MappingProxyType
 
-from antenna_designer.sweep import resolve_range
+from antennaknobs.sweep import resolve_range
 
-from antenna_designer.cli import resolve_class
+from antennaknobs.cli import resolve_class
 from types import ModuleType
 
 
@@ -44,7 +44,7 @@ def test_resolve_class_ambiguous_bare_name(monkeypatch):
 
     # The package re-exports a cli() function, shadowing the submodule
     # attribute — fetch the actual module object explicitly.
-    cli = importlib.import_module("antenna_designer.cli")
+    cli = importlib.import_module("antennaknobs.cli")
 
     monkeypatch.setattr(cli, "_design_families", lambda: ["fam_a", "fam_b"])
 
@@ -53,8 +53,8 @@ def test_resolve_class_ambiguous_bare_name(monkeypatch):
 
     def fake_import(name):
         if name in (
-            "antenna_designer.designs.fam_a.dupe",
-            "antenna_designer.designs.fam_b.dupe",
+            "antennaknobs.designs.fam_a.dupe",
+            "antennaknobs.designs.fam_b.dupe",
         ):
             m = _types.ModuleType(name)
             m.Builder = _B

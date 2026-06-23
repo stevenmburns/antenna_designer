@@ -18,7 +18,7 @@ import traceback
 
 from momwire import TriangularSolver, SinusoidalSolver, BSplineSolver
 
-from antenna_designer.engines import PyNECEngine, MomwireEngine
+from antennaknobs.engines import PyNECEngine, MomwireEngine
 
 MOMWIRE_ENGINES = [
     ("triangular", dict(solver=TriangularSolver)),
@@ -30,7 +30,7 @@ MOMWIRE_ENGINES = [
 
 def _load_builder(dotted):
     """cebik.quad_3el -> designs.cebik.quad_3el.Builder."""
-    mod = importlib.import_module(f"antenna_designer.designs.{dotted}")
+    mod = importlib.import_module(f"antennaknobs.designs.{dotted}")
     return mod.Builder
 
 

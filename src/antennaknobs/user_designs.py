@@ -1,7 +1,7 @@
 """Discovery and path-loading of user-authored antenna designs.
 
 Engine/UI-agnostic: pure filesystem + ``importlib`` with no dependency on the
-``web`` package, so both the CLI (``antenna_designer.cli``) and the web adapter
+``web`` package, so both the CLI (``antennaknobs.cli``) and the web adapter
 resolve ``user.<name>`` designs from the same folders. The web layer
 (``web/user_designs.py``) adds REGISTRY registration, scaffolding, and
 error-panel formatting on top of this.
@@ -20,17 +20,17 @@ from collections.abc import Iterator
 from pathlib import Path
 
 USER_NS = "user"
-_MODULE_PREFIX = "antenna_designer._user_designs"
+_MODULE_PREFIX = "antennaknobs._user_designs"
 
 
 def default_user_dir() -> Path:
-    """The primary user-design folder: ``$ANTENNA_DESIGNER_USER_DIR`` if set,
-    else ``~/.antenna_designer/designs``. Read fresh each call so tests can
+    """The primary user-design folder: ``$ANTENNAKNOBS_USER_DIR`` if set,
+    else ``~/.antennaknobs/designs``. Read fresh each call so tests can
     redirect it via the environment."""
-    env = os.environ.get("ANTENNA_DESIGNER_USER_DIR")
+    env = os.environ.get("ANTENNAKNOBS_USER_DIR")
     if env:
         return Path(env).expanduser()
-    return Path.home() / ".antenna_designer" / "designs"
+    return Path.home() / ".antennaknobs" / "designs"
 
 
 def user_design_dirs() -> list[Path]:

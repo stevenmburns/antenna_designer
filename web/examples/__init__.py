@@ -26,7 +26,7 @@ def register(example: AntennaExample) -> AntennaExample:
     return example
 
 
-# Examples are auto-generated from antenna_designer's designs/ package via
+# Examples are auto-generated from antennaknobs's designs/ package via
 # the adapter, which derives a ParamSpec schema from each Builder's
 # default_params and wraps MomwireEngine + PyNECEngine in the SolveFn /
 # SweepFn contract above. See web/adapter.py for the bridge and what each

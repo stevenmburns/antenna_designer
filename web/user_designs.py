@@ -1,6 +1,6 @@
 """Web-layer glue for user-authored antenna designs.
 
-The discovery + path-loading core lives in ``antenna_designer.user_designs``
+The discovery + path-loading core lives in ``antennaknobs.user_designs``
 (no web dependency, shared with the CLI). This module layers on the bits that
 are specific to the running web app: registering each design into ``REGISTRY``
 under ``user.<filename>``, scaffolding the folder on first run, and formatting
@@ -14,7 +14,7 @@ import shutil
 import traceback
 from pathlib import Path
 
-from antenna_designer.user_designs import (
+from antennaknobs.user_designs import (
     USER_NS,
     default_user_dir,
     iter_design_files,

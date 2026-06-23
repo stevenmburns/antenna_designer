@@ -4,9 +4,9 @@ geometry translator it sits on top of."""
 import numpy as np
 import pytest
 
-from antenna_designer.designs.dipoles.invvee import Builder
-from antenna_designer.engines import PyNECEngine, MomwireEngine
-from antenna_designer.geometry import flat_wires_to_polylines
+from antennaknobs.designs.dipoles.invvee import Builder
+from antennaknobs.engines import PyNECEngine, MomwireEngine
+from antennaknobs.geometry import flat_wires_to_polylines
 
 from conftest import needs_pynec
 
@@ -70,9 +70,9 @@ def test_momwire_matches_pynec_in_free_space():
 @pytest.mark.parametrize(
     "design_module, max_dR, max_dX",
     [
-        ("antenna_designer.designs.arrays.invveearray", 1.5, 2.5),
-        ("antenna_designer.designs.arrays.moxonarray", 5.0, 2.5),
-        ("antenna_designer.designs.arrays.yagiarray", 3.0, 2.0),
+        ("antennaknobs.designs.arrays.invveearray", 1.5, 2.5),
+        ("antennaknobs.designs.arrays.moxonarray", 5.0, 2.5),
+        ("antennaknobs.designs.arrays.yagiarray", 3.0, 2.0),
     ],
 )
 def test_momwire_multi_feed_impedance_matches_pynec(design_module, max_dR, max_dX):
@@ -101,7 +101,7 @@ def test_momwire_multi_feed_impedance_sweep_shape():
     """impedance_sweep on a multi-feed array returns (n_k, n_feeds), not
     (n_k,). The shape normalisation is what lets the rest of the analysis
     code treat single- and multi-feed sweeps uniformly."""
-    from antenna_designer.designs.arrays.invveearray import Builder as ArrBuilder
+    from antennaknobs.designs.arrays.invveearray import Builder as ArrBuilder
 
     freqs = np.linspace(28.0, 29.0, 4)
     zs = MomwireEngine(ArrBuilder()).impedance_sweep(freqs)
@@ -118,7 +118,7 @@ def test_momwire_tl_card_runs_and_returns_finite_impedance():
     near TL half-wave resonance (the default twist puts one TL at ~0.5λ).
     Validate that the engine produces a finite, passive impedance and
     that the underlying Y matrix is symmetric (reciprocity)."""
-    from antenna_designer.designs.arrays.delta_looparray_with_tls import (
+    from antennaknobs.designs.arrays.delta_looparray_with_tls import (
         Builder as TLBuilder,
     )
 
@@ -140,7 +140,7 @@ def test_momwire_tl_card_passive_port_floats_correctly():
     """With TLs present, the passive (TL-only) ports must satisfy I_ext=0
     in the reduced solution. Reconstruct V from the impedance() solve and
     verify the constraint at every passive port."""
-    from antenna_designer.designs.arrays.delta_looparray_with_tls import (
+    from antennaknobs.designs.arrays.delta_looparray_with_tls import (
         Builder as TLBuilder,
     )
 
@@ -171,7 +171,7 @@ def test_momwire_tl_impedance_sweep_matches_per_freq():
     to within solver noise. Exercises the swept-Y → per-k TL stamp →
     driven-port reduction path that was added once compute_y_matrix_swept
     learned about junctions upstream."""
-    from antenna_designer.designs.arrays.delta_looparray_with_tls import (
+    from antennaknobs.designs.arrays.delta_looparray_with_tls import (
         Builder as TLBuilder,
     )
 
@@ -196,7 +196,7 @@ def test_momwire_tl_admittance_quarter_wave():
     """Hand-checked Y_TL for a quarter-wave TL with Z0=50: at θ=π/2,
     Y_TL = (1/(j50)) [[0,-1],[-1,0]] = [[0, j/50], [j/50, 0]].
     A unit-length TL of length λ/4 satisfies sin(βl)=1, cos(βl)=0."""
-    from antenna_designer.network_reduce import tl_admittance_2x2
+    from antennaknobs.network_reduce import tl_admittance_2x2
 
     wl = 4.0  # arbitrary; TL length = wl/4 gives θ=π/2
     Y_tl = tl_admittance_2x2(z0=50.0, length=1.0, wavelength=wl)
@@ -208,7 +208,7 @@ def test_momwire_tl_admittance_transposed_flips_offdiagonal_only():
     """A crossed/transposed line inverts port B's polarity: only the
     off-diagonal (transfer) terms flip sign; the diagonal (self) terms are
     unchanged. (NOT the same as a negative z0, which negates everything.)"""
-    from antenna_designer.network_reduce import tl_admittance_2x2
+    from antennaknobs.network_reduce import tl_admittance_2x2
 
     # θ = π/3 so cos≠0 and the diagonal is non-trivial to compare.
     wl, length, z0 = 6.0, 1.0, 50.0
@@ -222,7 +222,7 @@ def test_momwire_tl_admittance_transposed_flips_offdiagonal_only():
 def test_momwire_tl_admittance_half_wave_singular():
     """A half-wavelength TL gives sin(βl)=0 — the admittance is singular.
     Raise instead of returning nans so callers can adjust geometry."""
-    from antenna_designer.network_reduce import tl_admittance_2x2
+    from antennaknobs.network_reduce import tl_admittance_2x2
 
     with pytest.raises(ValueError, match="singular"):
         tl_admittance_2x2(z0=50.0, length=2.0, wavelength=4.0)
@@ -237,7 +237,7 @@ def test_momwire_difftl_admittance_quarter_wave():
     TL, lifted to four terminals by M = [[1,-1,0,0],[0,0,1,-1]] as
     Stamp = Mᵀ · Y2 · M. For a quarter-wave Z0=50 line, Y2 = [[0, j/50],
     [j/50, 0]], so the cross-coupling constant is c = j/50."""
-    from antenna_designer.network_reduce import difftl_admittance_4x4
+    from antennaknobs.network_reduce import difftl_admittance_4x4
 
     wl = 4.0  # length = wl/4 -> theta = pi/2
     Y4 = difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl, transposed=False)
@@ -258,7 +258,7 @@ def test_momwire_difftl_transposed_flips_cross_coupling():
     """Transposing one port swaps its two terminals — that's the half-twist.
     It flips the sign of the A<->B cross-coupling blocks while leaving the
     self blocks (each port's own admittance) unchanged."""
-    from antenna_designer.network_reduce import difftl_admittance_4x4
+    from antennaknobs.network_reduce import difftl_admittance_4x4
 
     wl = 4.0
     Y = difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl, transposed=False)
@@ -274,7 +274,7 @@ def test_momwire_difftl_common_mode_stamp_quarter_wave():
     one. For a quarter-wave common line, Y_c = [[0, j/Zc],[j/Zc,0]], lifted
     by P_c=[[½,½,0,0],[0,0,½,½]] as P_cᵀ·Y_c·P_c — a hand value of
     (j/4Zc)·[[0,0,1,1],[0,0,1,1],[1,1,0,0],[1,1,0,0]]."""
-    from antenna_designer.network_reduce import difftl_admittance_4x4
+    from antennaknobs.network_reduce import difftl_admittance_4x4
 
     wl = 4.0
     Y_diff = difftl_admittance_4x4(z0=50.0, length=1.0, wavelength=wl)
@@ -295,8 +295,8 @@ def _difftl_demo_builder(transposed=False):
     line singularity)."""
     from types import MappingProxyType
 
-    from antenna_designer import AntennaBuilder
-    from antenna_designer.network import DiffTL, Driven, Network, PortAtEdge
+    from antennaknobs import AntennaBuilder
+    from antennaknobs.network import DiffTL, Driven, Network, PortAtEdge
 
     h = 0.5 * (299.792458 / 28.47) * 0.95
     eps = 0.1
@@ -338,7 +338,7 @@ def _difftl_demo_builder(transposed=False):
 
 
 def test_difftl_network_rejects_unknown_ref():
-    from antenna_designer.network import DiffTL, Driven, Network, PortAtEdge
+    from antennaknobs.network import DiffTL, Driven, Network, PortAtEdge
 
     with pytest.raises(ValueError, match="unknown port"):
         Network(
@@ -387,10 +387,10 @@ def _delta_looparray_difftl_builder():
     indexing, 4x4 stamp, nodal reduction) against an independently-validated
     reference array.
     """
-    from antenna_designer.designs.arrays.delta_looparray_network import (
+    from antennaknobs.designs.arrays.delta_looparray_network import (
         Builder as NetBuilder,
     )
-    from antenna_designer.network import (
+    from antennaknobs.network import (
         DiffTL,
         Driven,
         Network,
@@ -441,7 +441,7 @@ def test_difftl_reproduces_tl_array_impedance():
     TL-driven delta_looparray impedance to numerical precision — a real
     radiating-array validation of the 4-terminal element, not just the
     bare admittance matrix."""
-    from antenna_designer.designs.arrays.delta_looparray_network import (
+    from antennaknobs.designs.arrays.delta_looparray_network import (
         Builder as NetBuilder,
     )
 
@@ -456,7 +456,7 @@ def test_difftl_reproduces_tl_array_far_field():
     """Same geometry + electrically-identical feed network -> identical
     radiated pattern. Confirms the DiffTL path drives the same current
     distribution, not merely the same driving-point Z."""
-    from antenna_designer.designs.arrays.delta_looparray_network import (
+    from antennaknobs.designs.arrays.delta_looparray_network import (
         Builder as NetBuilder,
     )
 
@@ -474,7 +474,7 @@ def test_difftl_reproduces_tl_array_far_field():
 def test_difftl_reproduces_tl_array_impedance_sweep():
     """Exercises the frequency-dependent (swept Y + per-k 4x4 stamp) DiffTL
     path against the TL reference across the band."""
-    from antenna_designer.designs.arrays.delta_looparray_network import (
+    from antennaknobs.designs.arrays.delta_looparray_network import (
         Builder as NetBuilder,
     )
 
@@ -561,7 +561,7 @@ def test_compare_patterns_accepts_engine_instances(tmp_path):
     import matplotlib
 
     matplotlib.use("Agg")
-    import antenna_designer as ant
+    import antennaknobs as ant
 
     b = Builder()
     out = tmp_path / "cmp.png"
@@ -580,7 +580,7 @@ def test_compare_patterns_backwards_compatible_with_bare_builders(tmp_path):
     import matplotlib
 
     matplotlib.use("Agg")
-    import antenna_designer as ant
+    import antennaknobs as ant
 
     out = tmp_path / "cmp.png"
     ant.compare_patterns([Builder(), Builder()], fn=str(out))
@@ -595,7 +595,7 @@ def test_sweep_freq_accepts_engine_factory(tmp_path):
 
     matplotlib.use("Agg")
     from functools import partial
-    import antenna_designer as ant
+    import antennaknobs as ant
 
     out = tmp_path / "sf.png"
     ant.sweep_freq(
@@ -612,7 +612,7 @@ def test_sweep_accepts_engine_factory(tmp_path):
     import matplotlib
 
     matplotlib.use("Agg")
-    import antenna_designer as ant
+    import antennaknobs as ant
 
     out = tmp_path / "sw.png"
     ant.sweep(
@@ -631,7 +631,7 @@ def test_sweep_gain_accepts_engine_factory(tmp_path):
     import matplotlib
 
     matplotlib.use("Agg")
-    import antenna_designer as ant
+    import antennaknobs as ant
 
     out = tmp_path / "sg.png"
     ant.sweep_gain(
@@ -656,7 +656,7 @@ def test_plot_patterns_pins_radial_floor(tmp_path):
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    import antenna_designer as ant
+    import antennaknobs as ant
 
     b = Builder()
     out = tmp_path / "p.png"
@@ -674,7 +674,7 @@ def test_translator_handles_hentenna_tee_junctions():
     """Hentenna has two degree-3 nodes (B, D); translator should
     decompose into 3 polylines all running B→D, with one junction at
     each."""
-    from antenna_designer.designs.specialty.hentenna import Builder as H
+    from antennaknobs.designs.specialty.hentenna import Builder as H
 
     out = flat_wires_to_polylines(H().build_wires())
     assert len(out["polylines"]) == 3
@@ -686,7 +686,7 @@ def test_translator_handles_hentenna_tee_junctions():
 def test_translator_handles_fandipole_high_degree_junctions():
     """Fandipole has two degree-6 nodes (S, T): feed wire + 5 spokes
     on each side. 5 polylines per side + 1 feed = 11 polylines."""
-    from antenna_designer.designs.multiband.fandipole import Builder as F
+    from antennaknobs.designs.multiband.fandipole import Builder as F
 
     out = flat_wires_to_polylines(F().build_wires())
     assert len(out["polylines"]) == 11
@@ -707,7 +707,7 @@ def test_momwire_sinusoidal_hentenna_impedance_close_to_pynec():
     this test is just verifying that the translator's junction/feed
     mapping is right."""
     from momwire import SinusoidalSolver
-    from antenna_designer.designs.specialty.hentenna import Builder as H
+    from antennaknobs.designs.specialty.hentenna import Builder as H
 
     b = H()
     z_nec = PyNECEngine(b, ground=None).impedance()[0]
@@ -724,7 +724,7 @@ def test_momwire_sinusoidal_fandipole_runs():
     a plausible value, the multi-wire geometry has too many freedoms
     to set a tight tolerance here."""
     from momwire import SinusoidalSolver
-    from antenna_designer.designs.multiband.fandipole import Builder as F
+    from antennaknobs.designs.multiband.fandipole import Builder as F
 
     z = MomwireEngine(F(), solver=SinusoidalSolver).impedance()[0]
     assert 20 < z.real < 200, z
@@ -736,7 +736,7 @@ def test_translator_handles_bowtie_closed_cycle():
     share one edge per triangle, leaving every node degree-2). Cut at
     the excited edge: feed becomes a 1-edge polyline, the rest becomes
     a 9-edge polyline running the long way back."""
-    from antenna_designer.designs.specialty.bowtie import Builder as BT
+    from antennaknobs.designs.specialty.bowtie import Builder as BT
 
     out = flat_wires_to_polylines(BT().build_wires())
     assert len(out["polylines"]) == 2
@@ -748,7 +748,7 @@ def test_translator_handles_bowtie_closed_cycle():
 
 
 def test_translator_handles_delta_loop_pure_cycle():
-    from antenna_designer.designs.loops.delta_loop import Builder as DL
+    from antennaknobs.designs.loops.delta_loop import Builder as DL
 
     out = flat_wires_to_polylines(DL().build_wires())
     assert len(out["polylines"]) == 2
@@ -763,7 +763,7 @@ def test_momwire_sinusoidal_delta_loop_close_to_pynec():
     canonical pure-cycle geometry. Tighter bound than the hentenna test
     because there are no tee junctions adding extra basis-family bias."""
     from momwire import SinusoidalSolver
-    from antenna_designer.designs.loops.delta_loop import Builder as DL
+    from antennaknobs.designs.loops.delta_loop import Builder as DL
 
     b = DL()
     z_nec = PyNECEngine(b, ground=None).impedance()[0]
@@ -776,7 +776,7 @@ def test_momwire_triangular_bowtie_runs():
     """Triangular handles the bowtie because its feed gap is n_seg=3
     (interior tent basis available). Verifies the closed-loop path
     doesn't trip Triangular's feed-basis lookup."""
-    from antenna_designer.designs.specialty.bowtie import Builder as BT
+    from antennaknobs.designs.specialty.bowtie import Builder as BT
 
     z = MomwireEngine(BT()).impedance()[0]
     assert 100 < z.real < 300, z
@@ -786,7 +786,7 @@ def test_momwire_triangular_bowtie_runs():
 def test_translator_emits_one_feed_per_excited_tuple():
     """Multi-feed builders (arrays) should produce one entry in `feeds`
     per excited wire tuple, with voltages from the builder phasors."""
-    from antenna_designer.designs.arrays.bowtiearray1x2 import Builder as B12
+    from antennaknobs.designs.arrays.bowtiearray1x2 import Builder as B12
 
     b = B12()
     b.phase_lr = 90.0
@@ -808,7 +808,7 @@ def test_momwire_multifeed_bowtie_1x2_matches_pynec():
     Z from MomwireEngine must agree with PyNEC, and the two feeds should
     return ~equal Z by symmetry. 5% relative + 3 Ω absolute slack covers
     the basis-vs-NEC gap that momwire's own bowtie-1×2 parity test uses."""
-    from antenna_designer.designs.arrays.bowtiearray1x2 import Builder as B12
+    from antennaknobs.designs.arrays.bowtiearray1x2 import Builder as B12
 
     b = B12()
     z_ps = MomwireEngine(b).impedance()
@@ -824,7 +824,7 @@ def test_momwire_multifeed_bowtie_1x2_matches_pynec():
 def test_momwire_multifeed_bowtie_1x2_phased_matches_pynec():
     """90° phasing makes Z₀ ≠ Z₁ via mutual coupling. Catches feed-
     ordering / voltage-sign bugs that a symmetric drive would mask."""
-    from antenna_designer.designs.arrays.bowtiearray1x2 import Builder as B12
+    from antennaknobs.designs.arrays.bowtiearray1x2 import Builder as B12
 
     b = B12()
     b.phase_lr = 90.0
@@ -847,7 +847,7 @@ def test_momwire_multifeed_far_field_matches_pynec():
     in the multi-feed RHS would show up as a different lobe shape and
     a different peak. 0.1 dBi headroom matches the single-feed dipole
     test; observed delta is ~0.02 dBi on both phasings."""
-    from antenna_designer.designs.arrays.bowtiearray1x2 import Builder as B12
+    from antennaknobs.designs.arrays.bowtiearray1x2 import Builder as B12
 
     for phase_lr_deg in (0.0, 90.0):
         b = B12()
@@ -864,7 +864,7 @@ def test_momwire_multifeed_far_field_matches_pynec():
 def test_momwire_multifeed_impedance_sweep_shape():
     """Multi-feed impedance_sweep must return (n_freqs, n_feeds) to
     match PyNECEngine's shape contract."""
-    from antenna_designer.designs.arrays.bowtiearray1x2 import Builder as B12
+    from antennaknobs.designs.arrays.bowtiearray1x2 import Builder as B12
 
     freqs = np.linspace(28.0, 29.0, 4)
     zs = MomwireEngine(B12()).impedance_sweep(freqs)
@@ -890,10 +890,10 @@ def test_network_spec_matches_legacy_tls_on_delta_looparray():
     an attachment point for tl_card. Same antenna, same TLs, same drive.
     Impedance should agree to within the stub wire's tiny radiative
     contribution (~0.5%), far-field peak essentially identical."""
-    from antenna_designer.designs.arrays.delta_looparray_with_tls import (
+    from antennaknobs.designs.arrays.delta_looparray_with_tls import (
         Builder as LegacyBuilder,
     )
-    from antenna_designer.designs.arrays.delta_looparray_network import (
+    from antennaknobs.designs.arrays.delta_looparray_network import (
         Builder as NetBuilder,
     )
 
@@ -913,7 +913,7 @@ def test_network_spec_matches_legacy_tls_on_delta_looparray():
 def test_network_spec_impedance_sweep_matches_per_freq():
     """impedance_sweep() in the network path should match per-freq
     impedance() — exercises the swept Y + per-k branch stamping path."""
-    from antenna_designer.designs.arrays.delta_looparray_network import (
+    from antennaknobs.designs.arrays.delta_looparray_network import (
         Builder as NetBuilder,
     )
 
@@ -932,7 +932,7 @@ def test_network_spec_impedance_sweep_matches_per_freq():
 def test_network_spec_rejects_unknown_port_reference():
     """Constructing a Network with a branch referencing a port name that
     isn't in `ports` should raise immediately, not silently at solve time."""
-    from antenna_designer.network import Driven, Network, PortVirtual, TL
+    from antennaknobs.network import Driven, Network, PortVirtual, TL
 
     with pytest.raises(ValueError, match="unknown port"):
         Network(
@@ -945,8 +945,8 @@ def test_network_spec_rejects_unknown_port_reference():
 def test_network_spec_rejects_port_at_edge_with_no_named_edge():
     """PortAtEdge("loop1") with no `loop1` edge in build_wires() should
     raise a clear error at engine construction time."""
-    from antenna_designer import AntennaBuilder
-    from antenna_designer.network import Driven, Network, PortAtEdge, PortVirtual, TL
+    from antennaknobs import AntennaBuilder
+    from antennaknobs.network import Driven, Network, PortAtEdge, PortVirtual, TL
     from types import MappingProxyType
 
     class BadBuilder(AntennaBuilder):
@@ -979,7 +979,7 @@ def test_pynec_network_matches_momwire_on_delta_looparray():
     wildly wrong impedance (~100 - j33000); the reducer path instead agrees
     with MomwireEngine to within the two MoM formulations' inherent few-percent
     difference, for both impedance and far-field gain."""
-    from antenna_designer.designs.arrays.delta_looparray_network import (
+    from antennaknobs.designs.arrays.delta_looparray_network import (
         Builder as NetBuilder,
     )
 
@@ -1001,8 +1001,8 @@ def test_pynec_virtual_to_virtual_tl_supported():
     nodes are just rows in the network Y matrix. It yields a finite impedance
     agreeing with MomwireEngine (was a hard ValueError under the old tl_card
     dispatch)."""
-    from antenna_designer import AntennaBuilder
-    from antenna_designer.network import Driven, Network, PortAtEdge, PortVirtual, TL
+    from antennaknobs import AntennaBuilder
+    from antennaknobs.network import Driven, Network, PortAtEdge, PortVirtual, TL
     from types import MappingProxyType
 
     class Builder(AntennaBuilder):
@@ -1036,8 +1036,8 @@ def test_pynec_load_branch_resistor_adds_to_impedance():
     """Load(r=R) on a PyNEC-driven dipole should shift driving-point Z by
     exactly R — ld_card type-0 inserts a series R+L+C at the segment. This
     is the cross-engine cross-check for piece (A) on the PyNEC side."""
-    from antenna_designer import AntennaBuilder
-    from antenna_designer.network import Driven, Load, Network, PortAtEdge
+    from antennaknobs import AntennaBuilder
+    from antennaknobs.network import Driven, Load, Network, PortAtEdge
     from types import MappingProxyType
 
     class Builder(AntennaBuilder):
@@ -1072,7 +1072,7 @@ def test_short_dipole_loaded_cross_engine_impedance():
     with a series loading coil at the feed point. Momwire's Sherman-Morrison
     Y stamp and PyNEC's ld_card should agree to within their baseline
     free-space dipole tolerance (~1-2 Ω R, tens of Ω X)."""
-    from antenna_designer.designs.dipoles.short_dipole_loaded import (
+    from antennaknobs.designs.dipoles.short_dipole_loaded import (
         Builder as ShortB,
     )
 
@@ -1094,7 +1094,7 @@ def test_short_dipole_loaded_pattern_similar_lower_gain_than_full():
     pattern as a full-length dipole but with ~0.4 dB less peak gain
     (closer to the ideal short-dipole directivity of 1.76 dBi vs the
     half-wave's 2.15 dBi). Confirmed on both engines."""
-    from antenna_designer.designs.dipoles.short_dipole_loaded import (
+    from antennaknobs.designs.dipoles.short_dipole_loaded import (
         Builder as ShortB,
     )
 
@@ -1130,8 +1130,8 @@ def test_short_dipole_loaded_pattern_similar_lower_gain_than_full():
 @needs_pynec
 def test_pynec_load_branch_rejects_virtual_port():
     """Load on a PortVirtual is rejected — same check as MomwireEngine."""
-    from antenna_designer import AntennaBuilder
-    from antenna_designer.network import (
+    from antennaknobs import AntennaBuilder
+    from antennaknobs.network import (
         Driven,
         Load,
         Network,
@@ -1170,8 +1170,8 @@ def test_pynec_network_rejects_port_at_edge_with_no_named_edge():
     """PortAtEdge("loop1") with no `loop1` edge in build_wires() should
     raise a clear error at engine construction time — mirror of the
     MomwireEngine check."""
-    from antenna_designer import AntennaBuilder
-    from antenna_designer.network import Driven, Network, PortAtEdge, PortVirtual, TL
+    from antennaknobs import AntennaBuilder
+    from antennaknobs.network import Driven, Network, PortAtEdge, PortVirtual, TL
     from types import MappingProxyType
 
     class Builder(AntennaBuilder):
@@ -1203,7 +1203,7 @@ def test_trap_dipole_cross_engine_impedance_at_trap_resonance():
     (high R, high X; the resonant trap is hard to cross-validate strictly
     because the engines handle the singular MoM update slightly
     differently)."""
-    from antenna_designer.designs.multiband.trap_dipole import Builder
+    from antennaknobs.designs.multiband.trap_dipole import Builder
 
     b = Builder()
     b.freq = 28.0
@@ -1227,7 +1227,7 @@ def test_trap_dipole_trap_C_changes_impedance():
     substantially — confirms the parallel-LC Load update actually
     propagates to the driven-port impedance (the bug that motivated
     splitting passive ports into loaded vs floating; see PR notes)."""
-    from antenna_designer.designs.multiband.trap_dipole import Builder
+    from antennaknobs.designs.multiband.trap_dipole import Builder
 
     b_res = Builder()
     b_res.freq = 28.0
@@ -1250,7 +1250,7 @@ def test_trap_dipole_low_band_loaded_into_resonance():
     loading lengthens the outer arms electrically and pulls the full-
     length antenna near resonance — much lower |X| than the unloaded
     short inner dipole would have on its own at 14 MHz."""
-    from antenna_designer.designs.multiband.trap_dipole import Builder
+    from antennaknobs.designs.multiband.trap_dipole import Builder
 
     b = Builder()
     b.freq = 14.0
@@ -1274,7 +1274,7 @@ def test_trap_dipole_parallel_lc_resonance_is_finite():
     stamp resolves the 0/∞ analytically (coefficient → 1/Y_kk, the
     open-circuit Schur complement). Momwire must produce a finite impedance
     here — no raise, no NaN/Inf."""
-    from antenna_designer.designs.multiband.trap_dipole import Builder
+    from antennaknobs.designs.multiband.trap_dipole import Builder
 
     b = Builder()
     b.freq = b.design_freq  # exactly at trap resonance — tank admittance → 0
@@ -1288,7 +1288,7 @@ def test_load_series_admittance_parallel_lc_zero_at_resonance():
     than raising."""
     import math
 
-    from antenna_designer.network import (
+    from antennaknobs.network import (
         Load,
         load_impedance,
         load_series_admittance,
@@ -1315,7 +1315,7 @@ def test_load_series_admittance_series_short_is_inf():
     admittance is reported as inf so the stamp consumer skips it."""
     import math
 
-    from antenna_designer.network import Load, load_series_admittance
+    from antennaknobs.network import Load, load_series_admittance
 
     L = 5e-6
     C = 1.0 / (L * (2 * math.pi * 28e6) ** 2)
@@ -1331,8 +1331,8 @@ def _load_dipole_builder(load_branch=None, name_feed=False):
     When `load_branch` is given, build_network() returns a Network with that
     Load and a Driven on the same port. Otherwise build_network()=None and
     the engine falls through to the plain-feed path."""
-    from antenna_designer import AntennaBuilder
-    from antenna_designer.network import Driven, Network, PortAtEdge
+    from antennaknobs import AntennaBuilder
+    from antennaknobs.network import Driven, Network, PortAtEdge
     from types import MappingProxyType
 
     class Builder(AntennaBuilder):
@@ -1360,7 +1360,7 @@ def _load_dipole_builder(load_branch=None, name_feed=False):
 def test_load_branch_resistor_adds_to_impedance():
     """Load(r=R) on the driven port should shift driving-point Z by exactly R
     — Sherman-Morrison on a 1-port reduces to Z' = Z + Z_L."""
-    from antenna_designer.network import Load
+    from antennaknobs.network import Load
 
     z_bare = MomwireEngine(_load_dipole_builder(name_feed=True)).impedance()[0]
     z_loaded = MomwireEngine(
@@ -1372,7 +1372,7 @@ def test_load_branch_resistor_adds_to_impedance():
 def test_load_branch_series_lc_at_resonance_zero_impact():
     """A series LC tuned to be resonant at the operating freq has Z_L=0 →
     no shift in driving-point Z."""
-    from antenna_designer.network import Load
+    from antennaknobs.network import Load
 
     f_hz = 28.0e6
     l = 1e-6
@@ -1386,7 +1386,7 @@ def test_load_branch_series_lc_at_resonance_zero_impact():
 
 def test_load_branch_inductor_adds_reactance():
     """Load(l=L) adds jωL to driving-point Z — pure reactive shift."""
-    from antenna_designer.network import Load
+    from antennaknobs.network import Load
 
     l = 1e-6
     omega = 2 * np.pi * 28.0e6
@@ -1400,8 +1400,8 @@ def test_load_branch_inductor_adds_reactance():
 
 def test_load_branch_rejects_virtual_port():
     """Load on a PortVirtual has no antenna segment to load → ValueError."""
-    from antenna_designer import AntennaBuilder
-    from antenna_designer.network import (
+    from antennaknobs import AntennaBuilder
+    from antennaknobs.network import (
         Driven,
         Load,
         Network,
@@ -1477,8 +1477,8 @@ def test_translator_rejects_geometry_with_no_excitation():
 @pytest.mark.parametrize(
     "design_module",
     [
-        "antenna_designer.designs.arrays.invveearray",
-        "antenna_designer.designs.arrays.bowtiearray2x4",
+        "antennaknobs.designs.arrays.invveearray",
+        "antennaknobs.designs.arrays.bowtiearray2x4",
     ],
 )
 def test_momwire_arrayblock_matches_dense_bspline(design_module):
@@ -1502,7 +1502,7 @@ def test_momwire_arrayblock_parity_matches_bspline():
     """ArrayBlockSolver shares BSplineSolver's degree-driven parity (a regression
     guard for the _parity_for_solver wiring)."""
     from momwire import BSplineSolver, ArrayBlockSolver
-    from antenna_designer.engines.momwire import _parity_for_solver
+    from antennaknobs.engines.momwire import _parity_for_solver
 
     for degree in (1, 2):
         kw = {"degree": degree}

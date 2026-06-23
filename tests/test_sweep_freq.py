@@ -1,5 +1,5 @@
-import antenna_designer as ant
-from antenna_designer.designs.dipoles.invvee import Builder
+import antennaknobs as ant
+from antennaknobs.designs.dipoles.invvee import Builder
 
 from conftest import needs_pynec
 

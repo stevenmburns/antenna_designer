@@ -1412,7 +1412,7 @@ export function App() {
     //     `link_meas_freq_to_param` — push the current value of the
     //     named sibling (possibly itself) into measFreq. Used by
     //     multi-band antennas with parallel length_NN / freq_NN flat
-    //     sliders (antenna_designer's fandipole).
+    //     sliders (antennaknobs's fandipole).
     if (!linkMeas) return;
     const ex = currentExample;
     if (!ex) return;

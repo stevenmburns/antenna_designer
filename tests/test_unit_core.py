@@ -1,4 +1,4 @@
-from antenna_designer.core import save_or_show
+from antennaknobs.core import save_or_show
 from unittest.mock import MagicMock
 
 

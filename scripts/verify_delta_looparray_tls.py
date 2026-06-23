@@ -23,8 +23,8 @@ from types import MappingProxyType
 
 import numpy as np
 
-from antenna_designer import AntennaBuilder, Transform, TransformStack
-from antenna_designer.engines.momwire import MomwireEngine
+from antennaknobs import AntennaBuilder, Transform, TransformStack
+from antennaknobs.engines.momwire import MomwireEngine
 
 import sys
 import os

@@ -1,4 +1,4 @@
-"""Tests for antenna_designer.nec_export.
+"""Tests for antennaknobs.nec_export.
 
 Structural tests run everywhere. The numerical cross-check runs the exported
 deck through the `nec2c` CLI (an independent NEC2 implementation) and compares
@@ -14,10 +14,10 @@ import pytest
 
 pytest.importorskip("PyNEC")
 
-from antenna_designer.designs.dipoles.invvee import Builder as InvVee  # noqa: E402
-from antenna_designer.designs.beams.yagi import Builder as Yagi  # noqa: E402
-from antenna_designer.engines import PyNECEngine  # noqa: E402
-from antenna_designer.nec_export import export_nec  # noqa: E402
+from antennaknobs.designs.dipoles.invvee import Builder as InvVee  # noqa: E402
+from antennaknobs.designs.beams.yagi import Builder as Yagi  # noqa: E402
+from antennaknobs.engines import PyNECEngine  # noqa: E402
+from antennaknobs.nec_export import export_nec  # noqa: E402
 
 HAVE_NEC2C = shutil.which("nec2c") is not None
 
@@ -63,7 +63,7 @@ def test_export_ground_cards():
 def test_export_reducer_network_raises():
     """build_network() TL/virtual-driver designs go through the multiport-Y
     reducer and have no faithful native-NEC deck."""
-    from antenna_designer.designs.arrays.delta_looparray_network import (
+    from antennaknobs.designs.arrays.delta_looparray_network import (
         Builder as NetTLBuilder,
     )
 
@@ -73,7 +73,7 @@ def test_export_reducer_network_raises():
 
 def test_export_legacy_tls_emits_tl_cards():
     """The legacy build_tls() path maps to native NEC TL cards."""
-    from antenna_designer.designs.arrays.delta_looparray_with_tls import (
+    from antennaknobs.designs.arrays.delta_looparray_with_tls import (
         Builder as TLBuilder,
     )
 

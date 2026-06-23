@@ -1,6 +1,6 @@
 """hexbeam_5band Builder: per-band z-stagger, multi-feed shape, daisy-
 chain TL list. Ports the multi-band convention from momwire's
-hexbeam_5band example into antenna_designer's Builder pattern."""
+hexbeam_5band example into antennaknobs's Builder pattern."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import math
 
 import pytest
 
-from antenna_designer.designs.multiband.hexbeam_5band import Builder
+from antennaknobs.designs.multiband.hexbeam_5band import Builder
 
 
 def _feeds(tups):

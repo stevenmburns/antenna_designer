@@ -3,7 +3,7 @@ import math
 from math import sqrt
 from types import MappingProxyType
 
-from antenna_designer import AntennaBuilder
+from antennaknobs import AntennaBuilder
 
 logger = logging.getLogger(__name__)
 

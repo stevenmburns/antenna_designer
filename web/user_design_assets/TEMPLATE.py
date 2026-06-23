@@ -22,13 +22,13 @@ THE RULES (keep it this simple)
 - One file = one antenna. The file name is the antenna name
   (lowercase_with_underscores.py, no spaces, no dots except ``.py``).
 - Define a class named exactly ``Builder`` that subclasses ``AntennaBuilder``.
-- Stay self-contained: only import from ``antenna_designer`` and the Python
+- Stay self-contained: only import from ``antennaknobs`` and the Python
   standard library. Don't import other antenna files.
 """
 
 from types import MappingProxyType
 
-from antenna_designer import AntennaBuilder
+from antennaknobs import AntennaBuilder
 
 
 class Builder(AntennaBuilder):
