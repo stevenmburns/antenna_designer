@@ -669,7 +669,7 @@ def test_auto_target_z0_scales_by_array_class(design_module, expected_z0):
 
     from web.adapter import _auto_target_z0
 
-    cls = importlib.import_module(f"antenna_designer.designs.{design_module}").Builder
+    cls = importlib.import_module(f"antennaknobs.designs.{design_module}").Builder
     assert _auto_target_z0(cls) == expected_z0
 
 
@@ -704,7 +704,7 @@ def test_phase_param_slider_range_spans_full_unit_circle():
     import importlib
 
     schema = importlib.import_module(
-        "antenna_designer.designs.arrays.bowtiearray"
+        "antennaknobs.designs.arrays.bowtiearray"
     ).Builder.default_params
     assert "phase_lr" in schema and "phase_tb" in schema
 
@@ -829,7 +829,7 @@ def test_ws_endpoint_returns_cleanly_on_client_disconnect(client: TestClient):
 
 _BROKEN_USER_DESIGN = """
 from types import MappingProxyType
-from antenna_designer import AntennaBuilder
+from antennaknobs import AntennaBuilder
 
 class Builder(AntennaBuilder):
     default_params = MappingProxyType({"freq": 14.0})

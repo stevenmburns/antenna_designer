@@ -1,5 +1,5 @@
 import numpy as np
-from antenna_designer import Transform, TransformStack
+from antennaknobs import Transform, TransformStack
 
 
 def test_hit():

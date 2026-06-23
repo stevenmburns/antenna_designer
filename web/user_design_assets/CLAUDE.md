@@ -17,7 +17,7 @@ A design file must:
    antenna's name in the app (`my_dipole.py` → `user.my_dipole`). No spaces,
    no dots except the `.py` extension, one antenna per file.
 2. **Define a class named exactly `Builder`** that subclasses `AntennaBuilder`.
-3. **Import only** from `antenna_designer` and the Python standard library.
+3. **Import only** from `antennaknobs` and the Python standard library.
    Do **not** import other design files — keep each one self-contained.
 4. Provide a **`default_params`** mapping (use `MappingProxyType(...)`) and a
    **`build_wires(self)`** method.
@@ -25,9 +25,9 @@ A design file must:
 Start from `TEMPLATE.py` in this folder — copy it, rename it, edit it.
 
 The same file also works from the command line: once `my_dipole.py` is in
-this folder, run e.g. `antenna_designer draw --builder user.my_dipole` (or
+this folder, run e.g. `antennaknobs draw --builder user.my_dipole` (or
 `sweep`, `pattern`, …). Always address it with the `user.` prefix.
-`antenna_designer list` shows every available design name (yours included).
+`antennaknobs list` shows every available design name (yours included).
 
 ## `default_params`
 
@@ -71,7 +71,7 @@ designs work and gives you a clean per-band tuning knob.
 
 ## Arrays of identical elements (advanced)
 
-For a phased array of N copies of one element, `antenna_designer` exposes
+For a phased array of N copies of one element, `antennaknobs` exposes
 `Array1x2Builder`, `Array1x4Builder`, `Array2x2Builder`, `Array2x4Builder`.
 These wrap an element `Builder`. For a first design, stick to a single
 `build_wires`; reach for arrays only once a single element works.

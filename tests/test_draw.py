@@ -6,7 +6,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-from antenna_designer import AntennaBuilder
+from antennaknobs import AntennaBuilder
 
 
 def test_draw_handles_named_edge_designs(tmp_path):
@@ -14,7 +14,7 @@ def test_draw_handles_named_edge_designs(tmp_path):
     "too many values to unpack" on every named-edge (5-tuple) design -- the
     transmission-line / network builders such as wire.sterba_tl. It
     must render those too, taking the endpoints regardless of tuple arity."""
-    from antenna_designer.designs.wire.sterba_tl import Builder
+    from antennaknobs.designs.wire.sterba_tl import Builder
 
     tups = Builder().build_wires()
     assert any(len(t) == 5 for t in tups)  # this design uses named edges
@@ -26,7 +26,7 @@ def test_draw_handles_named_edge_designs(tmp_path):
 
 def test_draw_handles_plain_four_tuple_designs(tmp_path):
     """The common 4-tuple case (no named edges) still works."""
-    from antenna_designer.designs.beams.moxon import Builder
+    from antennaknobs.designs.beams.moxon import Builder
 
     out = tmp_path / "moxon.png"
     AntennaBuilder.draw(Builder().build_wires(), fn=str(out))

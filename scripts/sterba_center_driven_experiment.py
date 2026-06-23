@@ -20,9 +20,9 @@ import sys
 
 import numpy as np
 
-from antenna_designer.designs.wire import sterba, sterba_center_driven
-from antenna_designer.engines import MomwireEngine
-from antenna_designer.far_field import plot_patterns
+from antennaknobs.designs.wire import sterba, sterba_center_driven
+from antennaknobs.engines import MomwireEngine
+from antennaknobs.far_field import plot_patterns
 
 FF_KW = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
 GROUND = None  # free space, vs the reference's 10.501 dBi

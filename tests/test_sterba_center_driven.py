@@ -8,8 +8,8 @@ matched) is measured by scripts/sterba_center_driven_experiment.py.
 
 import numpy as np
 
-from antenna_designer.designs.wire import sterba_center_driven
-from antenna_designer.engines import MomwireEngine
+from antennaknobs.designs.wire import sterba_center_driven
+from antennaknobs.engines import MomwireEngine
 
 FF_KW = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
 

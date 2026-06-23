@@ -1,4 +1,4 @@
-"""Bridge antenna_designer's Builder idiom into momwire's web AntennaExample.
+"""Bridge antennaknobs's Builder idiom into momwire's web AntennaExample.
 
 Each `designs/<name>.py` exposes a `Builder` class with `default_params`
 (a MappingProxyType of physics knobs). We walk that registry, derive a
@@ -36,7 +36,7 @@ from typing import Any
 
 import numpy as np
 
-from antenna_designer.builder import (
+from antennaknobs.builder import (
     Array1x2Builder,
     Array1x4Builder,
     Array1x4GroupedBuilder,
@@ -45,10 +45,10 @@ from antenna_designer.builder import (
 )
 
 try:
-    from antenna_designer.engines.pynec import PyNECEngine
+    from antennaknobs.engines.pynec import PyNECEngine
 except ImportError:
     PyNECEngine = None
-from antenna_designer.engines.momwire import MomwireEngine
+from antennaknobs.engines.momwire import MomwireEngine
 from momwire import (
     ArrayBlockSolver,
     BSplineSolver,
@@ -70,9 +70,9 @@ from .examples._base import (
 
 C_LIGHT = 299_792_458.0
 
-DESIGNS_PKG = "antenna_designer.designs"
+DESIGNS_PKG = "antennaknobs.designs"
 DESIGNS_DIR = (
-    pathlib.Path(__file__).resolve().parents[1] / "src" / "antenna_designer" / "designs"
+    pathlib.Path(__file__).resolve().parents[1] / "src" / "antennaknobs" / "designs"
 )
 
 _MOMWIRE_MODELS = {
@@ -1117,7 +1117,7 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
         # Same builder construction as pynec_solve, then serialise to a NEC2
         # card deck. Ground/freq mirror what the live solve uses so the
         # downloaded deck matches the antenna the user is viewing.
-        from antenna_designer.nec_export import export_nec as _export_nec
+        from antennaknobs.nec_export import export_nec as _export_nec
 
         design_freq = float(req.get("design_freq_mhz", _design_freq_default(req)))
         meas_freq = float(req.get("measurement_freq_mhz", design_freq))
@@ -1206,7 +1206,7 @@ def list_designs() -> list[str]:
     Every design lives in a family subpackage (`dipoles/`, `loops/`,
     `arrays/`, …) and registers under the dotted path the user sees in
     the UI (`dipoles.invvee`) — the same convention as the Python import
-    path, minus the leading `antenna_designer.designs.`. The dotted name
+    path, minus the leading `antennaknobs.designs.`. The dotted name
     is what `register_all` feeds back to importlib too. Any bare top-level
     `*.py` (none today) would register under its stem.
     """

@@ -11,8 +11,8 @@ question the driver script measures, not something pinned here.)
 import numpy as np
 import pytest
 
-from antenna_designer.designs.wire import sterba_driven
-from antenna_designer.engines import MomwireEngine
+from antennaknobs.designs.wire import sterba_driven
+from antennaknobs.engines import MomwireEngine
 
 FF_KW = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
 

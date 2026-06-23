@@ -78,7 +78,7 @@ def resolve_class(s):
     if (res := try_to_resolve_list(lst)) is not None:
         return res
 
-    if (res := try_to_resolve_list(["antenna_designer", "designs"] + lst)) is not None:
+    if (res := try_to_resolve_list(["antennaknobs", "designs"] + lst)) is not None:
         return res
 
     # Designs live under a family subpackage (designs/<family>/<name>.py).
@@ -89,7 +89,7 @@ def resolve_class(s):
     # qualify it (the qualified form resolves in the branch above).
     matches = []
     for fam in _design_families():
-        cand = ["antenna_designer", "designs", fam] + lst
+        cand = ["antennaknobs", "designs", fam] + lst
         if (res := try_to_resolve_list(cand)) is not None:
             matches.append((fam, res))
     if len(matches) > 1:
@@ -112,12 +112,12 @@ def resolve_class(s):
 
 
 def _design_families():
-    """Family subpackage names under antenna_designer.designs (cached)."""
+    """Family subpackage names under antennaknobs.designs (cached)."""
     global _DESIGN_FAMILIES
     if _DESIGN_FAMILIES is None:
         import os
 
-        import antenna_designer.designs as _d
+        import antennaknobs.designs as _d
 
         fams = set()
         for root in list(getattr(_d, "__path__", [])):
@@ -136,13 +136,13 @@ _DESIGN_FAMILIES = None
 def list_builtin_designs() -> list[str]:
     """Every built-in design as a sorted ``family.name`` dotted path.
 
-    A pure filesystem walk over ``antenna_designer.designs`` — every family
+    A pure filesystem walk over ``antennaknobs.designs`` — every family
     ``*.py`` defines a ``Builder``, so the listing matches what ``resolve_class``
     can resolve, without importing the modules.
     """
     import os
 
-    import antenna_designer.designs as _d
+    import antennaknobs.designs as _d
 
     names: list[str] = []
     for root in list(getattr(_d, "__path__", [])):

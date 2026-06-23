@@ -1,18 +1,18 @@
 """Convergence-flow plumbing: nominal_nsegs on the Builder, segment_parity
 on the SimulationEngine. The momwire version had a working convergence
-sweep; this exercises the equivalent path through antenna_designer."""
+sweep; this exercises the equivalent path through antennaknobs."""
 
 from __future__ import annotations
 
 import pytest
 
-from antenna_designer.designs.specialty.bowtie import Builder as BowtieBuilder
-from antenna_designer.designs.dipoles.invvee import Builder as InvVeeBuilder
-from antenna_designer.engine import SimulationEngine
+from antennaknobs.designs.specialty.bowtie import Builder as BowtieBuilder
+from antennaknobs.designs.dipoles.invvee import Builder as InvVeeBuilder
+from antennaknobs.engine import SimulationEngine
 
 pytest.importorskip("PyNEC")
-from antenna_designer.engines.pynec import PyNECEngine  # noqa: E402
-from antenna_designer.engines.momwire import MomwireEngine  # noqa: E402
+from antennaknobs.engines.pynec import PyNECEngine  # noqa: E402
+from antennaknobs.engines.momwire import MomwireEngine  # noqa: E402
 
 
 def test_coerce_n_seg_any_passes_through():

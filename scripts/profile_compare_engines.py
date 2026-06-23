@@ -6,7 +6,7 @@ Engines compared:
   Bs1   — momwire BSplineSolver(degree=1)
   Bs2   — momwire BSplineSolver(degree=2)
   Sin   — momwire SinusoidalSolver
-  PyNEC — antenna_designer.engines.pynec.PyNECEngine (ground="free")
+  PyNEC — antennaknobs.engines.pynec.PyNECEngine (ground="free")
 
 Each cell is the mean wall-clock of impedance() across the design's
 target bands, with an off-band warm-up call beforehand. Geometry/Z size
@@ -58,17 +58,17 @@ os.environ.setdefault("GOMP_SPINCOUNT", "0")
 import sys  # noqa: E402
 import time  # noqa: E402
 
-sys.path.insert(0, "/home/smburns/antennas/antenna_designer/src")
-sys.path.insert(0, "/home/smburns/antennas/antenna_designer/momwire/src")
+sys.path.insert(0, "/home/smburns/antennas/antennaknobs/src")
+sys.path.insert(0, "/home/smburns/antennas/antennaknobs/momwire/src")
 
-from antenna_designer.designs.multiband.fandipole import (  # noqa: E402
+from antennaknobs.designs.multiband.fandipole import (  # noqa: E402
     Builder as FanBuilder,
 )
-from antenna_designer.designs.multiband.trap_fan_dipole import (  # noqa: E402
+from antennaknobs.designs.multiband.trap_fan_dipole import (  # noqa: E402
     Builder as TrapBuilder,
 )
-from antenna_designer.engines.pynec import PyNECEngine  # noqa: E402
-from antenna_designer.engines.momwire import MomwireEngine  # noqa: E402
+from antennaknobs.engines.pynec import PyNECEngine  # noqa: E402
+from antennaknobs.engines.momwire import MomwireEngine  # noqa: E402
 from momwire import BSplineSolver, SinusoidalSolver, TriangularSolver  # noqa: E402
 
 

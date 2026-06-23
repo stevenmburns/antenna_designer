@@ -2,19 +2,19 @@
 
 The web app registers user files under ``user.<name>`` in its REGISTRY; the
 CLI resolves the same ``user.<name>`` spec straight from the folder via
-``antenna_designer.user_designs`` (no web dependency). These cover the CLI /
+``antennaknobs.user_designs`` (no web dependency). These cover the CLI /
 core path, separate from the web-registry behaviour in test_user_designs.py.
 """
 
 import pytest
 
-import antenna_designer as ant
-from antenna_designer import user_designs
-from antenna_designer.cli import resolve_class
+import antennaknobs as ant
+from antennaknobs import user_designs
+from antennaknobs.cli import resolve_class
 
 VALID = """
 from types import MappingProxyType
-from antenna_designer import AntennaBuilder
+from antennaknobs import AntennaBuilder
 
 class Builder(AntennaBuilder):
     label = "CLI test dipole"
@@ -35,7 +35,7 @@ SYNTAX_ERROR = "class Builder(  # unterminated\n"
 
 @pytest.fixture
 def userdir(tmp_path, monkeypatch):
-    monkeypatch.setenv("ANTENNA_DESIGNER_USER_DIR", str(tmp_path))
+    monkeypatch.setenv("ANTENNAKNOBS_USER_DIR", str(tmp_path))
     return tmp_path
 
 

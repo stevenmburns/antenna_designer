@@ -29,8 +29,8 @@ classifiers = [
 web = ["uvicorn[standard]", "psutil"]
 
 [project.urls]
-Homepage = "https://github.com/stevenmburns/antenna_designer"
-Issues = "https://github.com/stevenmburns/antenna_designer/issues"
+Homepage = "https://github.com/stevenmburns/antennaknobs"
+Issues = "https://github.com/stevenmburns/antennaknobs/issues"
 
 [tool.pytest.ini_options]
 markers = [

@@ -21,8 +21,8 @@ import argparse
 
 from scipy.optimize import minimize
 
-from antenna_designer.designs.multiband.hexbeam_5band import Builder
-from antenna_designer.engines.pynec import PyNECEngine
+from antennaknobs.designs.multiband.hexbeam_5band import Builder
+from antennaknobs.engines.pynec import PyNECEngine
 
 
 def tune(

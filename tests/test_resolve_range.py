@@ -1,4 +1,4 @@
-from antenna_designer import resolve_range, gen_xs
+from antennaknobs import resolve_range, gen_xs
 import numpy as np
 
 

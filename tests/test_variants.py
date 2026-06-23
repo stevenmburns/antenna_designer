@@ -1,10 +1,10 @@
 import pytest
 
-from antenna_designer.cli import get_builder, list_variants
-from antenna_designer.designs.beams import hexbeam, moxon
-from antenna_designer.designs.multiband import twoband_fan_dipole
-from antenna_designer.designs.loops import delta_loop
-from antenna_designer.designs.specialty import hentenna
+from antennaknobs.cli import get_builder, list_variants
+from antennaknobs.designs.beams import hexbeam, moxon
+from antennaknobs.designs.multiband import twoband_fan_dipole
+from antennaknobs.designs.loops import delta_loop
+from antennaknobs.designs.specialty import hentenna
 
 
 def _design_params(inst):

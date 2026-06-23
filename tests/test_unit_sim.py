@@ -1,5 +1,5 @@
-from antenna_designer import Antenna
-from antenna_designer.designs.dipoles.invvee import Builder
+from antennaknobs import Antenna
+from antennaknobs.designs.dipoles.invvee import Builder
 
 from unittest.mock import patch
 
@@ -31,7 +31,7 @@ def mock_geometry(self):
 
 
 @needs_pynec
-@patch("antenna_designer.Antenna._build_geometry", new=mock_geometry)
+@patch("antennaknobs.Antenna._build_geometry", new=mock_geometry)
 def test_impedence_with_mock_Antenna():
 
     a = Antenna(Builder())

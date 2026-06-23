@@ -2,15 +2,15 @@ import argparse
 
 import pytest
 
-import antenna_designer as ant
-from antenna_designer.cli import (
+import antennaknobs as ant
+from antennaknobs.cli import (
     MOMWIRE_BASES,
     parse_engine_spec,
     make_engine_factory,
     broadcast_pairs,
     _GROUND_UNSET,
 )
-from antenna_designer.engines import PyNECEngine, MomwireEngine
+from antennaknobs.engines import PyNECEngine, MomwireEngine
 from momwire import TriangularSolver, SinusoidalSolver, BSplineSolver
 
 from conftest import needs_pynec
