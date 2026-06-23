@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "antennaknobs"
-version = "0.0.1"
+version = "0.1.0"
 authors = [
   { name="Steven M. Burns", email="smburns47@gmail.com" },
 ]
@@ -16,19 +16,23 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-# Core runtime deps: imported unconditionally by src/antennaknobs (numpy/scipy
-# math throughout; matplotlib for the draw/sweep/pattern plots; icecream for the
-# CLI/sweep debug tracing; scikit-rf for Touchstone/network handling in sweep).
+# Core runtime deps, imported unconditionally:
+#   - momwire — the built-in MoM engine (`from momwire import ...` across the
+#     engines/CLI). Now that momwire publishes its own wheels, it is a real
+#     declared dependency so `pip install antennaknobs` resolves it from the
+#     same index. The vendored git submodule remains for co-development (install
+#     it editable to override the wheel); a development checkout that does
+#     `pip install -e ./momwire` first satisfies this pin and pip won't refetch.
+#   - numpy/scipy math throughout; matplotlib for the draw/sweep/pattern plots;
+#     icecream for the CLI/sweep debug tracing; scikit-rf for Touchstone/network
+#     handling in sweep.
 #
-# Deliberately NOT listed here:
-#   - momwire — the built-in MoM engine. Provided by the vendored git submodule
-#     (installed editable: `pip install -e ./momwire`) or its own wheel; not yet
-#     on a durable index, and antennaknobs is only ever installed from a clone
-#     that carries the submodule, so pinning it here would just break that flow.
-#   - PyNEC — the optional NEC2 backend, which is GPL-2.0-or-later. It is
-#     installed separately from the python-necpp fork's release wheel (see
-#     README) and must never be declared a dependency of this MIT package.
+# Deliberately NOT listed: PyNEC — the optional NEC2 backend, GPL-2.0-or-later.
+# It is installed separately from the python-necpp fork's release wheel (the
+# `pynec-accel` distribution; see README) and must never be declared a
+# dependency of this MIT package.
 dependencies = [
+    "momwire>=0.1.0",
     "numpy>=1.21",
     "scipy>=1.7",
     "matplotlib>=3.5",
