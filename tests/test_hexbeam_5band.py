@@ -1,5 +1,5 @@
 """hexbeam_5band Builder: per-band z-stagger, multi-feed shape, daisy-
-chain TL list. Ports the multi-band convention from pysim's
+chain TL list. Ports the multi-band convention from momwire's
 hexbeam_5band example into antenna_designer's Builder pattern."""
 
 from __future__ import annotations

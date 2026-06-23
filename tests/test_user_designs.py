@@ -76,7 +76,7 @@ def test_broken_geometry_loads_but_fails_on_solve(userdir):
     assert errors == []
     assert "user.oops" in REGISTRY
     with pytest.raises(NameError):
-        REGISTRY["user.oops"].pysim_solve({})
+        REGISTRY["user.oops"].momwire_solve({})
 
 
 def test_format_solve_error_points_at_user_file(userdir):
@@ -85,7 +85,7 @@ def test_format_solve_error_points_at_user_file(userdir):
     (userdir / "boom.py").write_text(BROKEN_BUILD)
     user_designs.refresh()
     with pytest.raises(NameError) as ei:
-        REGISTRY["user.boom"].pysim_solve({})
+        REGISTRY["user.boom"].momwire_solve({})
     msg = user_designs.format_solve_error(ei.value)
     assert "NameError" in msg
     assert "boom.py" in msg and "line" in msg

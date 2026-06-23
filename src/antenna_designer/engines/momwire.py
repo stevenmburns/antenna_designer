@@ -1,11 +1,11 @@
-"""pysim-backed SimulationEngine. Impedance via TriangularPySim;
-far-field/directivity ported from pysim/web/server.py:_compute_directivity_norm.
+"""momwire-backed SimulationEngine. Impedance via TriangularSolver;
+far-field/directivity ported from momwire/web/server.py:_compute_directivity_norm.
 """
 
 from __future__ import annotations
 
 import numpy as np
-from pysim import TriangularPySim
+from momwire import TriangularSolver
 
 from ..engine import FarField, SimulationEngine, WireCurrents
 from ..geometry import flat_wires_to_polylines
@@ -15,18 +15,18 @@ from ..network_reduce import NetworkReducer, tl_admittance_2x2
 
 def _parity_for_solver(solver, solver_kwargs):
     """The basis types have fixed parity expectations:
-      - TriangularPySim (tent / linear B-spline) → even (feed straddles 2 segs)
-      - BSplinePySim degree=1 → same as triangular → even
-      - BSplinePySim degree=2 → quadratic → odd
-      - SinusoidalPySim → odd
+      - TriangularSolver (tent / linear B-spline) → even (feed straddles 2 segs)
+      - BSplineSolver degree=1 → same as triangular → even
+      - BSplineSolver degree=2 → quadratic → odd
+      - SinusoidalSolver → odd
     Anything else falls through as "any" (no coercion)."""
     name = getattr(solver, "__name__", "")
-    if name == "TriangularPySim":
+    if name == "TriangularSolver":
         return "even"
-    if name == "SinusoidalPySim":
+    if name == "SinusoidalSolver":
         return "odd"
-    if name in ("BSplinePySim", "HMatrixPySim", "ArrayBlockPySim"):
-        # HMatrixPySim and ArrayBlockPySim are BSplinePySim subclasses (same
+    if name in ("BSplineSolver", "HMatrixSolver", "ArrayBlockSolver"):
+        # HMatrixSolver and ArrayBlockSolver are BSplineSolver subclasses (same
         # basis), so they share the degree-driven parity. Getting this right
         # matters for cross-solver comparison: a mismatched parity would build
         # a *different* mesh and silently invalidate any A/B against the dense
@@ -42,7 +42,7 @@ EPS0 = 8.854_187_817e-12
 
 def _polyline_knots(polyline, npe_list):
     """Concatenated per-edge knot positions (shared corners deduped).
-    Mirrors pysim/web/server.py:_polyline_knots."""
+    Mirrors momwire/web/server.py:_polyline_knots."""
     parts = []
     for i, n_e in enumerate(npe_list):
         seg = np.linspace(polyline[i], polyline[i + 1], n_e + 1)
@@ -60,14 +60,14 @@ def _normalise_ground(ground):
     raise ValueError(f"unrecognised ground spec: {ground!r}")
 
 
-class PysimEngine(SimulationEngine):
+class MomwireEngine(SimulationEngine):
     supports_far_field = True
 
     def __init__(
         self,
         builder,
         *,
-        solver=TriangularPySim,
+        solver=TriangularSolver,
         wire_radius=0.0005,
         solver_kwargs=None,
         ground=None,
@@ -75,21 +75,21 @@ class PysimEngine(SimulationEngine):
     ):
         """
         solver:
-          A pysim solver class — TriangularPySim (default), SinusoidalPySim,
-          or BSplinePySim. Different bases trade speed vs impedance fidelity;
+          A momwire solver class — TriangularSolver (default), SinusoidalSolver,
+          or BSplineSolver. Different bases trade speed vs impedance fidelity;
           on the hentenna sinusoidal is typically closer to PyNEC at modest
           segmentation than triangular.
         solver_kwargs:
           Dict of solver-specific kwargs passed straight to the constructor
-          (e.g. `{"n_qp_reg": 8, "n_qp_off": 8}` for TriangularPySim, or
-          `{"n_qp_const": 16}` for SinusoidalPySim). None = solver defaults.
+          (e.g. `{"n_qp_reg": 8, "n_qp_off": 8}` for TriangularSolver, or
+          `{"n_qp_const": 16}` for SinusoidalSolver). None = solver defaults.
         ground:
           None or "free"           — no ground (default)
           "pec"                    — PEC plane at z=ground_z (image method)
           ("finite", eps_r, sigma) — far-field uses PEC image + Fresnel
                                      coefficients on the reflected component;
                                      impedance solve still uses PEC because
-                                     pysim only models PEC ground. Cross-
+                                     momwire only models PEC ground. Cross-
                                      validation against PyNEC's gn_card(0,...)
                                      is approximate.
         """
@@ -108,7 +108,7 @@ class PysimEngine(SimulationEngine):
         self._tls = [] if self._network is not None else list(builder.build_tls())
 
         # Resolve TL endpoint tags into augmented tups: any tag whose ev was
-        # nullified gets a passive feed (V=0) so pysim assembles the full
+        # nullified gets a passive feed (V=0) so momwire assembles the full
         # multi-port Y matrix. Driven ports keep their original voltages.
         augmented_tags = set()
         if self._tls:
@@ -225,7 +225,7 @@ class PysimEngine(SimulationEngine):
 
     def _compute_y_matrix(self, wavelength):
         """Multi-port short-circuit Y at the configured feeds. Builds one
-        solver with the full feed list and calls pysim's compute_y_matrix,
+        solver with the full feed list and calls momwire's compute_y_matrix,
         which since the junction-aware-y-matrix PR handles closed-loop /
         tee-junction antennas correctly (one LU + N back-subs per Y)."""
         return np.asarray(
@@ -240,7 +240,7 @@ class PysimEngine(SimulationEngine):
         share one MoM solve when the live UI tick calls them in sequence.
 
         Cache lives for this engine instance only; the server constructs a
-        fresh PysimEngine each tick, so nothing leaks across requests.
+        fresh MomwireEngine each tick, so nothing leaks across requests.
         """
         sim = self._make_excited_solver(wavelength=wavelength)
         v_key = tuple((complex(v).real, complex(v).imag) for *_, v in sim.feeds)

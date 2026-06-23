@@ -1,10 +1,10 @@
 """PyNEC drop-in backend for the web UI.
 
-Mirrors the response shape of `web.server`'s pysim solver paths so the
+Mirrors the response shape of `web.server`'s momwire solver paths so the
 frontend can swap between solvers via a `solver` field on every request.
 
 PyNEC is optional: `HAVE_PYNEC` is False if the import fails, and the
-server falls back to pysim with a one-time warning.
+server falls back to momwire with a one-time warning.
 """
 
 from __future__ import annotations

@@ -8,7 +8,7 @@ looks inductive, electrically lengthening the outer arms and letting the
 whole antenna act as a loaded dipole at the low band.
 
 The trap is a `Load(parallel=True)` on a single segment of a continuous
-wire. PysimEngine modifies the segment's MoM Z-diagonal via Sherman-Morrison;
+wire. MomwireEngine modifies the segment's MoM Z-diagonal via Sherman-Morrison;
 PyNECEngine emits `ld_card type 1` (parallel RLC). The wires on either
 side of the trap segment share an endpoint and junction continuously
 through the trap segment — the trap impedance is *in series with* the
@@ -78,7 +78,7 @@ class Builder(AntennaBuilder):
         #  -X_outer_tip                                                  +X_outer_tip
         #            -X_trap_outer  -X_trap_inner   +X_trap_inner   +X_trap_outer
         #
-        # Wires share vertices at every "│" → pysim junctions them continuously.
+        # Wires share vertices at every "│" → momwire junctions them continuously.
         # The named single-segment "trap_l" and "trap_r" wires sit *inside*
         # the wire chain, so their basis-function current carries the actual
         # arm current. Loading them with parallel-LC interrupts that current

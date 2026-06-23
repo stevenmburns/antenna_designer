@@ -1,7 +1,7 @@
 """Engine-agnostic reduction of a port-based `Network` spec to driven-port
 impedances, on top of a raw multiport antenna admittance matrix.
 
-Both PysimEngine and PyNECEngine assemble the antenna's short-circuit Y at
+Both MomwireEngine and PyNECEngine assemble the antenna's short-circuit Y at
 the real (`PortAtEdge`) ports, then hand it here with a port-name -> matrix-
 index map. This module stamps the network branches (`TL` / `DiffTL` / `Load`)
 into the Y matrix and reduces it to the driven-port impedance(s). The only

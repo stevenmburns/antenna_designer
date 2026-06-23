@@ -3,7 +3,7 @@
 A research/demonstration variant of `wire.sterba` that replaces each
 vertical *twisted-pair* phasing section with a single 4-terminal
 differential transmission line (`network.DiffTL`) — the element NEC2's
-`tl_card` cannot express, so this design is **PysimEngine-only**.
+`tl_card` cannot express, so this design is **MomwireEngine-only**.
 
 It reuses the validated all-wires `sterba` geometry, then surgically:
   - removes the 8 interior vertical riser wires (the A- and B-conductor

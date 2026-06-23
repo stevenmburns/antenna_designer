@@ -10,15 +10,15 @@ from . import (
     compare_patterns,
     optimize,
 )
-from .engines import PyNECEngine, PysimEngine
+from .engines import PyNECEngine, MomwireEngine
 from .user_designs import USER_NS, iter_design_files, resolve_user_design
 
-from pysim import (
-    TriangularPySim,
-    SinusoidalPySim,
-    BSplinePySim,
-    HMatrixPySim,
-    ArrayBlockPySim,
+from momwire import (
+    TriangularSolver,
+    SinusoidalSolver,
+    BSplineSolver,
+    HMatrixSolver,
+    ArrayBlockSolver,
 )
 
 from icecream import ic
@@ -28,17 +28,17 @@ from importlib import import_module
 from types import ModuleType
 
 ENGINE_CLASSES = {
-    "pysim": PysimEngine,
+    "momwire": MomwireEngine,
 }
 if PyNECEngine is not None:
     ENGINE_CLASSES["pynec"] = PyNECEngine
 
-PYSIM_BASES = {
-    "triangular": TriangularPySim,
-    "sinusoidal": SinusoidalPySim,
-    "bspline": BSplinePySim,
-    "hmatrix": HMatrixPySim,
-    "arrayblock": ArrayBlockPySim,
+MOMWIRE_BASES = {
+    "triangular": TriangularSolver,
+    "sinusoidal": SinusoidalSolver,
+    "bspline": BSplineSolver,
+    "hmatrix": HMatrixSolver,
+    "arrayblock": ArrayBlockSolver,
 }
 
 
@@ -245,7 +245,7 @@ def broadcast_pairs(builders, engines):
 def parse_engine_spec(spec):
     """Parse an engine spec into (engine_name, kwargs_to_bind).
 
-    Forms: "pynec", "pysim", "pysim:triangular|sinusoidal|bspline".
+    Forms: "pynec", "momwire", "momwire:triangular|sinusoidal|bspline".
     """
     name, _, basis = spec.partition(":")
     if name not in ENGINE_CLASSES:
@@ -254,21 +254,21 @@ def parse_engine_spec(spec):
         )
     if not basis:
         return name, {}
-    if name != "pysim":
+    if name != "momwire":
         raise argparse.ArgumentTypeError(
             f"engine {name!r} does not accept a basis suffix (got {basis!r})"
         )
-    if basis not in PYSIM_BASES:
+    if basis not in MOMWIRE_BASES:
         raise argparse.ArgumentTypeError(
-            f"unknown pysim basis {basis!r}; available: {', '.join(sorted(PYSIM_BASES))}"
+            f"unknown momwire basis {basis!r}; available: {', '.join(sorted(MOMWIRE_BASES))}"
         )
-    return name, {"solver": PYSIM_BASES[basis]}
+    return name, {"solver": MOMWIRE_BASES[basis]}
 
 
 def make_engine_factory(engine_spec, ground_spec):
     name, kwargs = parse_engine_spec(engine_spec)
     cls = ENGINE_CLASSES[name]
-    # PyNECEngine's default ground IS finite; pysim's default is free.
+    # PyNECEngine's default ground IS finite; momwire's default is free.
     # When the user passes --ground explicitly we always honour it;
     # when they don't, we use whatever the engine's own default is.
     if ground_spec is not _GROUND_UNSET:
@@ -318,7 +318,7 @@ def cli(arguments=None):
                 nargs="+",
                 default=["pynec"],
                 help="One or more simulation backends. Each spec is "
-                '"pynec" or "pysim[:triangular|sinusoidal|bspline]". '
+                '"pynec" or "momwire[:triangular|sinusoidal|bspline]". '
                 "Cross-products with --builders.",
             )
         else:
@@ -326,15 +326,15 @@ def cli(arguments=None):
                 "--engine",
                 type=str,
                 default="pynec",
-                help="Simulation backend: pynec | pysim | "
-                "pysim:triangular | pysim:sinusoidal | pysim:bspline "
+                help="Simulation backend: pynec | momwire | "
+                "momwire:triangular | momwire:sinusoidal | momwire:bspline "
                 "(default: pynec).",
             )
         p.add_argument(
             "--ground",
             default=_GROUND_UNSET,
             help="Ground model: free | pec | finite | finite:<eps_r>,<sigma> "
-            "(default: engine-specific — finite for pynec, free for pysim).",
+            "(default: engine-specific — finite for pynec, free for momwire).",
         )
 
     def add_pattern_common(p):

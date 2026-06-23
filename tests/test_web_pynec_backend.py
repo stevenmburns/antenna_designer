@@ -5,7 +5,7 @@ Covers the pure helpers and module-level state — `_segment_centers_to_knot_cur
 known-error path of `solve()` when an example declares no pynec_solve.
 
 The NEC-driven sweep/pattern paths are not covered here (they need a
-running NEC engine; we exercise those via test_pysim_engine.py's
+running NEC engine; we exercise those via test_momwire_engine.py's
 PyNEC comparisons).
 """
 
@@ -75,8 +75,8 @@ def test_solve_raises_when_example_has_no_pynec_solve():
     stub = AntennaExample(
         name="stub_no_pynec",
         label="stub",
-        pysim_solve=lambda req: {},
-        pysim_sweep=lambda req, freqs: ([], []),
+        momwire_solve=lambda req: {},
+        momwire_sweep=lambda req, freqs: ([], []),
         pynec_solve=None,
     )
     with patch.dict(pynec_backend.EXAMPLES, {"stub_no_pynec": stub}, clear=False):

@@ -3,7 +3,7 @@ each sized to its own band's wavelength and driven by its own feed.
 
 Each band reuses the single-band hexbeam geometry (driver hex with t0/t1
 tip segments, reflector hex, 1-segment T->S feed gap). Per-band sizing
-follows the pysim convention: halfdriver = halfdriver_factor * lambda/4.
+follows the momwire convention: halfdriver = halfdriver_factor * lambda/4.
 Bands stack along z at z = base + (n_bands - 1 - i) * z_spacing, so
 band 0 (longest wavelength) sits on top and band N-1 sits at base —
 the usual physical convention for stacked Yagi/hexbeam towers.
@@ -14,9 +14,9 @@ Two feed modes are exposed via daisy_chain:
     Smith chart shows per-band driving-point Z.
   * True — daisy-chain: only band 0 is driven externally; the lower
     bands couple via 50ohm TL jumpers of length z_spacing between
-    successive feeds. build_tls() emits the jumper specs. Pysim engines
+    successive feeds. build_tls() emits the jumper specs. Momwire engines
     don't support TLs yet; the frontend greys out the toggle when a
-    pysim slot is active.
+    momwire slot is active.
 """
 
 import math
@@ -369,9 +369,9 @@ class Builder(AntennaBuilder):
     def build_tls(self):
         """50ohm jumpers between successive band feeds in daisy-chain mode.
         Each tuple is (idx1, seg1, idx2, seg2, impedance, length) — the
-        shape PyNECEngine.tl_card expects. Pysim engines reject any
-        non-empty list (engines/pysim.py:90), which the frontend should
-        guard against by greying out the toggle when a pysim slot is
+        shape PyNECEngine.tl_card expects. Momwire engines reject any
+        non-empty list (engines/momwire.py:90), which the frontend should
+        guard against by greying out the toggle when a momwire slot is
         active."""
         if not getattr(self, "daisy_chain", False):
             return []

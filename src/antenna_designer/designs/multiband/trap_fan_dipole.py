@@ -68,13 +68,13 @@ C_LIGHT_MHZ_M = 299.792458
 # ~0.50). 10m's SWR50 drops from 1.20 to 1.02 with the other three
 # bands largely unchanged. (Band-0 shift has near-zero leverage on
 # Re17 — kept at 1.0.)
-# Length factors tuned against PysimEngine with BSplinePySim(degree=2)
+# Length factors tuned against MomwireEngine with BSplineSolver(degree=2)
 # at nominal_nsegs=41. After moving to adaptive per-wire segmentation
 # (target_seg_len = max_wire / nominal_nsegs, see build_wires), both Bs2
 # and Triangular stay essentially flat across N=21..81 — drift ≤ 0.22 Ω
 # on every band — and agree with each other to ~1 Ω at the converged
 # limit. Sinusoidal still wanders 2–8 Ω over the same N range (basis-
-# family issue, not segmentation). PyNEC sits ~10 Ω above the pysim
+# family issue, not segmentation). PyNEC sits ~10 Ω above the momwire
 # cluster on every band — a systematic offset — and on 10m / 12m
 # actually drifts UP with refinement (57.7 → 67.2 Ω at 10m from N=21 to
 # N=81), which is its own discretization story.
@@ -319,7 +319,7 @@ class Builder(AntennaBuilder):
         # single basis function). Feed segment is also pinned to 1, which
         # is fine for the BSpline d=2 basis this design is tuned against;
         # the triangular basis can't drive a 1-segment feed gap, so this
-        # design is no longer drop-in compatible with TriangularPySim.
+        # design is no longer drop-in compatible with TriangularSolver.
         adaptive_lengths = []
         for i, (trap_in, trap_out, tip) in enumerate(spokes):
             adaptive_lengths.append(dist(S, A[i]))

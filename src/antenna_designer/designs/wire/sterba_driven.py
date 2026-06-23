@@ -20,7 +20,7 @@ voltages it is handed.
 Build it up one junction at a time with `active_junctions`: a single central
 pair first (to confirm the feedpoint mechanism solves at all), then more, up to
 all n_cells+1. Sections at inactive junctions stay as plain floating (parasitic)
-wires. PysimEngine-only (multi-feed network, like `sterba_difftl`).
+wires. MomwireEngine-only (multi-feed network, like `sterba_difftl`).
 """
 
 from ...network import Driven, Network, PortAtEdge

@@ -133,7 +133,7 @@ def compare_patterns(
     is how you pick a non-default backend or ground configuration. Pass
     an explicit `builder_names=[...]` to control legend labels; absent
     that, engine instances get their class name (e.g. "PyNECEngine",
-    "PysimEngine") and bare builders fall back to "Unknown" for
+    "MomwireEngine") and bare builders fall back to "Unknown" for
     backwards compatibility."""
     if builder_names is None:
         builder_names = [_default_name(b) for b in builders_or_engines]

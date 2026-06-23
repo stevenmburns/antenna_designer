@@ -14,7 +14,7 @@ purely a phasing mechanism.
 As with `sterba_driven`, voltages are supplied via `feed_voltages`; the driver
 script solves V = Y⁻¹·I_target so the section-center currents match the
 reference. End risers are kept (they are not among the 8 inner verticals).
-PysimEngine-only.
+MomwireEngine-only.
 """
 
 from ...network import Driven, Network, PortAtEdge

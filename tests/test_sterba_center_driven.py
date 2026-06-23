@@ -9,7 +9,7 @@ matched) is measured by scripts/sterba_center_driven_experiment.py.
 import numpy as np
 
 from antenna_designer.designs.wire import sterba_center_driven
-from antenna_designer.engines import PysimEngine
+from antenna_designer.engines import MomwireEngine
 
 FF_KW = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
 
@@ -34,7 +34,7 @@ def test_section_feeds_sit_at_section_centers():
 
 
 def test_builds_and_solves_to_finite_z_and_gain():
-    eng = PysimEngine(sterba_center_driven.Builder(), ground=None)
+    eng = MomwireEngine(sterba_center_driven.Builder(), ground=None)
     zs = eng.impedance()
     assert len(zs) == 10
     assert all(np.isfinite(z.real) and np.isfinite(z.imag) for z in zs)

@@ -1,7 +1,7 @@
 """FastAPI server for the interactive antenna UI.
 
 All geometries live in web.examples — each registered antenna bundles its
-pysim solve/sweep and pynec build/solve into one file. Dispatchers here
+momwire solve/sweep and pynec build/solve into one file. Dispatchers here
 look the geometry up in EXAMPLES and call its callables; adding or
 removing an antenna doesn't touch this file.
 
@@ -73,7 +73,7 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("OMP_NUM_THREADS", _NPROC)
 os.environ.setdefault("MKL_NUM_THREADS", _NPROC)
 # Between OMP parallel regions the workers default to busy-spinning on the
-# team barrier (GOMP_SPINCOUNT ~300k, ~80 ms on KBL). Each pysim solve runs
+# team barrier (GOMP_SPINCOUNT ~300k, ~80 ms on KBL). Each momwire solve runs
 # only ~1 ms of C++ kernel then ~10–20 ms of Python serial work (basis-coef
 # build, sparse matmul, LU solve); the workers spin through all of that
 # Python time on every solve. On the N=21 hentenna width-sweep harness
@@ -109,7 +109,7 @@ user_designs.ensure_scaffold()
 user_designs.refresh()
 
 
-# Target per-chunk wall time for the adaptive pysim /sweep chunking. The
+# Target per-chunk wall time for the adaptive momwire /sweep chunking. The
 # chunk size is tuned each iteration so a batch takes roughly this long —
 # enough to amortise per-call overhead and benefit from numpy batching,
 # small enough that an aborted fetch only wastes ~this much CPU before the
@@ -117,7 +117,7 @@ user_designs.refresh()
 _CHUNK_TARGET_MS = 500
 
 
-app = FastAPI(title="pysim interactive")
+app = FastAPI(title="momwire interactive")
 
 app.add_middleware(
     CORSMiddleware,
@@ -127,7 +127,7 @@ app.add_middleware(
 )
 
 
-C_LIGHT = 299_792_458.0  # m/s, matches TriangularPySim's eps*mu derivation to ~1e-9
+C_LIGHT = 299_792_458.0  # m/s, matches TriangularSolver's eps*mu derivation to ~1e-9
 _EPS0 = 8.854187817e-12  # F/m
 
 
@@ -325,8 +325,8 @@ def _sample_arc_for_wire(knots: np.ndarray) -> np.ndarray:
     return sample_arc
 
 
-def _pack_pysim_wires(sim, coeffs, knot_arrays, labels) -> list[dict]:
-    """Build wire records for every pysim wire with both knot-level currents
+def _pack_momwire_wires(sim, coeffs, knot_arrays, labels) -> list[dict]:
+    """Build wire records for every momwire wire with both knot-level currents
     AND finer-grained mid-segment samples (one extra sample per segment).
 
     Calls `sim.currents_at_knots(coeffs)` once for the knot values and once
@@ -349,7 +349,7 @@ def _pack_pysim_wires(sim, coeffs, knot_arrays, labels) -> list[dict]:
     ]
 
 
-# Pysim PEC ground: pass these to the response so the frontend's Fresnel
+# Momwire PEC ground: pass these to the response so the frontend's Fresnel
 # far-field code treats the surface as a perfect electric conductor
 # (ρ_h → −1, ρ_v → +1 in the eps_r → ∞ limit).
 _PEC_GROUND_EPS_R = 1.0e10
@@ -411,8 +411,8 @@ def _solve_uncached(req: dict) -> dict:
         _compute_directivity_norm(out)
         return out
     ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
-    out = ex.pysim_solve(req)
-    out["solver"] = "pysim"
+    out = ex.momwire_solve(req)
+    out["solver"] = "momwire"
     _attach_derived_em_fields(out)
     _compute_directivity_norm(out)
     return out
@@ -454,7 +454,7 @@ async def sweep_endpoint(req: dict, request: Request):
     geometry = req.get("geometry", next(iter(EXAMPLES)))
     sweep_ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
     use_pynec = req.get("solver") == "pynec" and pynec_backend.HAVE_PYNEC
-    solver_name = "pynec" if use_pynec else "pysim"
+    solver_name = "pynec" if use_pynec else "momwire"
 
     async def gen():
         if not freqs:
@@ -492,7 +492,7 @@ async def sweep_endpoint(req: dict, request: Request):
                     }
                 yield json.dumps(record) + "\n"
         else:
-            # pysim's batched sweep is ~10x faster per-call than per-point,
+            # momwire's batched sweep is ~10x faster per-call than per-point,
             # but a 5-band fan dipole sweep at n_per_wire=21, 41 freqs takes
             # ~6 s and holds several hundred MB of J tensors — long enough
             # that rapid slider drags would otherwise pile up concurrent
@@ -510,7 +510,7 @@ async def sweep_endpoint(req: dict, request: Request):
             # granularity is consistent across geometries. Start with an
             # 8-chunk heuristic, then after each chunk recompute the next
             # size from observed per-freq cost. Converges in ~1 iteration.
-            sweep_fn = sweep_ex.pysim_sweep
+            sweep_fn = sweep_ex.momwire_sweep
             chunk_size = max(1, len(freqs) // 8)
             start = 0
             while start < len(freqs):
@@ -569,7 +569,7 @@ def _solve_z_only(req: dict) -> tuple[complex, list[complex] | None]:
         res = pynec_backend.solve(req)
     else:
         ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
-        res = ex.pysim_solve(req)
+        res = ex.momwire_solve(req)
     primary = complex(res["z_in_re"], res["z_in_im"])
     feeds_list = res.get("feeds")
     feeds_z: list[complex] | None = (
@@ -596,7 +596,7 @@ async def converge_endpoint(req: dict, request: Request):
     """
     n_values = [int(n) for n in req.get("n_values", [])]
     use_pynec = req.get("solver") == "pynec" and pynec_backend.HAVE_PYNEC
-    solver_name = "pynec" if use_pynec else "pysim"
+    solver_name = "pynec" if use_pynec else "momwire"
 
     async def gen():
         for n in n_values:
@@ -681,20 +681,20 @@ async def geometry_endpoint(req: dict):
     picks a new antenna so the shape renders immediately (large arrays take
     tens of seconds to solve); the live /ws solve then supplies currents,
     impedance, and far field. Geometry is solver-independent, so this always
-    uses the pysim builder path regardless of the request's `solver`.
+    uses the momwire builder path regardless of the request's `solver`.
     """
     geometry = req.get("geometry", next(iter(EXAMPLES)))
     ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
-    if ex.pysim_geometry is None:
+    if ex.momwire_geometry is None:
         return {"available": False}
     try:
-        out = await run_in_threadpool(ex.pysim_geometry, req)
+        out = await run_in_threadpool(ex.momwire_geometry, req)
     except Exception as exc:  # noqa: BLE001 — a user design's build_wires can raise
         # Geometry builds lazily on selection now, so a broken user design
         # fails here rather than at load. Return the cause (200, not 500) so the
         # frontend can show it in the solve-error banner instead of a blank stage.
         return {"geometry": geometry, "error": user_designs.format_solve_error(exc)}
-    out["solver"] = "pysim"
+    out["solver"] = "momwire"
     return out
 
 

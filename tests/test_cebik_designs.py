@@ -1171,32 +1171,32 @@ def test_zepp_series_feeder_cannot_match_to_coax():
 
 
 # ===========================================================================
-# Methodology / cross-engine findings (pysim vs the PyNEC reference)
+# Methodology / cross-engine findings (momwire vs the PyNEC reference)
 #
-# These lock in WHERE the four pysim solver bases agree with PyNEC and where
-# they do not -- the point of this batch. They import PysimEngine directly.
+# These lock in WHERE the four momwire solver bases agree with PyNEC and where
+# they do not -- the point of this batch. They import MomwireEngine directly.
 # ===========================================================================
 
 
 def test_parasitic_loop_quad_agrees_across_engines():
     """A parasitic (no-port) closed loop -- the cubical quad's reflector -- is
-    now handled on every pysim basis (the geometry translator cuts the loop at
-    an arbitrary edge and lets pysim's junction KCL carry the current around
+    now handled on every momwire basis (the geometry translator cuts the loop at
+    an arbitrary edge and lets momwire's junction KCL carry the current around
     it). All four bases agree with the PyNEC reference. This was the single
-    biggest pysim gap; the test that used to assert it RAISED now asserts it
+    biggest momwire gap; the test that used to assert it RAISED now asserts it
     SOLVES."""
     from antenna_designer.designs.loops.quad import Builder
-    from antenna_designer.engines import PysimEngine
-    from pysim import BSplinePySim, SinusoidalPySim, TriangularPySim
+    from antenna_designer.engines import MomwireEngine
+    from momwire import BSplineSolver, SinusoidalSolver, TriangularSolver
 
     z_ref = _z(Builder())  # PyNEC reference
     assert z_ref.real > 0.0
     for solver, kw in [
-        (TriangularPySim, {}),
-        (SinusoidalPySim, {}),
-        (BSplinePySim, {"degree": 2}),
+        (TriangularSolver, {}),
+        (SinusoidalSolver, {}),
+        (BSplineSolver, {"degree": 2}),
     ]:
-        z = PysimEngine(
+        z = MomwireEngine(
             Builder(), ground=None, solver=solver, solver_kwargs=kw
         ).impedance()[0]
         # within a few percent of PyNEC on R, and near-resonant like PyNEC
@@ -1209,15 +1209,15 @@ def test_terminated_rhombic_is_unidirectional_across_engines():
     terminating resistor -- is now handled too (cut at one port, the other
     rides the long-way polyline as a mid-polyline feed). The resistive load
     is imposed with its physical series-impedance BC in the excited solve, so
-    pysim develops the same TRAVELING-WAVE unidirectional pattern as PyNEC
+    momwire develops the same TRAVELING-WAVE unidirectional pattern as PyNEC
     (it was bidirectional, F/B ~1 dB, before the load shaped the current), and
     the radiation efficiency folds the termination loss into GAIN."""
     from antenna_designer.designs.wire.rhombic import Builder
-    from antenna_designer.engines import PysimEngine
-    from pysim import TriangularPySim
+    from antenna_designer.engines import MomwireEngine
+    from momwire import TriangularSolver
 
     ref = _far_field(Builder())  # PyNEC reference
-    ff = PysimEngine(Builder(), ground=None, solver=TriangularPySim).far_field(
+    ff = MomwireEngine(Builder(), ground=None, solver=TriangularSolver).far_field(
         n_theta=90, n_phi=360, del_theta=1, del_phi=1
     )
 
@@ -1235,19 +1235,19 @@ def test_terminated_rhombic_is_unidirectional_across_engines():
     assert front_to_back(ref) > 15.0
 
 
-def test_pynec_pec_matches_pysim_sinusoidal_on_terminated_loop():
-    """PyNEC defaults to PEC wires (WIRE_CONDUCTIVITY=None), matching pysim's
-    lossless model. With copper loss off, PyNEC and pysim's SINUSOIDAL basis --
+def test_pynec_pec_matches_momwire_sinusoidal_on_terminated_loop():
+    """PyNEC defaults to PEC wires (WIRE_CONDUCTIVITY=None), matching momwire's
+    lossless model. With copper loss off, PyNEC and momwire's SINUSOIDAL basis --
     the same NEC2 basis family -- agree on a terminated rhombic to a fraction
     of an ohm and a fraction of a dB. This pins that clean cross-engine
     reference (turning copper loss back on would offset it by a few tenths of
     a dB, which is exactly why the default is PEC)."""
     from antenna_designer.designs.wire.rhombic import Builder
-    from antenna_designer.engines import PysimEngine
-    from pysim import SinusoidalPySim
+    from antenna_designer.engines import MomwireEngine
+    from momwire import SinusoidalSolver
 
     z_nec = _z(Builder())  # PyNEC, PEC by default
-    eng = PysimEngine(Builder(), ground=None, solver=SinusoidalPySim)
+    eng = MomwireEngine(Builder(), ground=None, solver=SinusoidalSolver)
     z_sin = eng.impedance()[0]
     # same basis family + both PEC -> impedance agrees to well under 1%.
     assert abs(z_nec - z_sin) / abs(z_nec) < 0.01
@@ -1262,20 +1262,20 @@ def test_pynec_pec_matches_pysim_sinusoidal_on_terminated_loop():
 def test_t2fd_broadband_gain_agrees_across_engines():
     """The T2FD is a folded loop carrying a feed AND a terminating resistor
     (two port edges). With the load shaping the current and its loss folded
-    into gain, pysim's low broadband gain matches PyNEC instead of reading
+    into gain, momwire's low broadband gain matches PyNEC instead of reading
     several dB high."""
     from antenna_designer.designs.broadband.t2fd import Builder
-    from antenna_designer.engines import PysimEngine
-    from pysim import BSplinePySim, SinusoidalPySim, TriangularPySim
+    from antenna_designer.engines import MomwireEngine
+    from momwire import BSplineSolver, SinusoidalSolver, TriangularSolver
 
     g_ref = _far_field(Builder()).max_gain  # PyNEC reference
     for solver, kw in [
-        (TriangularPySim, {}),
-        (SinusoidalPySim, {}),
-        (BSplinePySim, {"degree": 2}),
+        (TriangularSolver, {}),
+        (SinusoidalSolver, {}),
+        (BSplineSolver, {"degree": 2}),
     ]:
         g = (
-            PysimEngine(Builder(), ground=None, solver=solver, solver_kwargs=kw)
+            MomwireEngine(Builder(), ground=None, solver=solver, solver_kwargs=kw)
             .far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
             .max_gain
         )
@@ -1284,8 +1284,8 @@ def test_t2fd_broadband_gain_agrees_across_engines():
 
 def test_g5rv_ideal_halfwave_line_is_singular_on_every_engine():
     """An ideal lossless TL is singular at exactly k*lambda/2 (sin betaL = 0);
-    the guard fires identically on PyNEC and every pysim basis -- a shared
-    network-layer limitation, not a pysim-specific hole. The default sits just
+    the guard fires identically on PyNEC and every momwire basis -- a shared
+    network-layer limitation, not a momwire-specific hole. The default sits just
     off the half wave to avoid it."""
     import pytest
 
@@ -1300,11 +1300,11 @@ def test_bruce_high_z_feed_is_well_conditioned_across_bases():
     off the exact current null the four bases AGREE on it (within a few percent)
     -- high-Z but NOT ill-conditioned."""
     from antenna_designer.designs.verticals.bruce import Builder
-    from antenna_designer.engines import PysimEngine
-    from pysim import SinusoidalPySim, TriangularPySim
+    from antenna_designer.engines import MomwireEngine
+    from momwire import SinusoidalSolver, TriangularSolver
 
-    zt = PysimEngine(Builder(), ground=None, solver=TriangularPySim).impedance()[0]
-    zs = PysimEngine(Builder(), ground=None, solver=SinusoidalPySim).impedance()[0]
+    zt = MomwireEngine(Builder(), ground=None, solver=TriangularSolver).impedance()[0]
+    zs = MomwireEngine(Builder(), ground=None, solver=SinusoidalSolver).impedance()[0]
     assert abs(zt - zs) / abs(zt) < 0.1
 
 
@@ -1313,10 +1313,10 @@ def test_zepp_current_null_end_feed_is_basis_dependent():
     half wave) is ill-conditioned. After the stub transform the shack R agrees
     across bases but the REACTANCE inherits the basis spread."""
     from antenna_designer.designs.wire.zepp import Builder
-    from antenna_designer.engines import PysimEngine
-    from pysim import TriangularPySim
+    from antenna_designer.engines import MomwireEngine
+    from momwire import TriangularSolver
 
     zp = _z(Builder())  # PyNEC shack
-    zt = PysimEngine(Builder(), ground=None, solver=TriangularPySim).impedance()[0]
+    zt = MomwireEngine(Builder(), ground=None, solver=TriangularSolver).impedance()[0]
     assert abs(zp.real - zt.real) < 1.0  # R agrees
     assert abs(zp.imag - zt.imag) > 4.0  # X inherits the end-null spread

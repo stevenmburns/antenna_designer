@@ -14,7 +14,7 @@ type Wire = {
   knot_currents_re: number[];
   knot_currents_im: number[];
   // Optional finer-grained samples: knots interleaved with segment midpoints
-  // (length 2*N_seg + 1). Present from pysim backends, absent from PyNEC.
+  // (length 2*N_seg + 1). Present from momwire backends, absent from PyNEC.
   sample_positions?: [number, number, number][];
   sample_currents_re?: number[];
   sample_currents_im?: number[];
@@ -474,7 +474,7 @@ function ParamForm({
   // Param names that should render as disabled even though they're
   // visible in the schema. Used to grey out controls whose effect
   // depends on the active backend (e.g. daisy_chain only works on
-  // PyNEC; pysim engines don't support transmission lines yet).
+  // PyNEC; momwire engines don't support transmission lines yet).
   disabledFields?: Set<string>;
   // Render float/int params as rotary knobs instead of range sliders.
   useKnobs?: boolean;
@@ -807,8 +807,8 @@ type SolveResponse = {
   error?: string;
 };
 
-// Backend selector — PySim model variants + PyNEC. Per-backend
-// `model_options` are forwarded to server.py's _make_pysim_sim.
+// Backend selector — Momwire model variants + PyNEC. Per-backend
+// `model_options` are forwarded to server.py's _make_momwire_sim.
 type Backend =
   | "triangular"
   | "sinusoidal"
@@ -844,7 +844,7 @@ function isBSplineFamily(b: Backend): boolean {
   return BSPLINE_FAMILY.includes(b);
 }
 
-// Every pysim model has the PEC image-method ground; PyNEC uses its own
+// Every momwire model has the PEC image-method ground; PyNEC uses its own
 // Sommerfeld / reflection-coefficient ground. Kept as an explicit list so
 // future backends without ground support can be excluded by name.
 function backendSupportsGround(b: Backend): boolean {
@@ -959,7 +959,7 @@ const DEFAULT_SLOTS: Record<Slot, SlotConfig> = {
 };
 
 // Translates the camelCase frontend options into the snake_case kwargs the
-// server forwards to each PySim model class constructor.
+// server forwards to each Momwire model class constructor.
 function modelOptionsForRequest(
   backend: Backend,
   opts: BackendOptsMap[Backend],
@@ -997,8 +997,8 @@ type SolveRequest = {
   /** Which `<name>_params` dict on the Builder to seed from. Omitted
    *  → backend falls back to default_params. */
   variant?: string;
-  solver: "pysim" | "pynec";
-  pysim_model?:
+  solver: "momwire" | "pynec";
+  momwire_model?:
     | "triangular"
     | "sinusoidal"
     | "bspline"
@@ -1599,7 +1599,7 @@ export function App() {
   // `default_backend`), so the backend is in place before the gated first solve
   // fires — no descriptor-vs-preview race, and no dependency on /examples
   // having the value (it works the same if a design's hints go lazy). Only
-  // *upgrades* a dense pysim backend; an explicit PyNEC pick, an already-
+  // *upgrades* a dense momwire backend; an explicit PyNEC pick, an already-
   // accelerated backend, or any hand-picked choice (backendTouchedRef) is left
   // untouched. The decision reads `prev` inside the updater so it's never stale.
   function seedBackendFromPreview(rec: Backend | null | undefined) {
@@ -1692,13 +1692,13 @@ export function App() {
   function buildRequest(): SolveRequest {
     // Solver-family ground notes: PyNEC uses Sommerfeld-Norton (or the
     // fast reflection-coefficient approximation) with εr=10, σ=0.002;
-    // pysim's Triangular and B-spline models use the PEC image method.
+    // momwire's Triangular and B-spline models use the PEC image method.
     // Sinusoidal is free-space-only — the gear UI grays the toggle for it.
     const groundActive = groundEnabled && backendSupportsGround(backend);
     const base: SolveRequest = {
       geometry,
       variant: currentVariant,
-      solver: backend === "pynec" ? "pynec" : "pysim",
+      solver: backend === "pynec" ? "pynec" : "momwire",
       n_per_wire: nPerWire,
       design_freq_mhz: designFreq,
       measurement_freq_mhz: measFreq,
@@ -1707,9 +1707,9 @@ export function App() {
       ground_fast: groundActive && groundFast,
     };
     if (backend !== "pynec") {
-      base.pysim_model = backend;
+      base.momwire_model = backend;
       const opts = modelOptionsForRequest(backend, currentOpts);
-      // BSplinePySim rejects ground_z + use_singular_enrichment together
+      // BSplineSolver rejects ground_z + use_singular_enrichment together
       // (image reaction for enrichment bases isn't worked out yet). Force
       // enrichment off in the request when ground is active so the user
       // gets a sensible solve instead of a server error; the gear shows
@@ -1724,9 +1724,9 @@ export function App() {
     // `bands: [{band_id, freq, length_factor}, ...]` array; the backend
     // unpacks it in _bands_from_request().
     Object.assign(base, currentValues);
-    // hexbeam_5band's daisy_chain feed mode uses NEC TL cards; pysim
+    // hexbeam_5band's daisy_chain feed mode uses NEC TL cards; momwire
     // engines reject any non-empty build_tls(). The daisy_chain gear
-    // is greyed out when a pysim slot is active (see the disabled prop
+    // is greyed out when a momwire slot is active (see the disabled prop
     // on the schema control), and we belt-and-suspenders force the
     // request to daisy_chain=false here so a stale value from a
     // previously-active pynec slot doesn't slip through.
@@ -1998,7 +1998,7 @@ export function App() {
     convergeEnabled,
   ]);
 
-  // Debounced NEC pattern fetch. PyNEC only — for pysim there's no rp_card
+  // Debounced NEC pattern fetch. PyNEC only — for momwire there's no rp_card
   // equivalent. Tracks measurement freq too (unlike the impedance sweep).
   useEffect(() => {
     if (patternTimerRef.current) window.clearTimeout(patternTimerRef.current);
@@ -2037,7 +2037,7 @@ export function App() {
 
     // Sweep range, log-spaced. Sommerfeld-Norton ground is ~100x slower
     // per point, so halve the resolution there to keep total sweep time
-    // near free-space cost. Fast (reflection-coefficient) ground and pysim
+    // near free-space cost. Fast (reflection-coefficient) ground and momwire
     // PEC ground are cheap enough for full resolution.
     //
     // Anchor + span come from the active example's sweep_policy. See
@@ -2578,9 +2578,9 @@ export function App() {
               onChange={setParamAtPath}
               useKnobs={useKnobs}
               // hexbeam_5band's daisy_chain mode emits NEC TL cards;
-              // pysim engines reject any non-empty build_tls() so the
+              // momwire engines reject any non-empty build_tls() so the
               // toggle has no effect there. Grey it out when the active
-              // slot's backend is pysim — the request-build side also
+              // slot's backend is momwire — the request-build side also
               // forces daisy_chain=false so a stale value doesn't slip
               // through.
               disabledFields={

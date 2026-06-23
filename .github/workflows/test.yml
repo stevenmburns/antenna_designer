@@ -30,8 +30,8 @@ jobs:
         cache: pip
         cache-dependency-path: pyproject.toml
     - name: Set up ccache
-      # Caches object files for the pysim C++ accelerator (built from source in
-      # the "Install pysim" step). The action masquerades gcc/g++ on PATH, so
+      # Caches object files for the momwire C++ accelerator (built from source in
+      # the "Install momwire" step). The action masquerades gcc/g++ on PATH, so
       # setuptools' default compiler invocation routes through ccache with no
       # CC/CXX overrides. Cold runs see no benefit; warm runs (the common case,
       # when _accelerators.cpp is unchanged) skip the recompile.
@@ -58,13 +58,13 @@ jobs:
         pip install PyNEC --no-index \
           --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.1
 
-    - name: Install pysim (vendored MoM engine)
-      # pysim is still a submodule; its C++ accelerator builds from source here.
-      # --remote tracks pysim's main; --no-build-isolation so setup.py sees the
+    - name: Install momwire (vendored MoM engine)
+      # momwire is still a submodule; its C++ accelerator builds from source here.
+      # --remote tracks momwire's main; --no-build-isolation so setup.py sees the
       # numpy + pybind11 installed above.
       run: |
-        git submodule update --init --remote pysim
-        pip install --no-build-isolation -e ./pysim
+        git submodule update --init --remote momwire
+        pip install --no-build-isolation -e ./momwire
 
     - name: Install antenna_designer
       run: pip install -e .

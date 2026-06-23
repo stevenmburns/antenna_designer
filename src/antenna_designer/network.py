@@ -29,7 +29,7 @@ from typing import Union
 @dataclass(frozen=True)
 class PortAtEdge:
     """Real port at a named edge from `build_wires()`. The named edge's
-    feed segment becomes the port location; pysim places a delta-gap at
+    feed segment becomes the port location; momwire places a delta-gap at
     the edge midpoint to read/inject current there."""
 
     name: str
@@ -80,7 +80,7 @@ class DiffTL:
     each a *differential pair* of independent real ports:
         port A = (a_pos, a_neg),  port B = (b_pos, b_neg).
     This is the 4-terminal element NEC2's `tl_card` cannot express, so it
-    is pysim-only (PyNECEngine raises on it).
+    is momwire-only (PyNECEngine raises on it).
 
     transposed=True applies the physical half-twist of the pair (swap the
     b-port terminals), flipping the A<->B coupling sign — the phase
@@ -145,7 +145,7 @@ class TwoPort:
     is what `ld_card` was designed for). See issue #65 piece (B) for the
     open work — cross-engine sanity tests revealed disagreement when the
     branch is conducting (R small), suggesting either a BC issue in the
-    pysim reduction or a `nt_card` semantics mismatch we haven't
+    momwire reduction or a `nt_card` semantics mismatch we haven't
     untangled yet."""
 
     a: str

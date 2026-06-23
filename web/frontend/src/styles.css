@@ -3,7 +3,7 @@
    offline). */
 
 /* ============================================================
-   pysim — Blueprint theme
+   momwire — Blueprint theme
    A single :root token set drives the DOM chrome AND the <canvas>
    plots (App.tsx reads the --plot-* vars via getComputedStyle).
    To retheme the whole app, edit only this block.
