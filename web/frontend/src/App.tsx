@@ -268,12 +268,204 @@ function findLinkedDesignFreq(
   return null;
 }
 
+// A dependency-free rotary knob — a drop-in alternative to the range
+// slider for float/int params. Semantically a slider (role="slider"), so
+// it stays keyboard- and screen-reader-accessible: vertical drag, scroll
+// wheel, and arrow keys all adjust the value; double-click (or Enter) to
+// type an exact number. The dial sweeps ~270° from min (lower-left) to
+// max (lower-right). Absolute-angle dragging is deliberately avoided —
+// drag is a *relative* vertical delta, which is far easier to do
+// precisely than chasing the pointer around a circle.
+function Knob({
+  value,
+  min,
+  max,
+  step,
+  precision,
+  unit,
+  label,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  precision: number;
+  unit: string | null;
+  label: string;
+  onChange: (v: number) => void;
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ y: number; v: number } | null>(null);
+  const [editing, setEditing] = useState(false);
+
+  const span = max - min || 1;
+  const clamp = (v: number) => Math.min(max, Math.max(min, v));
+  const snap = (v: number) => {
+    if (step > 0) v = min + Math.round((v - min) / step) * step;
+    // Round to the param's precision so we emit clean values (2.46, not
+    // 2.4600000001) and don't spam the live solve with fp noise.
+    const p = precision >= 0 ? precision : 6;
+    return clamp(Number(v.toFixed(p)));
+  };
+
+  const frac = Math.min(1, Math.max(0, (value - min) / span));
+  const SWEEP = 270;
+  const START = -135;
+  const ang = START + frac * SWEEP;
+  const R = 38;
+  const polar = (deg: number, r: number): [number, number] => {
+    const a = (deg * Math.PI) / 180;
+    return [50 + r * Math.sin(a), 50 - r * Math.cos(a)];
+  };
+  const arc = (r: number, a0: number, a1: number): string => {
+    const [x0, y0] = polar(a0, r);
+    const [x1, y1] = polar(a1, r);
+    const large = Math.abs(a1 - a0) > 180 ? 1 : 0;
+    return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+  };
+  const [px, py] = polar(ang, R - 3);
+
+  // Scroll wheel: ±step per detent (×10 with Shift). Attached natively so
+  // we can preventDefault — React's onWheel is passive and can't stop the
+  // page from scrolling under the dial.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const dir = e.deltaY < 0 ? 1 : -1;
+      const mult = e.shiftKey ? 10 : 1;
+      let v = value + dir * step * mult;
+      if (step > 0) v = min + Math.round((v - min) / step) * step;
+      const p = precision >= 0 ? precision : 6;
+      onChange(Math.min(max, Math.max(min, Number(v.toFixed(p)))));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [value, step, min, max, precision, onChange]);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (editing) return;
+    (e.target as Element).setPointerCapture(e.pointerId);
+    dragRef.current = { y: e.clientY, v: value };
+    wrapRef.current?.focus();
+    e.preventDefault();
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dy = d.y - e.clientY; // drag up = increase
+    const sens = e.shiftKey ? 0.25 : 1; // hold Shift for fine control
+    onChange(snap(d.v + (dy / 180) * span * sens)); // ~180px = full sweep
+  };
+  const endDrag = (e: React.PointerEvent) => {
+    dragRef.current = null;
+    (e.target as Element).releasePointerCapture?.(e.pointerId);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    let next: number | null = null;
+    switch (e.key) {
+      case "ArrowUp":
+      case "ArrowRight":
+        next = value + step;
+        break;
+      case "ArrowDown":
+      case "ArrowLeft":
+        next = value - step;
+        break;
+      case "PageUp":
+        next = value + step * 10;
+        break;
+      case "PageDown":
+        next = value - step * 10;
+        break;
+      case "Home":
+        next = min;
+        break;
+      case "End":
+        next = max;
+        break;
+      case "Enter":
+        setEditing(true);
+        e.preventDefault();
+        return;
+      default:
+        return;
+    }
+    e.preventDefault();
+    onChange(snap(next));
+  };
+
+  const commit = (raw: string) => {
+    const n = Number(raw);
+    if (Number.isFinite(n)) onChange(snap(n));
+    setEditing(false);
+  };
+
+  const p = Math.max(0, precision);
+  return (
+    <div
+      className="knob"
+      ref={wrapRef}
+      role="slider"
+      tabIndex={editing ? -1 : 0}
+      aria-label={label}
+      aria-valuemin={min}
+      aria-valuemax={max}
+      aria-valuenow={value}
+      aria-valuetext={`${value.toFixed(p)}${unit ?? ""}`}
+      onKeyDown={onKeyDown}
+    >
+      {editing ? (
+        <input
+          className="knob-edit"
+          type="number"
+          autoFocus
+          defaultValue={value}
+          min={min}
+          max={max}
+          step={step}
+          onBlur={(e) => commit((e.target as HTMLInputElement).value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit((e.target as HTMLInputElement).value);
+            else if (e.key === "Escape") setEditing(false);
+            e.stopPropagation();
+          }}
+        />
+      ) : (
+        <svg
+          viewBox="0 0 100 100"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onDoubleClick={() => setEditing(true)}
+        >
+          <path className="knob-track" d={arc(R, START, START + SWEEP)} />
+          <path className="knob-fill" d={arc(R, START, ang)} />
+          <line
+            className="knob-ptr"
+            x1="50"
+            y1="50"
+            x2={px.toFixed(2)}
+            y2={py.toFixed(2)}
+          />
+          <circle className="knob-hub" cx="50" cy="50" r="6" />
+        </svg>
+      )}
+    </div>
+  );
+}
+
 function ParamForm({
   schema,
   values,
   onChange,
   pathPrefix = [],
   disabledFields,
+  useKnobs = false,
 }: {
   schema: SchemaItem[];
   values: ParamValueBag;
@@ -284,6 +476,8 @@ function ParamForm({
   // depends on the active backend (e.g. daisy_chain only works on
   // PyNEC; pysim engines don't support transmission lines yet).
   disabledFields?: Set<string>;
+  // Render float/int params as rotary knobs instead of range sliders.
+  useKnobs?: boolean;
 }) {
   return (
     <>
@@ -306,6 +500,7 @@ function ParamForm({
                     onChange={onChange}
                     pathPrefix={[...pathPrefix, item.name, i]}
                     disabledFields={disabledFields}
+                    useKnobs={useKnobs}
                   />
                 </div>
               ))}
@@ -371,7 +566,7 @@ function ParamForm({
         if (item.kind === "enum") {
           const opts = item.enum_options ?? [];
           return (
-            <div key={item.name} className="field">
+            <div key={item.name} className="field field-enum">
               <label>
                 <span>{item.label}</span>
               </label>
@@ -407,10 +602,32 @@ function ParamForm({
           item.kind === "int"
             ? String(Math.round(currentNum))
             : currentNum.toFixed(item.precision);
+        // Knobs stack vertically — label on top, dial in the middle, value
+        // on the bottom — so the label and value don't share a cramped row
+        // above the dial. Sliders keep the name+value label row above the
+        // track.
+        if (useKnobs) {
+          return (
+            <div key={item.name} className="field field-knob">
+              <span className="knob-label" title={item.label}>{item.label}</span>
+              <Knob
+                value={currentNum}
+                min={effMin}
+                max={effMax}
+                step={item.step ?? 0.001}
+                precision={item.kind === "int" ? 0 : item.precision}
+                unit={item.unit}
+                label={item.label}
+                onChange={(v) => onChange([...pathPrefix, item.name], v)}
+              />
+              <span className="knob-value">{shown}{item.unit ?? ""}</span>
+            </div>
+          );
+        }
         return (
           <div key={item.name} className="field">
             <label>
-              <span>{item.label}</span>
+              <span title={item.label}>{item.label}</span>
               <span>{shown}{item.unit ?? ""}</span>
             </label>
             <input
@@ -1014,6 +1231,21 @@ export function App() {
   // Tools (gear) dropdown in the header. Tucked away because it holds
   // occasional actions like the NEC deck export, not per-solve controls.
   const [gearMenuOpen, setGearMenuOpen] = useState(false);
+
+  // Render parameter controls as rotary knobs instead of range sliders.
+  // Opt-in (persisted) — knobs are on-brand and compact but a precision
+  // regression for some users, so sliders stay the default.
+  const [useKnobs, setUseKnobs] = useState<boolean>(
+    () => localStorage.getItem("useKnobs") === "1",
+  );
+  const toggleKnobs = (next: boolean) => {
+    try {
+      localStorage.setItem("useKnobs", next ? "1" : "0");
+    } catch {
+      /* storage disabled — in-memory toggle still works */
+    }
+    setUseKnobs(next);
+  };
 
   // Schema-driven parameter controls. Each registered example bundles
   // its parameter schema in web/examples/<name>.py; the backend serves
@@ -2316,20 +2548,46 @@ export function App() {
         )}
 
         {currentExample && (
-          <ParamForm
-            schema={currentExample.param_schema}
-            values={currentValues}
-            onChange={setParamAtPath}
-            // hexbeam_5band's daisy_chain mode emits NEC TL cards;
-            // pysim engines reject any non-empty build_tls() so the
-            // toggle has no effect there. Grey it out when the active
-            // slot's backend is pysim — the request-build side also
-            // forces daisy_chain=false so a stale value doesn't slip
-            // through.
-            disabledFields={
-              backend !== "pynec" ? new Set(["daisy_chain"]) : undefined
-            }
-          />
+          <div
+            className="knob-toggle"
+            role="group"
+            aria-label="Parameter control style"
+          >
+            <button
+              type="button"
+              className={!useKnobs ? "active" : ""}
+              onClick={() => toggleKnobs(false)}
+            >
+              Sliders
+            </button>
+            <button
+              type="button"
+              className={useKnobs ? "active" : ""}
+              onClick={() => toggleKnobs(true)}
+            >
+              Knobs
+            </button>
+          </div>
+        )}
+
+        {currentExample && (
+          <div className={`param-grid${useKnobs ? " is-knobs" : ""}`}>
+            <ParamForm
+              schema={currentExample.param_schema}
+              values={currentValues}
+              onChange={setParamAtPath}
+              useKnobs={useKnobs}
+              // hexbeam_5band's daisy_chain mode emits NEC TL cards;
+              // pysim engines reject any non-empty build_tls() so the
+              // toggle has no effect there. Grey it out when the active
+              // slot's backend is pysim — the request-build side also
+              // forces daisy_chain=false so a stale value doesn't slip
+              // through.
+              disabledFields={
+                backend !== "pynec" ? new Set(["daisy_chain"]) : undefined
+              }
+            />
+          </div>
         )}
 
         {currentBands.length > 0 && currentExample?.has_design_freq && (() => {
