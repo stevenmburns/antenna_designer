@@ -184,7 +184,13 @@ def get_builder(nm):
     name, _, variant = nm.partition(":")
     cls = resolve_class(name)
     if cls is None:
-        return None
+        # Fail with a clear message instead of returning None, which every
+        # caller would then call as `builder()` -> `TypeError: 'NoneType' object
+        # is not callable` (a confusing crash for a simple typo). SystemExit
+        # prints just the message to stderr and exits non-zero, no traceback.
+        raise SystemExit(
+            f"unknown builder {nm!r} — run `antennaknobs list` to see available designs"
+        )
     if not variant or variant == "default":
         return cls
     attr = f"{variant}_params"
@@ -591,8 +597,6 @@ def cli(arguments=None):
         from .nec_export import export_nec
 
         builder = get_builder(args.builder)
-        if builder is None:
-            raise SystemExit(f"unknown builder: {args.builder!r}")
         kwargs = {"include_rp": args.include_rp}
         if args.ground is not _GROUND_UNSET:
             kwargs["ground"] = parse_ground(args.ground)
