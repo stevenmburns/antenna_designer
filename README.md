@@ -1,196 +1,335 @@
-# Python-based Amateur Radio Antenna Design and Modeling Package
+# AntennaKNoBs &nbsp;·&nbsp; *by KK7KNB*
 
-Front-end code for antenna design and optimization using the PyNEC library (https://github.com/tmolteno/python-necpp.git)
+### Script your antenna. Tune it in real time by turning knobs.
 
-# Basic Usage:
+AntennaKNoBs is a Python package for **parametric, programmatic antenna design**.
+You describe an antenna once as a small Python *builder* — its geometry expressed
+in terms of named parameters — and then explore the design space two ways:
 
-To render (produce an image) of a moxon antenna, try:
+- **In code**, from the command line or a Python script: draw geometry, sweep a
+  parameter, compare radiation patterns, optimize for match or gain, export a
+  NEC deck.
+- **In the browser**, from a live workbench: drag a knob and watch the 3D wire
+  model, far-field patterns, and Smith chart redraw in real time.
+
+It ships with **two simulation backends** — the battle-tested **PyNEC** (NEC2)
+engine and **pysim**, a new in-house set of method-of-moments engines — so you
+can solve the same design two ways and trust the answer.
+
+[![Test Python package](https://github.com/stevenmburns/antenna_designer/actions/workflows/test.yml/badge.svg)](https://github.com/stevenmburns/antenna_designer/actions/workflows/test.yml)
+[![Ruff](https://github.com/stevenmburns/antenna_designer/actions/workflows/ruff.yml/badge.svg)](https://github.com/stevenmburns/antenna_designer/actions/workflows/ruff.yml)
+[![Coverage](https://raw.githubusercontent.com/stevenmburns/antenna_designer/python-coverage-comment-action-data/badge.svg)](https://github.com/stevenmburns/antenna_designer/actions/workflows/test.yml)
+
+---
+
+## The live web workbench
+
+The workbench is the fastest way to feel a design. Pick an antenna, and its
+parameters appear as a panel of sliders — the *knobs*. Drag one and every view
+updates live over a WebSocket: the solver re-runs and the browser redraws.
+
+<!-- TODO: add a screenshot/gif of the web workbench here (web-workbench.png) -->
+
+What you get:
+
+- **A panel of knobs.** Every builder parameter becomes a slider (or dropdown,
+  or checkbox) with sensible min/max/step. Drag and the design re-solves.
+- **3D wire geometry** with current visualization, viewable from three
+  orthogonal projections (top / front / side).
+- **Azimuth and elevation** far-field pattern slices.
+- **A Smith chart** of input impedance, with optional frequency-sweep and
+  convergence overlays.
+- **Three solver slots (A / B / C)** you can point at different backends and
+  compare side by side — e.g. pysim triangular vs. B-spline vs. PyNEC on the
+  same antenna, at once.
+
+Live tuning stays responsive because rapid slider drags are coalesced into one
+solve per round-trip, so the solver is never buried under stale requests.
+
+### Running it
+
+The workbench is a FastAPI backend plus a React (Vite) frontend. In development
+you run the two together (two terminals):
+
 ```bash
-python -m antenna_designer draw --builder moxon
+# Terminal 1 — backend (from the repo root, in your .venv)
+pip install -e ".[web]"
+uvicorn web.server:app --reload          # serves on http://127.0.0.1:8000
+
+# Terminal 2 — frontend dev server
+cd web/frontend
+npm install
+npm run dev                              # open http://localhost:5173
 ```
 
-To see the impedance as a function of the `halfdriver` parameter in the moxon model, try:
-```bash
-python -m antenna_designer sweep --builder moxon --param halfdriver
-```
-To compare the far-field patterns of a moxon and hexbeam, try:
-```bash
-python -m antenna_designer compare_patterns --builders moxon hexbeam 
-```
-# More Advanced Usage
+The Vite dev server proxies the API and the `/ws` live-solve channel to the
+backend on port 8000, so you only ever open `http://localhost:5173`.
 
-Optimize the `length_factor` and `angle_radians` of an inverted-V dipole antenna as the height (`base`) is swept across several different values and then show the far-field plots for the different builds:
-```python3
+For a production bundle, `npm run build` (output in `web/frontend/dist/`) and
+serve it behind the FastAPI app.
+
+> The `[web]` extra pulls in `uvicorn[standard]`, which includes the WebSocket
+> support the live-solve channel needs — plain `uvicorn` fails the `/ws`
+> handshake.
+
+---
+
+## Two simulation backends
+
+AntennaKNoBs can solve any design with either backend, selected per-run with
+`--engine` (CLI) or per-slot (web). Solving the same antenna two ways is the
+point — agreement between independent engines is your confidence check.
+
+| | **PyNEC** | **pysim** |
+|---|---|---|
+| What | Python binding to the compiled C++ **NEC2** engine | In-house **method-of-moments** engines, pure-Python core with optional C++ accelerators |
+| Basis | NEC2 thin-wire (pulse/sinusoidal) | Multiple families: triangular (tent), sinusoidal, B-spline, H-matrix, array-block |
+| Speed | Very fast single-frequency solves | Fast; C++ accelerators (pybind11) for assembly/quadrature, pure-Python fallback |
+| Ground | Sommerfeld–Norton finite ground (default) | PEC image method; free space by default |
+| Install | Prebuilt wheel from the `python-necpp` fork release (OpenBLAS vendored) | C++ accelerator built from the `pysim` submodule |
+| Use it for | The established reference; finite-ground patterns | Basis-flexible cross-validation; geometries where NEC2 reactance fails to converge |
+
+**Selecting an engine** (CLI):
+
+```bash
+--engine pynec                 # NEC2 via PyNEC
+--engine pysim                 # pysim, default triangular basis
+--engine pysim:triangular      # piecewise-linear (tent) basis  — the pysim default
+--engine pysim:sinusoidal      # NEC2-style three-term basis (cross-validator)
+--engine pysim:bspline         # degree-1/2 B-spline Galerkin basis
+--engine pysim:hmatrix         # B-spline + hierarchical-matrix (ACA) acceleration
+--engine pysim:arrayblock      # element-aware block solver for arrays
+```
+
+In Python, instantiate an engine directly:
+
+```python
+from antenna_designer.engines import PyNECEngine, PysimEngine
+from pysim import BSplinePySim
+
+engine = PyNECEngine(builder)
+engine = PysimEngine(builder, solver=BSplinePySim, solver_kwargs={"degree": 2})
+```
+
+**pysim** lives in its own repository and is vendored here as a git submodule;
+its primary `TriangularPySim` engine converges to NEC accuracy in ~80 segments
+and is validated against the independent B-spline basis. The H-matrix and
+array-block engines are newer and aimed at large arrays. **PyNEC** is the
+`python-necpp` fork, distributed as a self-contained wheel (OpenBLAS vendored,
+so no SWIG/BLAS/autotools toolchain is required at install time).
+
+---
+
+## Designing antennas in code
+
+An antenna is a subclass of `AntennaBuilder` that declares named parameters and
+builds its wires from them. Because the geometry is *computed* from parameters
+in ordinary Python, you specify physical coordinates a minimal number of times —
+the rest follow by reflection and relative position. (Most antenna tools make
+you type six absolute coordinates per wire.)
+
+Here is the built-in Moxon beam (`beams.moxon`), abbreviated. Four parameters
+describe the rectangle; helper functions negate coordinates (`rx`, `ry`) and
+chain nodes into wires (`build_path`):
+
+```python
+from ... import AntennaBuilder
+from types import MappingProxyType
+
+
+class Builder(AntennaBuilder):
+    default_params = MappingProxyType(
+        {
+            "freq": 28.57,
+            "base": 7.0,
+            "halfdriver": 2.4597430629596713,   # length of one radiating side
+            "aspect_ratio": 0.3646010186757216,  # short side / long side
+            "tipspacer_factor": 0.07729647745945359,
+            "t0_factor": 0.4078045966770739,
+        }
+    )
+
+    def build_wires(self):
+        eps = 0.05
+        base = self.base
+
+        long = 2 * self.halfdriver / (1 + 2 * self.aspect_ratio * self.t0_factor)
+        short = self.aspect_ratio * long
+        tipspacer = short * self.tipspacer_factor
+        t0 = short * self.t0_factor
+
+        def build_path(lst, ns, ex):
+            return ((a, b, ns, ex) for a, b in zip(lst[:-1], lst[1:]))
+        def rx(p): return -p[0], p[1], p[2]   # mirror across x
+        def ry(p): return p[0], -p[1], p[2]   # mirror across y
+
+        S = (short / 2, eps, base)
+        A = (S[0], long / 2, base)
+        B = (A[0] - t0, A[1], base)
+        C = (B[0] - tipspacer, B[1], base)
+        D = rx(A)
+        E, F, G, H, T = ry(D), ry(C), ry(B), ry(A), ry(S)
+
+        n_seg0, n_seg1 = 21, 1
+        tups = []
+        tups.extend(build_path([S, A, B], n_seg0, None))
+        tups.extend(build_path([C, D, E, F], n_seg0, None))
+        tups.extend(build_path([G, H, T], n_seg0, None))
+        tups.append((T, S, n_seg1, 1 + 0j))   # the driven segment
+        return tups
+```
+
+The top-level package re-exports the workhorse functions, so a full
+design-explore-compare loop is a short script. This optimizes an inverted-V
+dipole at several heights and overlays the resulting patterns:
+
+```python
 import antenna_designer as ant
 from antenna_designer.designs.dipoles.invvee import Builder
 
 p = dict(Builder.default_params)
-bounds = ((p['length_factor']*.8, p['length_factor']*1.25), (0, 1))
+bounds = ((p['length_factor'] * .8, p['length_factor'] * 1.25), (0, 1))
 
 builders = (
-  ant.optimize(
-    Builder(dict(p, **{'base': base})),
-    ['length_factor', 'angle_radians'], z0=50, bounds=bounds
-  ) for base in [5, 6, 7, 8]
+    ant.optimize(
+        Builder(dict(p, base=base)),
+        ['length_factor', 'angle_radians'], z0=50, bounds=bounds,
+    )
+    for base in [5, 6, 7, 8]
 )
 
 ant.compare_patterns(builders)
 ```
 
-# Antenna Builder Example
-Here is a python subclass that can be used to design a moxon antenna.
-In this design, there are four parameters that describe the shape of the rectangle. The parameter `halfdriver` is the length of one side of the radiating element, and this includes half of the long side of the rectangle and a segment on the short side. The parameter `t0_factor` is the fraction of the short side segment. `tipspacer_factor` is the fraction of the short side segment that separates the driver and the reflector. Finally, `aspect_ratio` describes the ratio of the short side to the long side.
+---
 
-There are three helper functions that manipulate nodes, and form wires between nodes. The `rx` and `ry` functions negate the x and y coordinates, respectively, and the `build_path` functions constructs wires by connecting consecutive nodes. These functions, and the general use of Python programming constructs, allow the designer to specify physical coordinates a minimal number of times, perhaps reducing errors and simplifying the design. Few of the nodes have their coordinates specified explicitly, then rest being defined through node negation, and relative position with respect to other nodes. Most antenna design systems require six absolute coordinates per wire.
+## Command-line usage
 
-```python3
-from .. import AntennaBuilder
-from types import MappingProxyType
+Everything is under `python -m antenna_designer <subcommand>`. Designs are named
+`family.name` (with an optional `:variant`) — run `list` to see them all.
 
-class Builder(AntennaBuilder):
-  default_params = MappingProxyType({
-    'freq': 28.57,
-    'base': 7,
-    'halfdriver': 2.460
-    'aspect_ratio': 0.3646
-    'tipspacer_factor': 0.0772
-    't0_factor': 0.4078
-  })
+```bash
+# Draw a Moxon's wire geometry to a file
+python -m antenna_designer draw --builder beams.moxon --fn moxon.png
 
-  def build_wires(self):
-    eps = 0.05
-	base = self.base
+# Sweep frequency and plot impedance on a Smith chart
+python -m antenna_designer sweep --builder beams.moxon --param freq \
+    --use_smithchart --npoints 21 --fn moxon_smith.png
 
-    # short = aspect_ratio*long
-    # halfdriver = long/2 + short*t0_factor
-    # halfdriver = long/2 + aspect_ratio*long*t0_factor
-    # 2*halfdriver = long + 2*aspect_ratio*long*t0_factor
-    # 2*halfdriver = long*(1 + 2*aspect_ratio*t0_factor)
-    # long = 2*halfdriver/(1 + 2*aspect_ratio*t0_factor)
+# Far-field pattern of a Yagi, solved with pysim
+python -m antenna_designer pattern --builder beams.yagi --engine pysim:triangular
 
-    long = 2*self.halfdriver / (1 + 2*self.aspect_ratio*self.t0_factor)
-    short = self.aspect_ratio * long
+# Overlay patterns of three beams
+python -m antenna_designer compare_patterns \
+    --builders beams.moxon beams.hexbeam beams.yagi --fn beams.png
 
-    tipspacer = short * self.tipspacer_factor
-    t0 = short * self.t0_factor
+# Cross-check one design across two backends
+python -m antenna_designer compare_patterns \
+    --builders beams.moxon beams.moxon --engines pynec pysim:bspline --fn check.png
 
-    def build_path(lst, ns, ex):
-      return ((a,b,ns,ex) for a,b in zip(lst[:-1], lst[1:]))
-    def rx(p):
-      return -p[0],  p[1], p[2]
-    def ry(p):
-      return  p[0], -p[1], p[2]
+# Optimize length and arm angle of an inverted-V dipole for a 50 Ω match
+python -m antenna_designer optimize --builder dipoles.invvee \
+    --params length_factor angle_radians
 
-    """
-    D----------C   B-----A
-    |                    |
-    |                    |
-    |                    |
-    |                    |
-    |                    |
-    |                    |
-    |                    S
-    |                    |
-    |                    T
-    |                    |
-    |                    |
-    |                    |
-    |                    |
-    |                    |
-    |                    |
-    E----------F   G-----H
-	"""
+# Export a NEC2 card deck for use in external tools
+python -m antenna_designer export --builder beams.hexbeam --out hexbeam.nec
 
-    S = (short/2,        eps,    base) 
-    A = (S[0],           long/2, base)
-    B = (A[0]-t0,        A[1],   base)
-    C = (B[0]-tipspacer, B[1],   base)
-    D = rx(A)
-    E, F, G, H, T = ry(D), ry(C), ry(B), ry(A), ry(S)
-
-    n_seg0, n_seg1 = 21, 1
-      
-    tups = []
-    tups.extend(build_path([S,A,B], n_seg0, None))
-    tups.extend(build_path([C,D,E,F], n_seg0, None))
-    tups.extend(build_path([G,H,T], n_seg0, None))
-    tups.append((T, S, n_seg1, 1+0j))
-
-    return tups
+# List the available designs (optionally filter)
+python -m antenna_designer list
+python -m antenna_designer list dipole
 ```
 
-# Install
+Shared flags: `--engine` (backend, see above), `--ground`
+(`free` | `pec` | `finite` | `finite:<eps_r>,<sigma>`), `--builder`/`--builders`,
+and `--fn` (save to file instead of showing on screen).
 
-To compile and run on recent ubuntu systems (22.04 and 24.04):
+Below is a typical far-field plot produced by the `pattern`/`compare_patterns`
+commands:
 
-1. Download system dependencies
+![Radiation pattern](RadiationPattern.png)
+
+### Available designs
+
+Roughly 70 built-in designs across nine families — run
+`python -m antenna_designer list` for the authoritative list:
+
+| Family | Examples |
+|---|---|
+| `dipoles` | invvee, folded_invvee, ocf_dipole, koch_dipole, dipole_turnstile |
+| `beams` | moxon, hexbeam, yagi, hb9cv |
+| `loops` | quad, delta_loop, diamond_loop, horizontal_loop, bisquare |
+| `verticals` | vertical, jpole, inverted_l, bobtail, four_square, bruce |
+| `arrays` | yagiarray, moxonarray, invveearray, bowtiearray, delta_looparray |
+| `multiband` | fandipole, trap_dipole, hexbeam_5band, twoband_fan_dipole |
+| `broadband` | discone, g5rv, lpda, t2fd |
+| `wire` | sterba, rhombic, vbeam, w8jk, zepp, lazy_h, longwire |
+| `specialty` | hentenna, bowtie, helix, hourglass |
+
+User-authored designs (in the `user.*` namespace) appear here too; filter with
+`list --builtin-only` / `list --user-only`.
+
+---
+
+## Install
+
+On recent Ubuntu (22.04 / 24.04). PyNEC installs as a prebuilt wheel, so no
+SWIG/BLAS/autotools toolchain is needed; only the pysim C++ accelerator compiles
+from source (hence `g++`).
+
+**1. System dependencies**
+
 ```bash
 sudo apt-get update
 sudo apt-get install \
-    # Python dependencies
-    python3 \
-    python3-pip \
-    python3-venv \
-    python3-dev \
-    # C++ build deps for the pysim accelerator (PyNEC ships as a prebuilt wheel)
-    g++ \
-    build-essential \
-    git
+    python3 python3-pip python3-venv python3-dev \
+    g++ build-essential git
 ```
 
-2. Create a virtual environment and collect python dependencies
+**2. Clone and create a virtual environment**
+
 ```bash
+git clone https://github.com/stevenmburns/antenna_designer
+cd antenna_designer
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install setuptools numpy scipy pytest matplotlib icecream scikit-rf
 ```
 
-3. Clone the repo and install the two engines (PyNEC + pysim). Do this in the virtual environment.
-```bash
-git clone https://github.com/stevenmburns/antenna_designer
-cd antenna_designer
+**3. Install the two engines (PyNEC + pysim)**
 
-# PyNEC: install the self-contained wheel from the python-necpp fork's release
-# (OpenBLAS is vendored, so no BLAS/SWIG/autotools toolchain is needed).
-# --no-index avoids upstream PyNEC on PyPI, whose builds are broken on current
-# Python and which lacks the fork's BLAS/OpenMP work.
+```bash
+# PyNEC: the self-contained wheel from the python-necpp fork's release
+# (OpenBLAS vendored). --no-index avoids upstream PyNEC on PyPI, whose builds
+# are broken on current Python and lack the fork's BLAS/OpenMP work.
 pip install PyNEC --no-index \
     --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.1
 
-# pysim (the MoM engine) is still a git submodule; its C++ accelerator builds
-# from source (needs g++ + pybind11; install pybind11 if you haven't).
+# pysim: still a git submodule; its C++ accelerator builds from source.
 pip install pybind11
 git submodule update --init pysim
 pip install --no-build-isolation -e ./pysim
 ```
 
-4. Install an editable version of this repo (inside virtual enviroment and in the cloned repository directory)
+**4. Install AntennaKNoBs**
+
 ```bash
-pip install -e .
+pip install -e .                 # or  pip install -e ".[web]"  for the web workbench
 ```
 
-5. Tests can be run (inside virtual enviroment and in the cloned repository directory) using:
+**5. Run the tests**
+
 ```bash
 pytest -vv --durations=0 -- tests/
 ```
 
-There are dockerfiles to automate and document the necessary packages installations.
+> The authoritative, always-tested version of this whole sequence is the CI
+> workflow at [`.github/workflows/test.yml`](.github/workflows/test.yml) — it
+> installs both engines and runs the suite on every push. If anything here
+> drifts, that file is the source of truth.
 
-To build the docker image locally, try:
-```bash
-docker build -f Dockerfile --target antenna_designer --tag stevenmburns/antenna_designer .
-```
-To run some of the test in docker, try:
-```bash
-docker run -it stevenmburns/antenna_designer /bin/bash -c "source /opt/.venv/bin/activate && cd /opt/antenna_designer && pytest -vv --durations=0 -- tests/" 
-```
+---
 
-The tests are also running in Github Actions on every push and pull request (PyNEC from the release wheel, pysim built from its submodule):
+## License
 
-[![Test Python package](https://github.com/stevenmburns/antenna_design/actions/workflows/test.yml/badge.svg)](https://github.com/stevenmburns/antenna_design/actions/workflows/test.yml)
-
-[![Ruff](https://github.com/stevenmburns/antenna_design/actions/workflows/ruff.yml/badge.svg)](https://github.com/stevenmburns/antenna_design/actions/workflows/ruff.yml)
-
-[![Coverage](https://raw.githubusercontent.com/stevenmburns/antenna_designer/python-coverage-comment-action-data/badge.svg)](https://github.com/stevenmburns/antenna_design/actions/workflows/test.yml)
-
+MIT — see [LICENSE](LICENSE).
