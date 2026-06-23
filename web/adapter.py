@@ -71,9 +71,11 @@ from .examples._base import (
 C_LIGHT = 299_792_458.0
 
 DESIGNS_PKG = "antennaknobs.designs"
-DESIGNS_DIR = (
-    pathlib.Path(__file__).resolve().parents[1] / "src" / "antennaknobs" / "designs"
-)
+# Resolve the designs directory from the installed package, never a path relative
+# to this file: web/ and src/antennaknobs/ are siblings in a source checkout, but
+# once installed from a wheel they are separate top-level packages with no `src/`
+# in between. __path__ points at the real location in both layouts.
+DESIGNS_DIR = pathlib.Path(importlib.import_module(DESIGNS_PKG).__path__[0])
 
 _MOMWIRE_MODELS = {
     "triangular": TriangularSolver,
