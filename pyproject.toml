@@ -16,17 +16,40 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+# Core runtime deps: imported unconditionally by src/antennaknobs (numpy/scipy
+# math throughout; matplotlib for the draw/sweep/pattern plots; icecream for the
+# CLI/sweep debug tracing; scikit-rf for Touchstone/network handling in sweep).
+#
+# Deliberately NOT listed here:
+#   - momwire — the built-in MoM engine. Provided by the vendored git submodule
+#     (installed editable: `pip install -e ./momwire`) or its own wheel; not yet
+#     on a durable index, and antennaknobs is only ever installed from a clone
+#     that carries the submodule, so pinning it here would just break that flow.
+#   - PyNEC — the optional NEC2 backend, which is GPL-2.0-or-later. It is
+#     installed separately from the python-necpp fork's release wheel (see
+#     README) and must never be declared a dependency of this MIT package.
+dependencies = [
+    "numpy>=1.21",
+    "scipy>=1.7",
+    "matplotlib>=3.5",
+    "icecream>=2.1",
+    "scikit-rf>=0.24",
+]
 
 [project.optional-dependencies]
-# Web UI: the FastAPI server (web.server:app) needs an ASGI server with
-# WebSocket support — the live-solve channel at /ws is a WS upgrade.
-# Bare `uvicorn` ships without ws support and fails the handshake at
-# runtime; `uvicorn[standard]` pulls in websockets + httptools + uvloop
-# (uvloop is no-op on Windows).
-# psutil powers _physical_cpu_count() in web.server — portable across
-# Windows/macOS/Linux. Falls back to os.cpu_count() if missing, which
-# misfires on chips without HT (pins to half the actual cores).
-web = ["uvicorn[standard]", "psutil"]
+# Web UI: web/server.py is a FastAPI app served by uvicorn.
+#   - fastapi (+ its starlette core) is the web framework itself — imported
+#     directly by web/server.py, so it must be declared here, not assumed.
+#   - uvicorn[standard] is the ASGI server. The live-solve channel at /ws is a
+#     WebSocket upgrade, so the server needs WS support: bare `uvicorn` ships
+#     without it and fails the handshake at runtime. `uvicorn[standard]` already
+#     pulls in websockets (+ httptools + uvloop, uvloop a no-op on Windows), but
+#     we also list `websockets` explicitly so the /ws dependency is visible and
+#     pinned even if uvicorn's extra ever changes.
+#   - psutil powers _physical_cpu_count() in web.server — portable across
+#     Windows/macOS/Linux. Falls back to os.cpu_count() if missing, which
+#     misfires on chips without HT (pins to half the actual cores).
+web = ["fastapi", "uvicorn[standard]", "websockets", "psutil"]
 
 [project.urls]
 Homepage = "https://github.com/stevenmburns/antennaknobs"
