@@ -197,7 +197,9 @@ def test_solve_reports_radiation_efficiency_for_terminated_antenna():
     term = server.solve({"geometry": "wire.rhombic", "momwire_model": "triangular"})
     assert 0.1 < term["radiation_efficiency"] < 0.6  # ~0.29: most power in the load
 
-    lossless = server.solve({"geometry": "broadband.g5rv", "momwire_model": "triangular"})
+    lossless = server.solve(
+        {"geometry": "broadband.g5rv", "momwire_model": "triangular"}
+    )
     assert lossless["radiation_efficiency"] == 1.0
 
     # The efficiency actually scales the normaliser: dividing it back out

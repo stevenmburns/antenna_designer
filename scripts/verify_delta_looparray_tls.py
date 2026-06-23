@@ -24,7 +24,7 @@ from types import MappingProxyType
 import numpy as np
 
 from antenna_designer import AntennaBuilder, Transform, TransformStack
-from antenna_designer.engines.pysim import PysimEngine
+from antenna_designer.engines.momwire import MomwireEngine
 
 import sys
 import os
@@ -133,7 +133,7 @@ class TLArrayBuilder(AntennaBuilder):
 
 
 def evaluate_tl(b):
-    e = PysimEngine(b)
+    e = MomwireEngine(b)
     z = e.impedance()
     ff = e.far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
     rings = np.array(ff.rings)

@@ -1,8 +1,8 @@
 """Cross-engine evaluation harness for batch-3 Cebik designs.
 
-Runs a builder through the PyNEC reference engine and all four pysim solver
+Runs a builder through the PyNEC reference engine and all four momwire solver
 bases, printing driving-point Z and peak gain for each, and CATCHING any
-exception so we can see exactly where a pysim basis chokes on a geometry/feed
+exception so we can see exactly where a momwire basis chokes on a geometry/feed
 (the whole point of this batch: find holes in the methodology).
 
 Usage:
@@ -16,15 +16,15 @@ import argparse
 import importlib
 import traceback
 
-from pysim import TriangularPySim, SinusoidalPySim, BSplinePySim
+from momwire import TriangularSolver, SinusoidalSolver, BSplineSolver
 
-from antenna_designer.engines import PyNECEngine, PysimEngine
+from antenna_designer.engines import PyNECEngine, MomwireEngine
 
-PYSIM_ENGINES = [
-    ("triangular", dict(solver=TriangularPySim)),
-    ("sinusoidal", dict(solver=SinusoidalPySim)),
-    ("bspl-d1", dict(solver=BSplinePySim, solver_kwargs={"degree": 1})),
-    ("bspl-d2", dict(solver=BSplinePySim, solver_kwargs={"degree": 2})),
+MOMWIRE_ENGINES = [
+    ("triangular", dict(solver=TriangularSolver)),
+    ("sinusoidal", dict(solver=SinusoidalSolver)),
+    ("bspl-d1", dict(solver=BSplineSolver, solver_kwargs={"degree": 1})),
+    ("bspl-d2", dict(solver=BSplineSolver, solver_kwargs={"degree": 2})),
 ]
 
 
@@ -73,8 +73,8 @@ def main():
             return b
 
         _run("pynec", lambda: PyNECEngine(builder(), ground=args.ground))
-        for name, kw in PYSIM_ENGINES:
-            _run(name, lambda kw=kw: PysimEngine(builder(), ground=args.ground, **kw))
+        for name, kw in MOMWIRE_ENGINES:
+            _run(name, lambda kw=kw: MomwireEngine(builder(), ground=args.ground, **kw))
 
 
 if __name__ == "__main__":

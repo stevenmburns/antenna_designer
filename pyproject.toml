@@ -45,8 +45,8 @@ markers = [
 ]
 
 [tool.ruff]
-# pysim is a submodule with its own config.
-extend-exclude = ["pysim"]
+# momwire is a submodule with its own config.
+extend-exclude = ["momwire"]
 
 [tool.ruff.lint]
 ignore = ["E741"]
