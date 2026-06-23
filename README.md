@@ -79,8 +79,8 @@
 | src/antenna\_designer/designs/wire/zepp.py                             |       19 |        0 |    100% |           |
 | src/antenna\_designer/engine.py                                        |       43 |        3 |     93% |65, 94, 100 |
 | src/antenna\_designer/engines/\_\_init\_\_.py                          |        6 |        2 |     67% |       3-4 |
+| src/antenna\_designer/engines/momwire.py                               |      280 |        4 |     99% |36, 60, 273, 505 |
 | src/antenna\_designer/engines/pynec.py                                 |      266 |       18 |     93% |119, 132, 152, 159, 173, 190, 270, 303-304, 316, 388, 390-394, 396, 401 |
-| src/antenna\_designer/engines/pysim.py                                 |      280 |        4 |     99% |36, 60, 273, 505 |
 | src/antenna\_designer/far\_field.py                                    |       94 |        0 |    100% |           |
 | src/antenna\_designer/geometry.py                                      |      137 |        4 |     97% |60, 85, 89, 101 |
 | src/antenna\_designer/nec\_export.py                                   |       52 |       12 |     77% |50, 92-102 |

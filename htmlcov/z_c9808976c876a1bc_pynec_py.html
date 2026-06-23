@@ -60,12 +60,12 @@
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
-            <a id="prevFileLink" class="nav" href="z_c9808976c876a1bc___init___py.html">&#xab; prev</a> &nbsp; &nbsp;
+            <a id="prevFileLink" class="nav" href="z_c9808976c876a1bc_momwire_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
-            <a id="nextFileLink" class="nav" href="z_c9808976c876a1bc_pysim_py.html">&#xbb; next</a>
+            <a id="nextFileLink" class="nav" href="z_1e48171eef13c56f_far_field_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.14.2">coverage.py v7.14.2</a>,
-            created at 2026-06-23 20:06 +0000
+            created at 2026-06-23 21:11 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -99,8 +99,8 @@
     <p class="run"><span class="n"><a id="t17" href="#t17">17</a></span><span class="t"><span class="nam">COPPER_CONDUCTIVITY</span> <span class="op">=</span> <span class="num">5.8e7</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t19" href="#t19">19</a></span><span class="t"><span class="com"># Conductivity (S/m) of the wire-loss ld_card, or None for PERFECT conductors.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t20" href="#t20">20</a></span><span class="t"><span class="com"># Default None = PEC, matching pysim's lossless-wire model. This is what makes</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t21" href="#t21">21</a></span><span class="t"><span class="com"># PyNEC a clean cross-engine reference: with copper loss off, PyNEC and pysim's</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t20" href="#t20">20</a></span><span class="t"><span class="com"># Default None = PEC, matching momwire's lossless-wire model. This is what makes</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t21" href="#t21">21</a></span><span class="t"><span class="com"># PyNEC a clean cross-engine reference: with copper loss off, PyNEC and momwire's</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t22" href="#t22">22</a></span><span class="t"><span class="com"># sinusoidal basis (the same NEC2 basis family) agree on impedance to ~0.1 &#937;</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t23" href="#t23">23</a></span><span class="t"><span class="com"># and on gain/efficiency to ~0.1 dB. Set to COPPER_CONDUCTIVITY to model real</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t24" href="#t24">24</a></span><span class="t"><span class="com"># copper loss instead (a few tenths of a dB on a resonant antenna; more on a</span>&nbsp;</span><span class="r"></span></p>
@@ -137,7 +137,7 @@
     <p class="run"><span class="n"><a id="t55" href="#t55">55</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">excitation_pairs</span> <span class="op">=</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t56" href="#t56">56</a></span><span class="t">        <span class="com"># Fraction of input power radiated; set by current_distribution() when</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t57" href="#t57">57</a></span><span class="t">        <span class="com"># the design carries resistive loads (e.g. a terminated rhombic). The</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t58" href="#t58">58</a></span><span class="t">        <span class="com"># web far-field normaliser reads it to plot GAIN, matching pysim and</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t58" href="#t58">58</a></span><span class="t">        <span class="com"># web far-field normaliser reads it to plot GAIN, matching momwire and</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t59" href="#t59">59</a></span><span class="t">        <span class="com"># NEC's own get_gain so engine-switching keeps the pattern meaning</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t60" href="#t60">60</a></span><span class="t">        <span class="com"># the same thing. 1.0 = no resistive loss.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t61" href="#t61">61</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">_excited_efficiency</span> <span class="op">=</span> <span class="num">1.0</span>&nbsp;</span><span class="r"></span></p>
@@ -279,7 +279,7 @@
     <p class="pln"><span class="n"><a id="t197" href="#t197">197</a></span><span class="t">    <span class="com"># `build_network()` designs we don't emit tl_cards at all: we extract the</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t198" href="#t198">198</a></span><span class="t">    <span class="com"># antenna's multiport short-circuit Y at the real ports and hand it to the</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t199" href="#t199">199</a></span><span class="t">    <span class="com"># engine-agnostic NetworkReducer (the EZNEC approach &#8212; transmission lines</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t200" href="#t200">200</a></span><span class="t">    <span class="com"># as a circuit post-process on the field solution). Shared with pysim.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t200" href="#t200">200</a></span><span class="t">    <span class="com"># as a circuit post-process on the field solution). Shared with momwire.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t201" href="#t201">201</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t202" href="#t202">202</a></span><span class="t">    <span class="key">def</span> <span class="nam">_network_uses_reducer</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t203" href="#t203">203</a></span><span class="t">        <span class="str">"""True iff the network needs the Y-matrix reduction path &#8212; i.e. it</span>&nbsp;</span><span class="r"></span></p>
@@ -298,10 +298,10 @@
     <p class="run"><span class="n"><a id="t216" href="#t216">216</a></span><span class="t">        <span class="key">if</span> <span class="nam">any</span><span class="op">(</span><span class="nam">isinstance</span><span class="op">(</span><span class="nam">b</span><span class="op">,</span> <span class="nam">DiffTL</span><span class="op">)</span> <span class="key">for</span> <span class="nam">b</span> <span class="key">in</span> <span class="nam">net</span><span class="op">.</span><span class="nam">branches</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t217" href="#t217">217</a></span><span class="t">            <span class="com"># The multiport-Y + NetworkReducer path *can* express a DiffTL</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t218" href="#t218">218</a></span><span class="t">            <span class="com"># (NEC2's tl_card cannot), but DiffTL on PyNEC isn't cross-</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t219" href="#t219">219</a></span><span class="t">            <span class="com"># validated yet &#8212; keep it PysimEngine-only for now.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t219" href="#t219">219</a></span><span class="t">            <span class="com"># validated yet &#8212; keep it MomwireEngine-only for now.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t220" href="#t220">220</a></span><span class="t">            <span class="key">raise</span> <span class="nam">NotImplementedError</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t221" href="#t221">221</a></span><span class="t">                <span class="str">"DiffTL (4-terminal differential transmission line) on "</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t222" href="#t222">222</a></span><span class="t">                <span class="str">"PyNECEngine is not enabled; use PysimEngine for differential "</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t222" href="#t222">222</a></span><span class="t">                <span class="str">"PyNECEngine is not enabled; use MomwireEngine for differential "</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t223" href="#t223">223</a></span><span class="t">                <span class="str">"lines."</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t224" href="#t224">224</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t225" href="#t225">225</a></span><span class="t">        <span class="nam">named</span> <span class="op">=</span> <span class="op">{</span><span class="nam">t</span><span class="op">[</span><span class="num">4</span><span class="op">]</span> <span class="key">for</span> <span class="nam">t</span> <span class="key">in</span> <span class="nam">self</span><span class="op">.</span><span class="nam">tups</span> <span class="key">if</span> <span class="nam">len</span><span class="op">(</span><span class="nam">t</span><span class="op">)</span> <span class="op">>=</span> <span class="num">5</span> <span class="key">and</span> <span class="nam">t</span><span class="op">[</span><span class="num">4</span><span class="op">]</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
@@ -363,7 +363,7 @@
     <p class="pln"><span class="n"><a id="t281" href="#t281">281</a></span><span class="t">        <span class="str">"""P_radiated / P_input = 1 - P_dissipated / P_input over the explicit</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t282" href="#t282">282</a></span><span class="t"><span class="str">        resistive Load branches; 1.0 when there are none.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t283" href="#t283">283</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t284" href="#t284">284</a></span><span class="t"><span class="str">        This mirrors PysimEngine's efficiency so the web UI can fold the same</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t284" href="#t284">284</a></span><span class="t"><span class="str">        This mirrors MomwireEngine's efficiency so the web UI can fold the same</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t285" href="#t285">285</a></span><span class="t"><span class="str">        directivity->gain correction on either engine (the JS far-field cut is</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t286" href="#t286">286</a></span><span class="t"><span class="str">        otherwise raw directivity). It matches NEC's own get_gain overlay to a</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t287" href="#t287">287</a></span><span class="t"><span class="str">        tenth of a dB -- NEC additionally counts the small global copper-loss</span>&nbsp;</span><span class="r"></span></p>
@@ -583,12 +583,12 @@
 <footer>
     <div class="content">
         <p>
-            <a class="nav" href="z_c9808976c876a1bc___init___py.html">&#xab; prev</a> &nbsp; &nbsp;
+            <a class="nav" href="z_c9808976c876a1bc_momwire_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
-            <a class="nav" href="z_c9808976c876a1bc_pysim_py.html">&#xbb; next</a>
+            <a class="nav" href="z_1e48171eef13c56f_far_field_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.14.2">coverage.py v7.14.2</a>,
-            created at 2026-06-23 20:06 +0000
+            created at 2026-06-23 21:11 +0000
         </p>
     </div>
 </footer>
