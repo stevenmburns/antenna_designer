@@ -23,6 +23,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         # No submodules: the dist is pure Python and does not build momwire.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/frontend/package-lock.json
+      - name: Build the React frontend
+        # Produces web/static (vite outDir) which setup.py ships as package
+        # data, so the wheel serves the browser UI with no Node at install time.
+        working-directory: web/frontend
+        run: |
+          npm ci
+          npm run build
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

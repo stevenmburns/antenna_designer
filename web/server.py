@@ -91,12 +91,14 @@ import json
 import time
 from collections import OrderedDict
 from copy import deepcopy
+from pathlib import Path
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketState
 
 from . import pynec_backend, user_designs
@@ -855,3 +857,18 @@ async def ws_endpoint(ws: WebSocket):
                 return
     except WebSocketDisconnect:
         return
+
+
+# Serve the built React frontend (web/static, produced by `npm run build` in
+# web/frontend) at "/". Mounted LAST so every API route and FastAPI's own
+# /docs + /openapi.json — all registered above — take precedence; the mount
+# only catches "/", the SPA's assets, and other unclaimed GETs. html=True
+# serves index.html for the root.
+#
+# Gated on the directory existing: a source checkout / editable install without
+# a frontend build (the dev workflow, where Vite serves the SPA on :5173 and
+# proxies here) simply runs API-only, while a wheel install — which ships the
+# built bundle as package data — serves the whole app from this one process.
+_FRONTEND_DIR = Path(__file__).resolve().parent / "static"
+if _FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")
