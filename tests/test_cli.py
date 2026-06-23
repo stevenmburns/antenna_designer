@@ -76,14 +76,14 @@ def test_cli_compare_patterns():
 
 
 def test_cli_engine_flag():
-    """--engine pysim selects the pysim backend; --ground forces a
+    """--engine momwire selects the momwire backend; --ground forces a
     specific ground model on either engine."""
     dipole = "dipoles.invvee:dipole"
-    ant.cli(f"pattern --builder {dipole} --engine pysim --ground free{o}".split())
-    ant.cli(f"pattern --builder {dipole} --engine pysim --ground pec{o}".split())
+    ant.cli(f"pattern --builder {dipole} --engine momwire --ground free{o}".split())
+    ant.cli(f"pattern --builder {dipole} --engine momwire --ground pec{o}".split())
     ant.cli(
-        f"compare_patterns --builders {dipole} --engine pysim --ground free{o}".split()
+        f"compare_patterns --builders {dipole} --engine momwire --ground free{o}".split()
     )
     ant.cli(
-        f"sweep --builder {dipole} --npoints 3 --engine pysim --ground free{o}".split()
+        f"sweep --builder {dipole} --npoints 3 --engine momwire --ground free{o}".split()
     )

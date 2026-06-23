@@ -1,3 +1,4 @@
-[submodule "pysim"]
-	path = pysim
-	url = https://github.com/stevenmburns/pysim.git
+[submodule "momwire"]
+	path = momwire
+	url = https://github.com/stevenmburns/momwire.git
+	branch = main

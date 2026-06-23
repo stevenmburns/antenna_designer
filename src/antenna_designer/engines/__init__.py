@@ -3,6 +3,6 @@ try:
 except ImportError:
     PyNECEngine = None
 
-from .pysim import PysimEngine
+from .momwire import MomwireEngine
 
-__all__ = ["PyNECEngine", "PysimEngine"]
+__all__ = ["PyNECEngine", "MomwireEngine"]

@@ -12,7 +12,7 @@ in terms of named parameters — and then explore the design space two ways:
 - **In the browser**, from a live workbench: drag a knob and watch the 3D wire
   model, far-field patterns, and Smith chart redraw in real time.
 
-Its built-in engine is **pysim**, a new in-house set of method-of-moments
+Its built-in engine is **momwire**, a new in-house set of method-of-moments
 engines. You can *optionally* add **PyNEC** (the battle-tested NEC2 engine) as a
 second backend and solve the same design both ways to trust the answer.
 
@@ -40,7 +40,7 @@ What you get:
 - **A Smith chart** of input impedance, with optional frequency-sweep and
   convergence overlays.
 - **Three solver slots (A / B / C)** you can point at different backends and
-  compare side by side — e.g. pysim triangular vs. B-spline vs. PyNEC on the
+  compare side by side — e.g. momwire triangular vs. B-spline vs. PyNEC on the
   same antenna, at once.
 
 Live tuning stays responsive because rapid slider drags are coalesced into one
@@ -80,39 +80,39 @@ AntennaKNoBs can solve any design with either backend, selected per-run with
 `--engine` (CLI) or per-slot (web). Solving the same antenna two ways is the
 point — agreement between independent engines is your confidence check.
 
-| | **PyNEC** | **pysim** |
+| | **PyNEC** | **momwire** |
 |---|---|---|
 | What | Python binding to the compiled C++ **NEC2** engine | In-house **method-of-moments** engines, pure-Python core with optional C++ accelerators |
 | Basis | NEC2 thin-wire (pulse/sinusoidal) | Multiple families: triangular (tent), sinusoidal, B-spline, H-matrix, array-block |
 | Speed | Very fast single-frequency solves | Fast; C++ accelerators (pybind11) for assembly/quadrature, pure-Python fallback |
 | Ground | Sommerfeld–Norton finite ground (default) | PEC image method; free space by default |
-| Install | Prebuilt wheel from the `python-necpp` fork release (OpenBLAS vendored) | C++ accelerator built from the `pysim` submodule |
+| Install | Prebuilt wheel from the `python-necpp` fork release (OpenBLAS vendored) | C++ accelerator built from the `momwire` submodule |
 | Use it for | The established reference; finite-ground patterns | Basis-flexible cross-validation; geometries where NEC2 reactance fails to converge |
 
 **Selecting an engine** (CLI):
 
 ```bash
 --engine pynec                 # NEC2 via PyNEC
---engine pysim                 # pysim, default triangular basis
---engine pysim:triangular      # piecewise-linear (tent) basis  — the pysim default
---engine pysim:sinusoidal      # NEC2-style three-term basis (cross-validator)
---engine pysim:bspline         # degree-1/2 B-spline Galerkin basis
---engine pysim:hmatrix         # B-spline + hierarchical-matrix (ACA) acceleration
---engine pysim:arrayblock      # element-aware block solver for arrays
+--engine momwire                 # momwire, default triangular basis
+--engine momwire:triangular      # piecewise-linear (tent) basis  — the momwire default
+--engine momwire:sinusoidal      # NEC2-style three-term basis (cross-validator)
+--engine momwire:bspline         # degree-1/2 B-spline Galerkin basis
+--engine momwire:hmatrix         # B-spline + hierarchical-matrix (ACA) acceleration
+--engine momwire:arrayblock      # element-aware block solver for arrays
 ```
 
 In Python, instantiate an engine directly:
 
 ```python
-from antenna_designer.engines import PyNECEngine, PysimEngine
-from pysim import BSplinePySim
+from antenna_designer.engines import PyNECEngine, MomwireEngine
+from momwire import BSplineSolver
 
 engine = PyNECEngine(builder)
-engine = PysimEngine(builder, solver=BSplinePySim, solver_kwargs={"degree": 2})
+engine = MomwireEngine(builder, solver=BSplineSolver, solver_kwargs={"degree": 2})
 ```
 
-**pysim** lives in its own repository and is vendored here as a git submodule;
-its primary `TriangularPySim` engine converges to NEC accuracy in ~80 segments
+**momwire** lives in its own repository and is vendored here as a git submodule;
+its primary `TriangularSolver` engine converges to NEC accuracy in ~80 segments
 and is validated against the independent B-spline basis. The H-matrix and
 array-block engines are newer and aimed at large arrays. **PyNEC** is an
 *optional* second backend — the `python-necpp` fork, distributed as a
@@ -219,8 +219,8 @@ python -m antenna_designer draw --builder beams.moxon --fn moxon.png
 python -m antenna_designer sweep --builder beams.moxon --param freq \
     --use_smithchart --npoints 21 --fn moxon_smith.png
 
-# Far-field pattern of a Yagi, solved with pysim
-python -m antenna_designer pattern --builder beams.yagi --engine pysim:triangular
+# Far-field pattern of a Yagi, solved with momwire
+python -m antenna_designer pattern --builder beams.yagi --engine momwire:triangular
 
 # Overlay patterns of three beams
 python -m antenna_designer compare_patterns \
@@ -228,7 +228,7 @@ python -m antenna_designer compare_patterns \
 
 # Cross-check one design across two backends
 python -m antenna_designer compare_patterns \
-    --builders beams.moxon beams.moxon --engines pynec pysim:bspline --fn check.png
+    --builders beams.moxon beams.moxon --engines pynec momwire:bspline --fn check.png
 
 # Optimize length and arm angle of an inverted-V dipole for a 50 Ω match
 python -m antenna_designer optimize --builder dipoles.invvee \
@@ -276,7 +276,7 @@ User-authored designs (in the `user.*` namespace) appear here too; filter with
 ## Install
 
 On recent Ubuntu (22.04 / 24.04). PyNEC installs as a prebuilt wheel, so no
-SWIG/BLAS/autotools toolchain is needed; only the pysim C++ accelerator compiles
+SWIG/BLAS/autotools toolchain is needed; only the momwire C++ accelerator compiles
 from source (hence `g++`).
 
 **1. System dependencies**
@@ -299,20 +299,20 @@ pip install --upgrade pip
 pip install setuptools numpy scipy pytest matplotlib icecream scikit-rf
 ```
 
-**3. Install pysim (the engine)**
+**3. Install momwire (the engine)**
 
 ```bash
-# pysim: a git submodule; its C++ accelerator builds from source.
+# momwire: a git submodule; its C++ accelerator builds from source.
 pip install pybind11
-git submodule update --init pysim
-pip install --no-build-isolation -e ./pysim
+git submodule update --init momwire
+pip install --no-build-isolation -e ./momwire
 ```
 
 **3b. (Optional) Install PyNEC for cross-validation**
 
 PyNEC is an optional second backend — **GPL-2.0**, installed separately from its
 own release, and never bundled with or required by antenna_designer. Skip it and
-pysim is still fully functional; install it only if you want to cross-check
+momwire is still fully functional; install it only if you want to cross-check
 against NEC2.
 
 ```bash

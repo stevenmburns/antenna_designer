@@ -1,10 +1,10 @@
 """Translate the flat (p0, p1, n_seg, excitation) wire list used by
 AntennaBuilder.build_wires() into the polyline + feed-arclength shape
-that pysim's TriangularPySim consumes.
+that momwire's TriangularSolver consumes.
 
 The flat list expresses connectivity implicitly: two tuples are part of
 the same electrical wire when they share an endpoint (within `eps`).
-pysim wants each electrical wire as one (M, 3) polyline with junction
+momwire wants each electrical wire as one (M, 3) polyline with junction
 information (KCL at shared nodes) explicit; this module recovers the
 graph, decomposes it into maximal chains between junction/endpoint
 nodes, and emits the junction list.
@@ -13,7 +13,7 @@ Supported topologies:
   * Open chains and any number of junctions of any degree (tees, X's,
     hentenna-style multi-junction, fandipole-style multi-spoke feeds).
   * Pure cycles (closed loops). A cycle is cut at one edge into two
-    polylines joined by a junction at each cut node, so pysim's KCL
+    polylines joined by a junction at each cut node, so momwire's KCL
     carries the current around the loop. The cut edge is the loop's port
     edge when it has one (driven loops); for a PARASITIC loop, which
     radiates only through mutual coupling, the cut edge is arbitrary.
@@ -36,7 +36,7 @@ def _round_point(p, eps):
 
 
 def flat_wires_to_polylines(tups, *, eps=1e-6):
-    """Convert flat wire tuples to pysim polyline form.
+    """Convert flat wire tuples to momwire polyline form.
 
     Returns a dict with keys:
         polylines       : list of (M, 3) np.ndarray
@@ -44,7 +44,7 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
         feeds           : list of (polyline_idx, arclength, voltage) —
                           one entry per excited tuple, in registration
                           order. Suitable to pass directly to
-                          TriangularPySim(feeds=...).
+                          TriangularSolver(feeds=...).
         feed_wire_index : int — polyline holding the first excited
                           segment (back-compat: feeds[0][0])
         feed_arclength  : float — arclength of the first feed
@@ -53,7 +53,7 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
                           (back-compat: feeds[0][2])
         junctions       : list of list[(wire_idx, "start"|"end")] —
                           shared-node groups, suitable to pass directly
-                          to TriangularPySim(junctions=...). Empty list
+                          to TriangularSolver(junctions=...). Empty list
                           if every component is a simple path.
     """
     if not tups:
@@ -161,7 +161,7 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
     # its excited edge: the excited edge becomes one polyline (A→B), the
     # rest of the cycle becomes a second polyline walked B→A the long
     # way. The two cut nodes A and B are each registered as 2-entry
-    # junctions so pysim's KCL enforces current continuity around the
+    # junctions so momwire's KCL enforces current continuity around the
     # loop.
     while not all(edge_seen):
         seed = next(i for i, seen in enumerate(edge_seen) if not seen)
@@ -182,7 +182,7 @@ def flat_wires_to_polylines(tups, *, eps=1e-6):
 
         # A "port edge" carries either a voltage (legacy build_tls path) or a
         # network-spec name. To open the cycle we cut ONE edge into its own
-        # polyline and register the two cut nodes as junctions, so pysim's KCL
+        # polyline and register the two cut nodes as junctions, so momwire's KCL
         # enforces current continuity around the loop. We PREFER to cut at a
         # port edge: it has to become its own polyline anyway, to host the
         # delta-gap feed. A PARASITIC loop has no port edge, so the cut point

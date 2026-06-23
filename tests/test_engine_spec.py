@@ -4,14 +4,14 @@ import pytest
 
 import antenna_designer as ant
 from antenna_designer.cli import (
-    PYSIM_BASES,
+    MOMWIRE_BASES,
     parse_engine_spec,
     make_engine_factory,
     broadcast_pairs,
     _GROUND_UNSET,
 )
-from antenna_designer.engines import PyNECEngine, PysimEngine
-from pysim import TriangularPySim, SinusoidalPySim, BSplinePySim
+from antenna_designer.engines import PyNECEngine, MomwireEngine
+from momwire import TriangularSolver, SinusoidalSolver, BSplineSolver
 
 from conftest import needs_pynec
 
@@ -21,21 +21,21 @@ def test_parse_pynec_no_basis():
     assert parse_engine_spec("pynec") == ("pynec", {})
 
 
-def test_parse_pysim_default():
-    assert parse_engine_spec("pysim") == ("pysim", {})
+def test_parse_momwire_default():
+    assert parse_engine_spec("momwire") == ("momwire", {})
 
 
 @pytest.mark.parametrize(
     "basis,cls",
     [
-        ("triangular", TriangularPySim),
-        ("sinusoidal", SinusoidalPySim),
-        ("bspline", BSplinePySim),
+        ("triangular", TriangularSolver),
+        ("sinusoidal", SinusoidalSolver),
+        ("bspline", BSplineSolver),
     ],
 )
-def test_parse_pysim_with_basis(basis, cls):
-    name, kw = parse_engine_spec(f"pysim:{basis}")
-    assert name == "pysim"
+def test_parse_momwire_with_basis(basis, cls):
+    name, kw = parse_engine_spec(f"momwire:{basis}")
+    assert name == "momwire"
     assert kw == {"solver": cls}
 
 
@@ -49,31 +49,31 @@ def test_parse_pynec_with_basis_raises():
         parse_engine_spec("pynec:triangular")
 
 
-def test_parse_pysim_unknown_basis_raises():
+def test_parse_momwire_unknown_basis_raises():
     with pytest.raises(argparse.ArgumentTypeError):
-        parse_engine_spec("pysim:not_a_basis")
+        parse_engine_spec("momwire:not_a_basis")
 
 
 @needs_pynec
 def test_make_factory_returns_class_when_no_kwargs():
     assert make_engine_factory("pynec", _GROUND_UNSET) is PyNECEngine
-    assert make_engine_factory("pysim", _GROUND_UNSET) is PysimEngine
+    assert make_engine_factory("momwire", _GROUND_UNSET) is MomwireEngine
 
 
 def test_make_factory_binds_solver():
-    factory = make_engine_factory("pysim:sinusoidal", _GROUND_UNSET)
-    assert factory.func is PysimEngine
-    assert factory.keywords == {"solver": SinusoidalPySim}
+    factory = make_engine_factory("momwire:sinusoidal", _GROUND_UNSET)
+    assert factory.func is MomwireEngine
+    assert factory.keywords == {"solver": SinusoidalSolver}
 
 
 def test_make_factory_binds_ground_and_solver():
-    factory = make_engine_factory("pysim:bspline", "pec")
-    assert factory.func is PysimEngine
-    assert factory.keywords == {"solver": BSplinePySim, "ground": "pec"}
+    factory = make_engine_factory("momwire:bspline", "pec")
+    assert factory.func is MomwireEngine
+    assert factory.keywords == {"solver": BSplineSolver, "ground": "pec"}
 
 
-def test_pysim_bases_keys():
-    assert set(PYSIM_BASES) == {
+def test_momwire_bases_keys():
+    assert set(MOMWIRE_BASES) == {
         "triangular",
         "sinusoidal",
         "bspline",
@@ -88,7 +88,7 @@ O = " --fn /dev/null"
 @needs_pynec
 def test_cli_compare_patterns_multi_engine():
     ant.cli(
-        f"compare_patterns --builders dipoles.invvee:dipole --engines pynec pysim{O}".split()
+        f"compare_patterns --builders dipoles.invvee:dipole --engines pynec momwire{O}".split()
     )
 
 
@@ -99,9 +99,9 @@ def test_cli_compare_patterns_single_engine_still_works():
     )
 
 
-def test_cli_compare_patterns_pysim_basis():
+def test_cli_compare_patterns_momwire_basis():
     ant.cli(
-        f"compare_patterns --builders dipoles.invvee:dipole --engines pysim:triangular pysim:sinusoidal{O}".split()
+        f"compare_patterns --builders dipoles.invvee:dipole --engines momwire:triangular momwire:sinusoidal{O}".split()
     )
 
 
@@ -138,24 +138,24 @@ def test_broadcast_mismatch_raises():
 def test_cli_compare_patterns_three_by_three_paired():
     ant.cli(
         f"compare_patterns --builders dipoles.invvee:dipole dipoles.invvee specialty.bowtie "
-        f"--engines pynec pysim:triangular pysim:sinusoidal{O}".split()
+        f"--engines pynec momwire:triangular momwire:sinusoidal{O}".split()
     )
 
 
 def test_cli_compare_patterns_three_builders_one_engine():
     ant.cli(
-        f"compare_patterns --builders dipoles.invvee:dipole dipoles.invvee specialty.bowtie --engines pysim{O}".split()
+        f"compare_patterns --builders dipoles.invvee:dipole dipoles.invvee specialty.bowtie --engines momwire{O}".split()
     )
 
 
 def test_cli_compare_patterns_mismatch_rejected():
     with pytest.raises(argparse.ArgumentTypeError):
         ant.cli(
-            f"compare_patterns --builders dipoles.invvee:dipole dipoles.invvee --engines pynec pysim:triangular pysim:sinusoidal{O}".split()
+            f"compare_patterns --builders dipoles.invvee:dipole dipoles.invvee --engines pynec momwire:triangular momwire:sinusoidal{O}".split()
         )
 
 
 def test_cli_pattern_with_basis_spec():
     ant.cli(
-        f"pattern --builder dipoles.invvee:dipole --engine pysim:sinusoidal{O}".split()
+        f"pattern --builder dipoles.invvee:dipole --engine momwire:sinusoidal{O}".split()
     )

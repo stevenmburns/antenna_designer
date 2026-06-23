@@ -3,7 +3,7 @@
 A half-wave dipole shortened to `length_factor` × λ/2 has a small radiation
 resistance plus a large capacitive reactance. Adding a series inductor at
 the feed (a "loading coil") cancels the capacitive reactance and pulls
-the input impedance toward resonance. Both Pysim's Sherman-Morrison rank-1
+the input impedance toward resonance. Both Momwire's Sherman-Morrison rank-1
 Y update and PyNEC's ld_card produce the same shift, which makes this the
 natural cross-engine cross-check for the Load branch.
 

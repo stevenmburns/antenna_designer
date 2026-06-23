@@ -10,7 +10,7 @@ the new port-based network spec (`build_network()`), so
   - the central driver is a `PortVirtual` — exists only as a row/column
     in the network Y matrix during the nodal reduction.
 
-PysimEngine produces the same impedance as `delta_looparray_with_tls` to
+MomwireEngine produces the same impedance as `delta_looparray_with_tls` to
 numerical precision; the showcase for the network-spec API in #65.
 """
 

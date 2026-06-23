@@ -1,10 +1,10 @@
-"""Bridge antenna_designer's Builder idiom into pysim's web AntennaExample.
+"""Bridge antenna_designer's Builder idiom into momwire's web AntennaExample.
 
 Each `designs/<name>.py` exposes a `Builder` class with `default_params`
 (a MappingProxyType of physics knobs). We walk that registry, derive a
 `ParamSpec` schema from `default_params` (with optional per-design
 overrides under the reserved `ui_params` key), and register one
-`AntennaExample` per design so the existing pysim web frontend can
+`AntennaExample` per design so the existing momwire web frontend can
 drive it without per-design glue.
 
 Reserved keys inside `ui_params`:
@@ -48,13 +48,13 @@ try:
     from antenna_designer.engines.pynec import PyNECEngine
 except ImportError:
     PyNECEngine = None
-from antenna_designer.engines.pysim import PysimEngine
-from pysim import (
-    ArrayBlockPySim,
-    BSplinePySim,
-    HMatrixPySim,
-    SinusoidalPySim,
-    TriangularPySim,
+from antenna_designer.engines.momwire import MomwireEngine
+from momwire import (
+    ArrayBlockSolver,
+    BSplineSolver,
+    HMatrixSolver,
+    SinusoidalSolver,
+    TriangularSolver,
 )
 
 from .examples import register
@@ -75,21 +75,21 @@ DESIGNS_DIR = (
     pathlib.Path(__file__).resolve().parents[1] / "src" / "antenna_designer" / "designs"
 )
 
-_PYSIM_MODELS = {
-    "triangular": TriangularPySim,
-    "sinusoidal": SinusoidalPySim,
-    "bspline": BSplinePySim,
+_MOMWIRE_MODELS = {
+    "triangular": TriangularSolver,
+    "sinusoidal": SinusoidalSolver,
+    "bspline": BSplineSolver,
     # Hierarchical (H-matrix / ACA) accelerator — same B-spline basis as
     # bspline; model_options forward verbatim (degree, aca_eta,
     # aca_leaf_size, aca_tol, solve_tol, …). Ground/enrichment fall back to
-    # the dense bspline solve inside HMatrixPySim.
-    "hmatrix": HMatrixPySim,
+    # the dense bspline solve inside HMatrixSolver.
+    "hmatrix": HMatrixSolver,
     # Element-aware array-block accelerator (sibling of hmatrix) for arrays of
     # identical/few-shape elements: dense per-shape self-blocks + low-rank
     # coupling, block-Jacobi GMRES. Same B-spline basis and model_options as
     # bspline/hmatrix (degree, aca_tol, solve_tol, …); on a single connected
     # structure it degrades to one element and matches the dense bspline solve.
-    "arrayblock": ArrayBlockPySim,
+    "arrayblock": ArrayBlockSolver,
 }
 
 
@@ -378,7 +378,7 @@ def _rehydrate_param(default_value: Any, raw: Any) -> Any:
 def _build_builder(cls, req: dict):
     """Construct a Builder from default_params overlaid with request fields.
 
-    The pysim frontend assembles its solve request by Object.assign'ing
+    The momwire frontend assembles its solve request by Object.assign'ing
     every live slider value as a *top-level* key on the request dict
     (App.tsx:buildRequest), so we read each Builder param off the request
     directly. A nested `params` dict is also accepted as a fallback for
@@ -409,18 +409,18 @@ def _ground_for_engine(req: dict, ground_z: float):
     if not ground_on:
         return None
     # Map the frontend's ground knobs to the engine's ground spec. The
-    # pysim frontend currently sends ground=True with an implicit PEC;
+    # momwire frontend currently sends ground=True with an implicit PEC;
     # finite ground specs can be wired through later via dedicated UI.
     return "pec"
 
 
-def _make_pysim_engine(req: dict, builder):
-    model = req.get("pysim_model", "triangular")
-    solver_cls = _PYSIM_MODELS.get(model, TriangularPySim)
+def _make_momwire_engine(req: dict, builder):
+    model = req.get("momwire_model", "triangular")
+    solver_cls = _MOMWIRE_MODELS.get(model, TriangularSolver)
     wire_radius = float(req.get("wire_radius", 0.0005))
     ground = _ground_for_engine(req, 0.0)
     solver_kwargs = req.get("model_options") or None
-    return PysimEngine(
+    return MomwireEngine(
         builder,
         solver=solver_cls,
         wire_radius=wire_radius,
@@ -430,10 +430,10 @@ def _make_pysim_engine(req: dict, builder):
 
 
 def _make_pynec_engine(req: dict, builder):
-    # PyNECEngine accepts the same ground-spec vocabulary as PysimEngine
+    # PyNECEngine accepts the same ground-spec vocabulary as MomwireEngine
     # — None / "pec" / ("finite", eps_r, sigma) — but defaults to a
     # finite ground rather than free space if you pass nothing. Match
-    # PysimEngine's behaviour: ground off => free space, ground on =>
+    # MomwireEngine's behaviour: ground off => free space, ground on =>
     # PEC plane at z=0.
     ground = _ground_for_engine(req, 0.0) or "free"
     return PyNECEngine(builder, ground=ground)
@@ -447,7 +447,7 @@ def _make_pynec_engine(req: dict, builder):
 # Frontend Fresnel reflection treats this as the real part of the
 # complex permittivity. For PEC the reflection coefficient ρ_h → −1 as
 # eps_r → ∞; 1e10 is large enough to be numerically indistinguishable
-# while staying away from float overflow. Matches pysim/web/server.py.
+# while staying away from float overflow. Matches momwire/web/server.py.
 _PEC_GROUND_EPS_R = 1.0e10
 _PEC_GROUND_SIGMA = 0.0
 
@@ -467,7 +467,7 @@ def _pack_wires(currents) -> list[dict]:
 def _primary_feed(engine):
     """(polyline_idx, arclength) of the driven feed, or None.
 
-    PysimEngine exposes `_feeds = [(polyline_idx, arclength, voltage)]`
+    MomwireEngine exposes `_feeds = [(polyline_idx, arclength, voltage)]`
     post-translator. For network-spec designs the geometry translator
     registers a feed for every named edge — including non-driven ports
     like trap stubs — so `_feeds[0]` is whichever named tuple appears
@@ -782,10 +782,10 @@ def _recommended_backend(cls) -> str | None:
     call site.
     """
     try:
-        from pysim.array_block import _wire_to_element
+        from momwire.array_block import _wire_to_element
 
         builder = _build_builder(cls, {})
-        eng = _make_pysim_engine({}, builder)
+        eng = _make_momwire_engine({}, builder)
         polylines = [np.asarray(p, dtype=float) for p in eng._polylines]
     except Exception:
         return None
@@ -897,7 +897,7 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
         vp = _variant_params(cls, req.get("variant"))
         return float(vp.get("freq", 14.0))
 
-    def pysim_solve(req: dict) -> dict:
+    def momwire_solve(req: dict) -> dict:
         design_freq = float(req.get("design_freq_mhz", _design_freq_default(req)))
         meas_freq = float(req.get("measurement_freq_mhz", design_freq))
         builder = _build_builder(cls, req)
@@ -910,7 +910,7 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
         # into _params and never read — guard on has_design_freq.
         if has_design_freq:
             builder.design_freq = design_freq
-        eng = _make_pysim_engine(req, builder)
+        eng = _make_momwire_engine(req, builder)
         t0 = time.perf_counter()
         zs = eng.impedance()
         currents = eng.current_distribution()
@@ -948,7 +948,7 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
         }
         if hints()["multi_feed"] and len(zs) > 1:
             # Pull per-feed drive voltages off the engine so the frontend
-            # can render each feed's phase indicator. PysimEngine stores
+            # can render each feed's phase indicator. MomwireEngine stores
             # _feeds = [(polyline_idx, arclength, voltage)]; fall back to
             # 1+0j (the canonical unit drive) when missing.
             voltages = [f[2] for f in (getattr(eng, "_feeds", None) or [])]
@@ -964,12 +964,12 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
             ]
         return out
 
-    def pysim_geometry(req: dict) -> dict:
+    def momwire_geometry(req: dict) -> dict:
         # Geometry-only snapshot: build the engine (cheap — geometry is
         # resolved in the constructor) and read its wire knot positions
         # without solving. The frontend draws this immediately on antenna
         # selection so a large design's shape shows up right away instead of
-        # waiting tens of seconds for the MoM solve. Mirrors pysim_solve's
+        # waiting tens of seconds for the MoM solve. Mirrors momwire_solve's
         # builder setup but returns zero currents and omits impedance / far
         # field (the live solve fills those in).
         design_freq = float(req.get("design_freq_mhz", _design_freq_default(req)))
@@ -978,7 +978,7 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
         builder.freq = meas_freq
         if has_design_freq:
             builder.design_freq = design_freq
-        eng = _make_pysim_engine(req, builder)
+        eng = _make_momwire_engine(req, builder)
         geom = eng.geometry_distribution()
         feed_wire_idx, feed_knot_idx = _feed_indices(eng, geom)
         return {
@@ -1056,7 +1056,7 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
         c.xq_card(0)
 
     def pynec_solve(req: dict) -> dict:
-        # Mirror pysim_solve but route through PyNECEngine. Response
+        # Mirror momwire_solve but route through PyNECEngine. Response
         # shape is identical so the frontend renders the result the
         # same way; the `solver` field gets stamped to "pynec" by
         # server.solve()'s outer wrapper.
@@ -1092,7 +1092,7 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
             "z0_ohms": hints()["target_z0"],
             "multi_feed": hints()["multi_feed"],
             "default_view": hints()["default_view"],
-            # Same directivity->gain factor as the pysim path, so switching
+            # Same directivity->gain factor as the momwire path, so switching
             # engines in the UI keeps the far-field plot meaning GAIN.
             # current_distribution() set it from the solved load currents.
             "radiation_efficiency": float(getattr(eng, "_excited_efficiency", 1.0)),
@@ -1128,21 +1128,21 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
         ground = _ground_for_engine(req, 0.0) or "free"
         return _export_nec(builder, ground=ground, freq=meas_freq)
 
-    def pysim_sweep(req: dict, freqs_mhz: list[float]):
+    def momwire_sweep(req: dict, freqs_mhz: list[float]):
         builder = _build_builder(cls, req)
-        # PysimEngine reads builder.freq only for the initial wavelength
+        # MomwireEngine reads builder.freq only for the initial wavelength
         # passed to _make_solver — impedance_sweep overrides k per point.
         builder.freq = float(freqs_mhz[0]) if freqs_mhz else float(builder.freq)
         # Geometry is fixed across the sweep; honour the request's
         # design_freq so the sweep sees the same antenna the live
-        # solve sees. See pysim_solve for the rationale.
+        # solve sees. See momwire_solve for the rationale.
         if has_design_freq:
             builder.design_freq = float(
                 req.get("design_freq_mhz", _design_freq_default(req))
             )
-        eng = _make_pysim_engine(req, builder)
+        eng = _make_momwire_engine(req, builder)
         zs = np.asarray(eng.impedance_sweep(list(freqs_mhz)))
-        # PysimEngine.impedance_sweep returns (n_freqs, n_feeds).
+        # MomwireEngine.impedance_sweep returns (n_freqs, n_feeds).
         primary = zs[:, 0]
         re = primary.real.tolist()
         im = primary.imag.tolist()
@@ -1171,9 +1171,9 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
     return AntennaExample(
         name=name,
         label=name.replace("_", " "),
-        pysim_solve=pysim_solve,
-        pysim_sweep=pysim_sweep,
-        pysim_geometry=pysim_geometry,
+        momwire_solve=momwire_solve,
+        momwire_sweep=momwire_sweep,
+        momwire_geometry=momwire_geometry,
         default_backend=field_default_backend,
         pynec_solve=pynec_solve,
         pynec_build=pynec_build,

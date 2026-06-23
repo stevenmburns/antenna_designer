@@ -20,7 +20,7 @@ class FarField(NamedTuple):
 class WireCurrents(NamedTuple):
     """Per-wire knot positions + complex currents at the solve frequency.
 
-    Engines decompose geometry differently — PysimEngine returns one
+    Engines decompose geometry differently — MomwireEngine returns one
     entry per polyline (post-translator), PyNECEngine returns one entry
     per build_wires() tuple. Callers (e.g. the web UI) treat each entry
     as an independent rendering primitive rather than assuming the lists
@@ -44,7 +44,7 @@ class SimulationEngine(ABC):
     @staticmethod
     def coerce_n_seg(n_seg: int, parity: SegmentParity) -> int:
         # Floor below the parity step. n_seg=0 is invalid for every engine
-        # (pysim divides edge length by it), and even-parity engines need
+        # (momwire divides edge length by it), and even-parity engines need
         # at least 2 segments to host a feed straddling a midpoint.
         if parity == "even":
             n_seg = max(2, n_seg)
@@ -59,7 +59,7 @@ class SimulationEngine(ABC):
         required parity. Logs once per distinct (n_in, n_out) shift so a
         converge sweep doesn't spam the log per-edge. Reads
         self.segment_parity so subclasses can set it per-instance (e.g.
-        PysimEngine, where the parity depends on the chosen solver)."""
+        MomwireEngine, where the parity depends on the chosen solver)."""
         parity = self.segment_parity
         if parity == "any":
             return tups

@@ -29,7 +29,7 @@ crossed TL between the two element centres. That gets the forward gain
 the very deep F/B null Cebik reports (25-45 dB) needs a precise simultaneous
 phase-AND-current-magnitude match that the single-ended ideal line does not
 reach -- it tops out near ~8 dB here. The genuinely deep null wants a true
-2-conductor transposed line (the pysim DiffTL, cf. sterba_difftl) or a fine
+2-conductor transposed line (the momwire DiffTL, cf. sterba_difftl) or a fine
 multi-variable optimisation. Treat F/B as "real but shallow" in this model.
 """
 

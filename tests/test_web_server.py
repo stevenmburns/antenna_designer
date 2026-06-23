@@ -162,22 +162,22 @@ def test_examples_carry_sweep_policy_keys(client: TestClient):
 
 
 # ---------------------------------------------------------------------------
-# solve() dispatcher — exercise the pysim path end-to-end on the cheapest
+# solve() dispatcher — exercise the momwire path end-to-end on the cheapest
 # geometry (dipole). This is the only place the test module calls a real
 # solver; everything else stays I/O-only.
 # ---------------------------------------------------------------------------
 
 
-def test_solve_dispatches_to_pysim_for_dipole():
+def test_solve_dispatches_to_momwire_for_dipole():
     out = server.solve(
         {
             "geometry": "dipoles.invvee",
             "measurement_freq_mhz": 28.47,
             "design_freq_mhz": 28.47,
-            "pysim_model": "triangular",
+            "momwire_model": "triangular",
         }
     )
-    assert out["solver"] == "pysim"
+    assert out["solver"] == "momwire"
     assert out["geometry"] == "dipoles.invvee"
     # _attach_derived_em_fields ran.
     assert "k_meas_m_inv" in out
@@ -194,10 +194,10 @@ def test_solve_reports_radiation_efficiency_for_terminated_antenna():
     input power, so the server reports radiation_efficiency < 1 and folds it
     into directivity_norm — the UI then plots GAIN, not directivity. A lossless
     design reports 1.0 and its normaliser is unchanged."""
-    term = server.solve({"geometry": "wire.rhombic", "pysim_model": "triangular"})
+    term = server.solve({"geometry": "wire.rhombic", "momwire_model": "triangular"})
     assert 0.1 < term["radiation_efficiency"] < 0.6  # ~0.29: most power in the load
 
-    lossless = server.solve({"geometry": "broadband.g5rv", "pysim_model": "triangular"})
+    lossless = server.solve({"geometry": "broadband.g5rv", "momwire_model": "triangular"})
     assert lossless["radiation_efficiency"] == 1.0
 
     # The efficiency actually scales the normaliser: dividing it back out
@@ -210,7 +210,7 @@ def test_solve_reports_radiation_efficiency_for_terminated_antenna():
 def test_pynec_path_also_reports_radiation_efficiency():
     """Switching engines must keep the far-field plot meaning GAIN: the PyNEC
     path reports a radiation_efficiency < 1 for the terminated rhombic too
-    (close to pysim's, both well under 1), and 1.0 for a lossless design --
+    (close to momwire's, both well under 1), and 1.0 for a lossless design --
     so the JS far-field cut is gain on either engine, not directivity on one
     and gain on the other."""
     from web import pynec_backend
@@ -220,13 +220,13 @@ def test_pynec_path_also_reports_radiation_efficiency():
 
         pytest.skip("PyNEC backend not available")
 
-    term_pysim = server.solve({"geometry": "wire.rhombic", "solver": "pysim"})
+    term_momwire = server.solve({"geometry": "wire.rhombic", "solver": "momwire"})
     term_pynec = server.solve({"geometry": "wire.rhombic", "solver": "pynec"})
     assert term_pynec["radiation_efficiency"] < 0.6
     # the two engines agree on the efficiency to better than ~1.5 dB (basis
     # difference + NEC's copper-loss card), far inside the old ~5 dB
     # directivity-vs-gain gap.
-    ratio = term_pynec["radiation_efficiency"] / term_pysim["radiation_efficiency"]
+    ratio = term_pynec["radiation_efficiency"] / term_momwire["radiation_efficiency"]
     assert 0.7 < ratio < 1.4
 
     lossless_pynec = server.solve({"geometry": "broadband.g5rv", "solver": "pynec"})
@@ -243,7 +243,7 @@ def test_solve_falls_back_when_geometry_unknown():
             "measurement_freq_mhz": 28.47,
         }
     )
-    assert out["solver"] == "pysim"
+    assert out["solver"] == "momwire"
     assert "wires" in out
 
 
@@ -351,7 +351,7 @@ def test_sweep_endpoint_empty_freqs_returns_only_done(client: TestClient):
     r = client.post("/sweep", json={"geometry": "dipoles.invvee", "freqs_mhz": []})
     assert r.status_code == 200
     recs = _ndjson_records(r.text)
-    assert recs == [{"done": True, "solver": "pysim"}]
+    assert recs == [{"done": True, "solver": "momwire"}]
 
 
 def test_sweep_endpoint_streams_one_record_per_freq_then_done(client: TestClient):
@@ -362,17 +362,17 @@ def test_sweep_endpoint_streams_one_record_per_freq_then_done(client: TestClient
             "geometry": "dipoles.invvee",
             "freqs_mhz": freqs,
             "measurement_freq_mhz": 28.47,
-            "pysim_model": "triangular",
+            "momwire_model": "triangular",
         },
     )
     assert r.status_code == 200
     recs = _ndjson_records(r.text)
     assert len(recs) == len(freqs) + 1
     *points, terminator = recs
-    assert terminator == {"done": True, "solver": "pysim"}
+    assert terminator == {"done": True, "solver": "momwire"}
     for f, rec in zip(freqs, points):
         assert rec["freq_mhz"] == f
-        assert rec["solver"] == "pysim"
+        assert rec["solver"] == "momwire"
         assert isinstance(rec["z_re"], float)
         assert isinstance(rec["z_im"], float)
         # Real dipole impedance never goes pathologically far from order
@@ -395,17 +395,17 @@ def test_converge_endpoint_streams_one_record_per_n_then_done(client: TestClient
             "geometry": "dipoles.invvee",
             "n_values": ns,
             "measurement_freq_mhz": 28.47,
-            "pysim_model": "triangular",
+            "momwire_model": "triangular",
         },
     )
     assert r.status_code == 200
     recs = _ndjson_records(r.text)
     assert len(recs) == len(ns) + 1
     *points, terminator = recs
-    assert terminator == {"done": True, "solver": "pysim"}
+    assert terminator == {"done": True, "solver": "momwire"}
     for n, rec in zip(ns, points):
         assert rec["n_per_wire"] == n
-        assert rec["solver"] == "pysim"
+        assert rec["solver"] == "momwire"
         # Convergence trace should always carry real impedance fields —
         # the error-path branch yields an `error` key instead, which
         # would mean dipole crapped out at this N (it shouldn't).
@@ -415,18 +415,18 @@ def test_converge_endpoint_streams_one_record_per_n_then_done(client: TestClient
 def test_converge_endpoint_empty_n_values_returns_only_done(client: TestClient):
     r = client.post("/converge", json={"geometry": "dipoles.invvee", "n_values": []})
     recs = _ndjson_records(r.text)
-    assert recs == [{"done": True, "solver": "pysim"}]
+    assert recs == [{"done": True, "solver": "momwire"}]
 
 
-def test_pattern_endpoint_pysim_returns_unavailable(client: TestClient):
-    # /pattern is PyNEC-only; pysim solvers get the {"available": False}
+def test_pattern_endpoint_momwire_returns_unavailable(client: TestClient):
+    # /pattern is PyNEC-only; momwire solvers get the {"available": False}
     # short-circuit. Tests both the solver-flag path and the
     # HAVE_PYNEC=False fallback shape.
     r = client.post(
         "/pattern",
         json={
             "geometry": "dipoles.invvee",
-            "solver": "pysim",
+            "solver": "momwire",
             "measurement_freq_mhz": 28.47,
         },
     )
@@ -451,7 +451,7 @@ def test_geometry_endpoint_returns_wires_without_solving(client: TestClient):
     out = r.json()
     assert out["geometry"] == "dipoles.invvee"
     assert out["preview"] is True
-    assert out["solver"] == "pysim"
+    assert out["solver"] == "momwire"
     assert len(out["wires"]) >= 1
     # Geometry only — every current is zero, and the solve never ran.
     assert "z_in_re" not in out
@@ -614,7 +614,7 @@ def test_solve_for_multi_feed_geometry_includes_feeds_array():
         {
             "geometry": "arrays.bowtiearray1x2",
             "measurement_freq_mhz": 28.5,
-            "pysim_model": "triangular",
+            "momwire_model": "triangular",
         }
     )
     assert "feeds" in out
@@ -634,7 +634,7 @@ def test_solve_for_single_feed_geometry_omits_feeds_array():
         {
             "geometry": "dipoles.invvee",
             "measurement_freq_mhz": 28.47,
-            "pysim_model": "triangular",
+            "momwire_model": "triangular",
         }
     )
     assert "feeds" not in out
@@ -678,7 +678,7 @@ def test_solve_response_carries_z0_ohms_for_array_design():
         {
             "geometry": "arrays.bowtiearray1x2",
             "measurement_freq_mhz": 28.5,
-            "pysim_model": "triangular",
+            "momwire_model": "triangular",
         }
     )
     assert out["z0_ohms"] == 100.0
@@ -721,7 +721,7 @@ def test_phase_lr_drives_per_feed_voltage_phasor():
         {
             "geometry": "arrays.bowtiearray1x2",
             "measurement_freq_mhz": 28.5,
-            "pysim_model": "triangular",
+            "momwire_model": "triangular",
             "phase_lr": 0.0,
         }
     )
@@ -729,7 +729,7 @@ def test_phase_lr_drives_per_feed_voltage_phasor():
         {
             "geometry": "arrays.bowtiearray1x2",
             "measurement_freq_mhz": 28.5,
-            "pysim_model": "triangular",
+            "momwire_model": "triangular",
             "phase_lr": 90.0,
         }
     )
@@ -753,13 +753,13 @@ def test_sweep_endpoint_streams_feeds_z_for_multi_feed_geometry(client: TestClie
         json={
             "geometry": "arrays.bowtiearray1x2",
             "freqs_mhz": [28.4, 28.5],
-            "pysim_model": "triangular",
+            "momwire_model": "triangular",
         },
     )
     assert r.status_code == 200
     recs = _ndjson_records(r.text)
     *points, terminator = recs
-    assert terminator == {"done": True, "solver": "pysim"}
+    assert terminator == {"done": True, "solver": "momwire"}
     for rec in points:
         assert "feeds_z_re" in rec
         assert "feeds_z_im" in rec
@@ -782,12 +782,12 @@ def test_ws_endpoint_round_trips_a_solve(client: TestClient):
                 {
                     "geometry": "dipoles.invvee",
                     "measurement_freq_mhz": 28.47,
-                    "pysim_model": "triangular",
+                    "momwire_model": "triangular",
                 }
             )
         )
         result = __import__("json").loads(ws.receive_text())
-    assert result["solver"] == "pysim"
+    assert result["solver"] == "momwire"
     assert result["geometry"] == "dipoles.invvee"
     assert "wires" in result
     assert result["z_in_re"] > 0
@@ -801,7 +801,7 @@ def test_ws_endpoint_handles_multiple_requests_on_one_socket(client: TestClient)
         {
             "geometry": "dipoles.invvee",
             "measurement_freq_mhz": 28.47,
-            "pysim_model": "triangular",
+            "momwire_model": "triangular",
         }
     )
     with client.websocket_connect("/ws") as ws:
@@ -883,7 +883,7 @@ def test_solve_z_only_returns_primary_z_and_no_feeds_for_dipole():
         {
             "geometry": "dipoles.invvee",
             "measurement_freq_mhz": 28.47,
-            "pysim_model": "triangular",
+            "momwire_model": "triangular",
         }
     )
     assert isinstance(z, complex)
@@ -933,8 +933,8 @@ def test_compute_directivity_norm_ground_on_stays_finite_and_positive():
 # physical/ignored split below.
 _CANONICAL_REQ = {
     "geometry": "multiband.fandipole",
-    "solver": "pysim",
-    "pysim_model": "bspline",
+    "solver": "momwire",
+    "momwire_model": "bspline",
     "model_options": {
         "degree": 2,
         "use_singular_enrichment": True,
@@ -960,7 +960,7 @@ _PHYSICAL_FIELDS = frozenset(
     {
         "geometry",
         "solver",
-        "pysim_model",
+        "momwire_model",
         "model_options",
         "wire_radius",
         "ground",

@@ -17,8 +17,8 @@ WIRE_RADIUS = 0.0005
 COPPER_CONDUCTIVITY = 5.8e7
 
 # Conductivity (S/m) of the wire-loss ld_card, or None for PERFECT conductors.
-# Default None = PEC, matching pysim's lossless-wire model. This is what makes
-# PyNEC a clean cross-engine reference: with copper loss off, PyNEC and pysim's
+# Default None = PEC, matching momwire's lossless-wire model. This is what makes
+# PyNEC a clean cross-engine reference: with copper loss off, PyNEC and momwire's
 # sinusoidal basis (the same NEC2 basis family) agree on impedance to ~0.1 Ω
 # and on gain/efficiency to ~0.1 dB. Set to COPPER_CONDUCTIVITY to model real
 # copper loss instead (a few tenths of a dB on a resonant antenna; more on a
@@ -55,7 +55,7 @@ class PyNECEngine(SimulationEngine):
         self.excitation_pairs = None
         # Fraction of input power radiated; set by current_distribution() when
         # the design carries resistive loads (e.g. a terminated rhombic). The
-        # web far-field normaliser reads it to plot GAIN, matching pysim and
+        # web far-field normaliser reads it to plot GAIN, matching momwire and
         # NEC's own get_gain so engine-switching keeps the pattern meaning
         # the same thing. 1.0 = no resistive loss.
         self._excited_efficiency = 1.0
@@ -197,7 +197,7 @@ class PyNECEngine(SimulationEngine):
     # `build_network()` designs we don't emit tl_cards at all: we extract the
     # antenna's multiport short-circuit Y at the real ports and hand it to the
     # engine-agnostic NetworkReducer (the EZNEC approach — transmission lines
-    # as a circuit post-process on the field solution). Shared with pysim.
+    # as a circuit post-process on the field solution). Shared with momwire.
 
     def _network_uses_reducer(self):
         """True iff the network needs the Y-matrix reduction path — i.e. it
@@ -216,10 +216,10 @@ class PyNECEngine(SimulationEngine):
         if any(isinstance(b, DiffTL) for b in net.branches):
             # The multiport-Y + NetworkReducer path *can* express a DiffTL
             # (NEC2's tl_card cannot), but DiffTL on PyNEC isn't cross-
-            # validated yet — keep it PysimEngine-only for now.
+            # validated yet — keep it MomwireEngine-only for now.
             raise NotImplementedError(
                 "DiffTL (4-terminal differential transmission line) on "
-                "PyNECEngine is not enabled; use PysimEngine for differential "
+                "PyNECEngine is not enabled; use MomwireEngine for differential "
                 "lines."
             )
         named = {t[4] for t in self.tups if len(t) >= 5 and t[4] is not None}
@@ -281,7 +281,7 @@ class PyNECEngine(SimulationEngine):
         """P_radiated / P_input = 1 - P_dissipated / P_input over the explicit
         resistive Load branches; 1.0 when there are none.
 
-        This mirrors PysimEngine's efficiency so the web UI can fold the same
+        This mirrors MomwireEngine's efficiency so the web UI can fold the same
         directivity->gain correction on either engine (the JS far-field cut is
         otherwise raw directivity). It matches NEC's own get_gain overlay to a
         tenth of a dB -- NEC additionally counts the small global copper-loss

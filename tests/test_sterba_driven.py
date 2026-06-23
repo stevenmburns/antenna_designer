@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from antenna_designer.designs.wire import sterba_driven
-from antenna_designer.engines import PysimEngine
+from antenna_designer.engines import MomwireEngine
 
 FF_KW = dict(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
 
@@ -38,7 +38,7 @@ def test_named_edges_match_network_ports(active):
 def test_single_junction_solves_to_finite_z_and_gain():
     """The user's 'can it be done': one vertical pair (4 feedpoints) builds,
     solves to finite driving-point impedances, and yields a finite far field."""
-    eng = PysimEngine(_builder([2]), ground=None)
+    eng = MomwireEngine(_builder([2]), ground=None)
     zs = eng.impedance()
     assert len(zs) == 4
     assert all(np.isfinite(z.real) and np.isfinite(z.imag) for z in zs)
@@ -51,7 +51,7 @@ def test_current_match_round_trip():
     experiment uses to inject the reference currents). Well-conditioned, so
     the round-trip is exact to solver precision."""
     b = _builder([1, 2, 3, 4])
-    eng = PysimEngine(b, ground=None)
+    eng = MomwireEngine(b, ground=None)
     wl = 299.792458 / b.design_freq
     Y = eng._compute_y_matrix(wl)
 
@@ -70,7 +70,7 @@ def test_applied_voltages_realize_the_target_port_currents():
     algebra). With I_target = 1 A at every port, the driving-point Z = V/I
     returned by impedance() must equal the applied voltages (since I = 1)."""
     b0 = _builder([2])
-    eng0 = PysimEngine(b0, ground=None)
+    eng0 = MomwireEngine(b0, ground=None)
     wl = 299.792458 / b0.design_freq
     Y = eng0._compute_y_matrix(wl)
     pti = eng0._reducer.port_to_idx
@@ -79,7 +79,7 @@ def test_applied_voltages_realize_the_target_port_currents():
     V = np.linalg.solve(Y, I_target)
 
     fv = {nm: complex(V[i]) for nm, i in pti.items()}
-    eng = PysimEngine(_builder([2], feed_voltages=fv), ground=None)
+    eng = MomwireEngine(_builder([2], feed_voltages=fv), ground=None)
     zs = eng.impedance()
 
     # impedance() returns V/I per driven port in source order (j, then At/Bt/

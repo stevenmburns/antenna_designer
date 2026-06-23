@@ -181,7 +181,7 @@ class Builder(AntennaBuilder):
 
         n_seg0 = self.nominal_nsegs
         # The feed wire (T → S) needs at least one interior basis
-        # function for pysim's triangular solver; n_seg=1 leaves zero
+        # function for momwire's triangular solver; n_seg=1 leaves zero
         # interior knots and triangular._feed_basis_indices crashes
         # with "argmin of empty sequence". 3 matches the convention
         # the rest of the design library uses for short feed wires.

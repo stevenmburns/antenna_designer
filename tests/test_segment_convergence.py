@@ -1,5 +1,5 @@
 """Convergence-flow plumbing: nominal_nsegs on the Builder, segment_parity
-on the SimulationEngine. The pysim version had a working convergence
+on the SimulationEngine. The momwire version had a working convergence
 sweep; this exercises the equivalent path through antenna_designer."""
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from antenna_designer.engine import SimulationEngine
 
 pytest.importorskip("PyNEC")
 from antenna_designer.engines.pynec import PyNECEngine  # noqa: E402
-from antenna_designer.engines.pysim import PysimEngine  # noqa: E402
+from antenna_designer.engines.momwire import MomwireEngine  # noqa: E402
 
 
 def test_coerce_n_seg_any_passes_through():
@@ -32,7 +32,7 @@ def test_coerce_n_seg_even_bumps_odd_up(n, expected):
 
 @pytest.mark.parametrize("parity,expected", [("any", 1), ("odd", 1), ("even", 2)])
 def test_coerce_n_seg_floors_at_minimum(parity, expected):
-    """Guard against ZeroDivisionError in pysim's _build_geometry when the
+    """Guard against ZeroDivisionError in momwire's _build_geometry when the
     slider lands at N=0 — the engine still produces a runnable mesh."""
     assert SimulationEngine.coerce_n_seg(0, parity) == expected
 
@@ -57,12 +57,12 @@ def test_builder_nominal_nsegs_scales_per_edge_counts():
     assert min(seg_counts) >= 3  # floor on minor edges holds at small N
 
 
-def test_pysim_triangular_coerces_to_even_parity():
-    """Triangular pysim requires even-segment counts; the engine bumps any
+def test_momwire_triangular_coerces_to_even_parity():
+    """Triangular momwire requires even-segment counts; the engine bumps any
     odd build_wires() output up to even before the solver sees it."""
     b = BowtieBuilder()
     b.nominal_nsegs = 21  # odd
-    eng = PysimEngine(b)  # default solver is TriangularPySim → parity="even"
+    eng = MomwireEngine(b)  # default solver is TriangularSolver → parity="even"
     seg_lists = eng._edge_segments
     all_segs = [n for wire in seg_lists for n in wire]
     assert all(n % 2 == 0 for n in all_segs), (
@@ -75,12 +75,12 @@ def test_pynec_engine_segment_parity_is_odd():
     assert PyNECEngine.segment_parity == "odd"
 
 
-def test_pysim_sinusoidal_uses_odd_parity():
-    from pysim import SinusoidalPySim
+def test_momwire_sinusoidal_uses_odd_parity():
+    from momwire import SinusoidalSolver
 
     b = InvVeeBuilder()
     b.nominal_nsegs = 20  # even, will get bumped to 21 by sinusoidal
-    eng = PysimEngine(b, solver=SinusoidalPySim)
+    eng = MomwireEngine(b, solver=SinusoidalSolver)
     assert eng.segment_parity == "odd"
     all_segs = [n for wire in eng._edge_segments for n in wire]
     assert all(n % 2 == 1 for n in all_segs), (
@@ -96,7 +96,7 @@ def test_nominal_nsegs_changes_solver_geometry():
     def total_segs(N):
         b = InvVeeBuilder()
         b.nominal_nsegs = N
-        eng = PysimEngine(b)
+        eng = MomwireEngine(b)
         return sum(sum(w) for w in eng._edge_segments)
 
     assert total_segs(11) < total_segs(21) < total_segs(41)
