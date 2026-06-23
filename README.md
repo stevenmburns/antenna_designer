@@ -12,9 +12,9 @@ in terms of named parameters — and then explore the design space two ways:
 - **In the browser**, from a live workbench: drag a knob and watch the 3D wire
   model, far-field patterns, and Smith chart redraw in real time.
 
-It ships with **two simulation backends** — the battle-tested **PyNEC** (NEC2)
-engine and **pysim**, a new in-house set of method-of-moments engines — so you
-can solve the same design two ways and trust the answer.
+Its built-in engine is **pysim**, a new in-house set of method-of-moments
+engines. You can *optionally* add **PyNEC** (the battle-tested NEC2 engine) as a
+second backend and solve the same design both ways to trust the answer.
 
 [![Test Python package](https://github.com/stevenmburns/antenna_designer/actions/workflows/test.yml/badge.svg)](https://github.com/stevenmburns/antenna_designer/actions/workflows/test.yml)
 [![Ruff](https://github.com/stevenmburns/antenna_designer/actions/workflows/ruff.yml/badge.svg)](https://github.com/stevenmburns/antenna_designer/actions/workflows/ruff.yml)
@@ -114,9 +114,12 @@ engine = PysimEngine(builder, solver=BSplinePySim, solver_kwargs={"degree": 2})
 **pysim** lives in its own repository and is vendored here as a git submodule;
 its primary `TriangularPySim` engine converges to NEC accuracy in ~80 segments
 and is validated against the independent B-spline basis. The H-matrix and
-array-block engines are newer and aimed at large arrays. **PyNEC** is the
-`python-necpp` fork, distributed as a self-contained wheel (OpenBLAS vendored,
-so no SWIG/BLAS/autotools toolchain is required at install time).
+array-block engines are newer and aimed at large arrays. **PyNEC** is an
+*optional* second backend — the `python-necpp` fork, distributed as a
+self-contained wheel (OpenBLAS vendored, so no SWIG/BLAS/autotools toolchain is
+required at install time). It is licensed **GPL-2.0** and installed separately
+from its own release; antenna_designer (MIT) neither bundles nor depends on it,
+and loads it only if present.
 
 ---
 
@@ -296,19 +299,28 @@ pip install --upgrade pip
 pip install setuptools numpy scipy pytest matplotlib icecream scikit-rf
 ```
 
-**3. Install the two engines (PyNEC + pysim)**
+**3. Install pysim (the engine)**
 
 ```bash
-# PyNEC: the self-contained wheel from the python-necpp fork's release
-# (OpenBLAS vendored). --no-index avoids upstream PyNEC on PyPI, whose builds
-# are broken on current Python and lack the fork's BLAS/OpenMP work.
-pip install PyNEC --no-index \
-    --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.1
-
-# pysim: still a git submodule; its C++ accelerator builds from source.
+# pysim: a git submodule; its C++ accelerator builds from source.
 pip install pybind11
 git submodule update --init pysim
 pip install --no-build-isolation -e ./pysim
+```
+
+**3b. (Optional) Install PyNEC for cross-validation**
+
+PyNEC is an optional second backend — **GPL-2.0**, installed separately from its
+own release, and never bundled with or required by antenna_designer. Skip it and
+pysim is still fully functional; install it only if you want to cross-check
+against NEC2.
+
+```bash
+# The self-contained wheel from the python-necpp fork's release (OpenBLAS
+# vendored). --no-index avoids upstream PyNEC on PyPI, whose builds are broken
+# on current Python and lack the fork's BLAS/OpenMP work.
+pip install PyNEC --no-index \
+    --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.1
 ```
 
 **4. Install AntennaKNoBs**
