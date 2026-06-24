@@ -217,11 +217,19 @@ DEFAULT_SWEEP_POLICY = SweepPolicy()
 
 
 DEFAULT_HF_BANDS: tuple[BandSpec, ...] = (
+    # Full HF amateur set + 6m, low to high. The band dropdown scales to any
+    # number, so designs (especially design_freq-scaled ones) can be placed and
+    # tuned anywhere from 160m up. (key, label, snap-freq, slider-min, -max MHz)
+    BandSpec("160m", "160m", 1.900, 1.800, 2.000),
+    BandSpec("80m", "80m", 3.750, 3.500, 4.000),
+    BandSpec("40m", "40m", 7.150, 7.000, 7.300),
+    BandSpec("30m", "30m", 10.125, 10.100, 10.150),
     BandSpec("20m", "20m", 14.300, 14.000, 14.350),
     BandSpec("17m", "17m", 18.1575, 18.068, 18.168),
     BandSpec("15m", "15m", 21.383, 21.000, 21.450),
     BandSpec("12m", "12m", 24.970, 24.890, 24.990),
     BandSpec("10m", "10m", 28.470, 28.000, 29.700),
+    BandSpec("6m", "6m", 50.150, 50.000, 54.000),
 )
 
 

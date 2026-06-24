@@ -1783,6 +1783,17 @@ export function App() {
 
   const currentBands: BandSpec[] = currentExample?.bands ?? [];
 
+  // Anchor for the measurement-freq slider window: the snap-freq of the band
+  // measFreq currently sits in, falling back to designFreq when it's between
+  // bands. This lets the meas-freq dropdown jump to any band (e.g. 40m) and
+  // have the slider actually reach it, instead of staying pinned to a window
+  // around the design frequency (which would strand a fixed-metre 40m antenna
+  // near 14 MHz). design_freq-scaled designs are unaffected: there the band's
+  // snap-freq equals designFreq, so the window is identical to before.
+  const measBandAnchor =
+    currentBands.find((b) => b.key === bandContaining(measFreq))?.freq_mhz ??
+    designFreq;
+
   // When the active example changes (or first loads), snap band /
   // designFreq / measFreq to the band whose [min, max] window contains
   // the design's native freq (from the schema's freq ParamSpec). If
@@ -2747,12 +2758,12 @@ export function App() {
               min={
                 currentExample?.meas_freq_range_mhz
                   ? currentExample.meas_freq_range_mhz[0]
-                  : Math.max(0.5, designFreq * 0.8)
+                  : Math.max(0.5, measBandAnchor * 0.8)
               }
               max={
                 currentExample?.meas_freq_range_mhz
                   ? currentExample.meas_freq_range_mhz[1]
-                  : Math.min(60, designFreq * 1.25)
+                  : Math.min(60, measBandAnchor * 1.25)
               }
               step={0.005}
               value={measFreq}
