@@ -403,6 +403,42 @@ button:focus-visible,
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/* Band selector: a compact <select> on the same row as the freq slider, so the
+   band list scales to any number of amateur bands without a wide tab strip. */
+.band-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.band-row input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.band-select {
+  flex: 0 0 auto;
+  background: var(--inset);
+  color: var(--fg);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  padding: var(--space-3) var(--space-4);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+.band-select:hover {
+  border-color: var(--border-hover);
+}
+.band-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.band-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .geometry-filter {
   flex: 1;
   background: var(--inset);

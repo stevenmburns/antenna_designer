@@ -2614,27 +2614,29 @@ export function App() {
                 <span>design freq</span>
                 <span>{designFreq.toFixed(3)} MHz</span>
               </label>
-              <div className="geometry-tabs band-tabs" role="tablist">
-                {currentBands.map((b) => (
-                  <button
-                    key={b.key}
-                    role="tab"
-                    aria-selected={activeKey === b.key}
-                    className={activeKey === b.key ? "active" : ""}
-                    onClick={() => selectBand(b.key)}
-                  >
-                    {b.label}
-                  </button>
-                ))}
+              <div className="band-row">
+                <select
+                  className="band-select"
+                  value={active.key}
+                  onChange={(e) => selectBand(e.target.value)}
+                >
+                  {currentBands.map((b) => (
+                    <option key={b.key} value={b.key}>
+                      {b.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="range"
+                  min={active.min_mhz}
+                  max={active.max_mhz}
+                  step={0.005}
+                  value={designFreq}
+                  onInput={(e) =>
+                    updateDesignFreq(Number((e.target as HTMLInputElement).value))
+                  }
+                />
               </div>
-              <input
-                type="range"
-                min={active.min_mhz}
-                max={active.max_mhz}
-                step={0.005}
-                value={designFreq}
-                onInput={(e) => updateDesignFreq(Number((e.target as HTMLInputElement).value))}
-              />
             </div>
           );
         })()}
@@ -2725,41 +2727,39 @@ export function App() {
           </label>
           {/* Multi-band examples override meas_freq_range_mhz so the
               slider spans every band rather than ±25% of one design freq. */}
-          {currentBands.length > 0 && (
-            <div className="geometry-tabs band-tabs" role="tablist">
-              {currentBands.map((b) => {
-                const active = bandContaining(measFreq) === b.key;
-                return (
-                  <button
-                    key={b.key}
-                    role="tab"
-                    aria-selected={active}
-                    className={active ? "active" : ""}
-                    onClick={() => selectMeasBand(b.key)}
-                  >
+          <div className="band-row">
+            {currentBands.length > 0 && (
+              <select
+                className="band-select"
+                value={bandContaining(measFreq) ?? currentBands[0].key}
+                disabled={linkMeas}
+                onChange={(e) => selectMeasBand(e.target.value)}
+              >
+                {currentBands.map((b) => (
+                  <option key={b.key} value={b.key}>
                     {b.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <input
-            type="range"
-            min={
-              currentExample?.meas_freq_range_mhz
-                ? currentExample.meas_freq_range_mhz[0]
-                : Math.max(0.5, designFreq * 0.8)
-            }
-            max={
-              currentExample?.meas_freq_range_mhz
-                ? currentExample.meas_freq_range_mhz[1]
-                : Math.min(60, designFreq * 1.25)
-            }
-            step={0.005}
-            value={measFreq}
-            disabled={linkMeas}
-            onInput={(e) => setMeasFreq(Number((e.target as HTMLInputElement).value))}
-          />
+                  </option>
+                ))}
+              </select>
+            )}
+            <input
+              type="range"
+              min={
+                currentExample?.meas_freq_range_mhz
+                  ? currentExample.meas_freq_range_mhz[0]
+                  : Math.max(0.5, designFreq * 0.8)
+              }
+              max={
+                currentExample?.meas_freq_range_mhz
+                  ? currentExample.meas_freq_range_mhz[1]
+                  : Math.min(60, designFreq * 1.25)
+              }
+              step={0.005}
+              value={measFreq}
+              disabled={linkMeas}
+              onInput={(e) => setMeasFreq(Number((e.target as HTMLInputElement).value))}
+            />
+          </div>
           <label className="link-toggle">
             <input
               type="checkbox"
