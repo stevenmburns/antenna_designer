@@ -270,6 +270,16 @@ function findLinkedDesignFreq(
   return null;
 }
 
+// Blend two #rrggbb colors; t=0 -> a, t=1 -> b. Used to warm the knob's value
+// arc from --accent toward --hot as it nears max (an "energizing" cue).
+function mixHex(a: string, b: string, t: number): string {
+  const ch = (s: string, i: number) => parseInt(s.slice(i, i + 2), 16);
+  const r = Math.round(ch(a, 1) + (ch(b, 1) - ch(a, 1)) * t);
+  const g = Math.round(ch(a, 3) + (ch(b, 3) - ch(a, 3)) * t);
+  const bl = Math.round(ch(a, 5) + (ch(b, 5) - ch(a, 5)) * t);
+  return `rgb(${r}, ${g}, ${bl})`;
+}
+
 // A dependency-free rotary knob — a drop-in alternative to the range
 // slider for float/int params. Semantically a slider (role="slider"), so
 // it stays keyboard- and screen-reader-accessible: vertical drag, scroll
@@ -287,6 +297,10 @@ function Knob({
   unit,
   label,
   onChange,
+  startDeg = -135,
+  sweepDeg = 270,
+  variant = "param",
+  disabled = false,
 }: {
   value: number;
   min: number;
@@ -296,10 +310,26 @@ function Knob({
   unit: string | null;
   label: string;
   onChange: (v: number) => void;
+  // Dial geometry in clock-angle degrees (0 = 12 o'clock, +CW). The default is
+  // the classic 270° gauge sweeping clockwise from 7:30 (lower-left) to 4:30.
+  // Pass startDeg=90, sweepDeg=-(max-min) for a CCW dial starting at 3 o'clock
+  // (elevation: -90 quarter-arc; azimuth: -360 full circle) — degrees then map
+  // 1:1 onto the dial face.
+  startDeg?: number;
+  sweepDeg?: number;
+  // "vfo" = the big weighted measurement-freq tuning dial: knurled skirt +
+  // finger dimple on an eased rotor, outer band arc that warms toward the edge.
+  // "param" = the compact setup/cut dials (clean accent, no warming).
+  variant?: "param" | "vfo";
+  // Locked (e.g. measurement freq while "lock to design freq" is on): dims the
+  // dial and ignores drag/wheel/keys.
+  disabled?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ y: number; v: number } | null>(null);
   const [editing, setEditing] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const isVfo = variant === "vfo";
 
   const span = max - min || 1;
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
@@ -312,10 +342,8 @@ function Knob({
   };
 
   const frac = Math.min(1, Math.max(0, (value - min) / span));
-  const SWEEP = 270;
-  const START = -135;
-  const ang = START + frac * SWEEP;
-  const R = 38;
+  const ang = startDeg + frac * sweepDeg;
+  const Rarc = isVfo ? 42 : 38;
   const polar = (deg: number, r: number): [number, number] => {
     const a = (deg * Math.PI) / 180;
     return [50 + r * Math.sin(a), 50 - r * Math.cos(a)];
@@ -323,10 +351,21 @@ function Knob({
   const arc = (r: number, a0: number, a1: number): string => {
     const [x0, y0] = polar(a0, r);
     const [x1, y1] = polar(a1, r);
-    const large = Math.abs(a1 - a0) > 180 ? 1 : 0;
-    return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+    const delta = a1 - a0;
+    const large = Math.abs(delta) > 180 ? 1 : 0;
+    // Sweep-flag follows the traversal direction: clockwise (SVG +angle) for an
+    // increasing clock-angle, counter-clockwise for a decreasing one. Lets a
+    // negative sweepDeg (CCW dials: elevation, azimuth) bend the correct way.
+    const sweep = delta >= 0 ? 1 : 0;
+    return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${large} ${sweep} ${x1.toFixed(2)} ${y1.toFixed(2)}`;
   };
-  const [px, py] = polar(ang, R - 3);
+  // Param-knob indicator notch across the cap face (center-out), at value.
+  const [nx0, ny0] = polar(ang, 3);
+  const [nx1, ny1] = polar(ang, 14);
+  // Only the VFO's band arc warms --accent -> --hot over the top ~40% of travel
+  // ("redlining" near the band edge). Small knobs stay a clean accent.
+  const warm = Math.max(0, (frac - 0.6) / 0.4);
+  const fillColor = isVfo ? mixHex("#2f5fb0", "#cf7a22", warm) : undefined;
 
   // Scroll wheel: ±step per detent (×10 with Shift). Attached natively so
   // we can preventDefault — React's onWheel is passive and can't stop the
@@ -335,6 +374,7 @@ function Knob({
     const el = wrapRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      if (disabled) return;
       e.preventDefault();
       const dir = e.deltaY < 0 ? 1 : -1;
       const mult = e.shiftKey ? 10 : 1;
@@ -345,12 +385,13 @@ function Knob({
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [value, step, min, max, precision, onChange]);
+  }, [value, step, min, max, precision, onChange, disabled]);
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (editing) return;
+    if (editing || disabled) return;
     (e.target as Element).setPointerCapture(e.pointerId);
     dragRef.current = { y: e.clientY, v: value };
+    setDragging(true);
     wrapRef.current?.focus();
     e.preventDefault();
   };
@@ -363,10 +404,12 @@ function Knob({
   };
   const endDrag = (e: React.PointerEvent) => {
     dragRef.current = null;
+    setDragging(false);
     (e.target as Element).releasePointerCapture?.(e.pointerId);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (disabled) return;
     let next: number | null = null;
     switch (e.key) {
       case "ArrowUp":
@@ -409,15 +452,16 @@ function Knob({
   const p = Math.max(0, precision);
   return (
     <div
-      className="knob"
+      className={`knob${isVfo ? " is-vfo" : ""}${disabled ? " is-disabled" : ""}`}
       ref={wrapRef}
       role="slider"
-      tabIndex={editing ? -1 : 0}
+      tabIndex={editing || disabled ? -1 : 0}
       aria-label={label}
       aria-valuemin={min}
       aria-valuemax={max}
       aria-valuenow={value}
       aria-valuetext={`${value.toFixed(p)}${unit ?? ""}`}
+      aria-disabled={disabled || undefined}
       onKeyDown={onKeyDown}
     >
       {editing ? (
@@ -438,23 +482,64 @@ function Knob({
         />
       ) : (
         <svg
-          viewBox="0 0 100 100"
+          // The VFO's 270° gauge opens at the bottom (~6 o'clock) and its
+          // content stops by y≈82, so crop the empty bottom off the box rather
+          // than reserve a full square. NOT for the others: the azimuth dial is
+          // a full circle that uses the bottom.
+          viewBox={isVfo ? "0 0 100 88" : "0 0 100 100"}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
           onDoubleClick={() => setEditing(true)}
         >
-          <path className="knob-track" d={arc(R, START, START + SWEEP)} />
-          <path className="knob-fill" d={arc(R, START, ang)} />
-          <line
-            className="knob-ptr"
-            x1="50"
-            y1="50"
-            x2={px.toFixed(2)}
-            y2={py.toFixed(2)}
+          <path
+            className="knob-track"
+            d={arc(Rarc, startDeg, startDeg + sweepDeg)}
           />
-          <circle className="knob-hub" cx="50" cy="50" r="6" />
+          <path
+            className="knob-fill"
+            style={fillColor ? { stroke: fillColor } : undefined}
+            d={arc(Rarc, startDeg, ang)}
+          />
+          {isVfo ? (
+            // The whole knob body spins; the band arc behind it stays put — a
+            // fixed scale with a turning dial, exactly like a transceiver VFO.
+            <g
+              className={`knob-rotor${dragging ? " no-ease" : ""}`}
+              style={{ transform: `rotate(${ang.toFixed(2)}deg)` }}
+            >
+              <circle className="knob-cap" cx="50" cy="50" r="30" />
+              {Array.from({ length: 30 }, (_, i) => {
+                const a = (i * 360) / 30;
+                const [sx0, sy0] = polar(a, 27.5);
+                const [sx1, sy1] = polar(a, 32);
+                return (
+                  <line
+                    key={i}
+                    className="knob-skirt"
+                    x1={sx0.toFixed(2)}
+                    y1={sy0.toFixed(2)}
+                    x2={sx1.toFixed(2)}
+                    y2={sy1.toFixed(2)}
+                  />
+                );
+              })}
+              <line className="knob-notch" x1="50" y1="39" x2="50" y2="24" />
+              <circle className="knob-dimple" cx="50" cy="30" r="3.4" />
+            </g>
+          ) : (
+            <>
+              <circle className="knob-cap" cx="50" cy="50" r="15" />
+              <line
+                className="knob-notch"
+                x1={nx0.toFixed(2)}
+                y1={ny0.toFixed(2)}
+                x2={nx1.toFixed(2)}
+                y2={ny1.toFixed(2)}
+              />
+            </>
+          )}
         </svg>
       )}
     </div>
@@ -467,7 +552,6 @@ function ParamForm({
   onChange,
   pathPrefix = [],
   disabledFields,
-  useKnobs = false,
 }: {
   schema: SchemaItem[];
   values: ParamValueBag;
@@ -478,8 +562,6 @@ function ParamForm({
   // depends on the active backend (e.g. daisy_chain only works on
   // PyNEC; momwire engines don't support transmission lines yet).
   disabledFields?: Set<string>;
-  // Render float/int params as rotary knobs instead of range sliders.
-  useKnobs?: boolean;
 }) {
   return (
     <>
@@ -499,14 +581,13 @@ function ParamForm({
                   {/* Wrap the band's controls in their own .param-grid so they
                       pack 3-across just like the top-level rail. Without this
                       the nested ParamForm block-stacks one control per row. */}
-                  <div className={`param-grid${useKnobs ? " is-knobs" : ""}`}>
+                  <div className="param-grid is-knobs">
                     <ParamForm
                       schema={item.params}
                       values={instances[i]}
                       onChange={onChange}
                       pathPrefix={[...pathPrefix, item.name, i]}
                       disabledFields={disabledFields}
-                      useKnobs={useKnobs}
                     />
                   </div>
                 </div>
@@ -609,47 +690,23 @@ function ParamForm({
           item.kind === "int"
             ? String(Math.round(currentNum))
             : currentNum.toFixed(item.precision);
-        // Knobs stack vertically — label on top, dial in the middle, value
-        // on the bottom — so the label and value don't share a cramped row
-        // above the dial. Sliders keep the name+value label row above the
-        // track.
-        if (useKnobs) {
-          return (
-            <div key={item.name} className="field field-knob">
-              <span className="knob-label" title={item.label}>{item.label}</span>
-              <Knob
-                value={currentNum}
-                min={effMin}
-                max={effMax}
-                step={item.step ?? 0.001}
-                precision={item.kind === "int" ? 0 : item.precision}
-                unit={item.unit}
-                label={item.label}
-                onChange={(v) => onChange([...pathPrefix, item.name], v)}
-              />
-              <span className="knob-value">{shown}{item.unit ?? ""}</span>
-            </div>
-          );
-        }
+        // Every float/int param is a rotary knob: label on top, dial in the
+        // middle, value on the bottom. (The slider alternative and its toggle
+        // were retired — knobs are the brand.)
         return (
-          <div key={item.name} className="field">
-            <label>
-              <span title={item.label}>{item.label}</span>
-              <span>{shown}{item.unit ?? ""}</span>
-            </label>
-            <input
-              type="range"
+          <div key={item.name} className="field field-knob">
+            <span className="knob-label" title={item.label}>{item.label}</span>
+            <Knob
+              value={currentNum}
               min={effMin}
               max={effMax}
               step={item.step ?? 0.001}
-              value={currentNum}
-              onInput={(e) =>
-                onChange(
-                  [...pathPrefix, item.name],
-                  Number((e.target as HTMLInputElement).value),
-                )
-              }
+              precision={item.kind === "int" ? 0 : item.precision}
+              unit={item.unit}
+              label={item.label}
+              onChange={(v) => onChange([...pathPrefix, item.name], v)}
             />
+            <span className="knob-value">{shown}{item.unit ?? ""}</span>
           </div>
         );
       })}
@@ -1238,21 +1295,6 @@ export function App() {
   // Tools (gear) dropdown in the header. Tucked away because it holds
   // occasional actions like the NEC deck export, not per-solve controls.
   const [gearMenuOpen, setGearMenuOpen] = useState(false);
-
-  // Render parameter controls as rotary knobs instead of range sliders.
-  // Opt-in (persisted) — knobs are on-brand and compact but a precision
-  // regression for some users, so sliders stay the default.
-  const [useKnobs, setUseKnobs] = useState<boolean>(
-    () => localStorage.getItem("useKnobs") === "1",
-  );
-  const toggleKnobs = (next: boolean) => {
-    try {
-      localStorage.setItem("useKnobs", next ? "1" : "0");
-    } catch {
-      /* storage disabled — in-memory toggle still works */
-    }
-    setUseKnobs(next);
-  };
 
   // Schema-driven parameter controls. Each registered example bundles
   // its parameter schema in web/examples/<name>.py; the backend serves
@@ -2576,35 +2618,11 @@ export function App() {
         )}
 
         {currentExample && (
-          <div
-            className="knob-toggle"
-            role="group"
-            aria-label="Parameter control style"
-          >
-            <button
-              type="button"
-              className={!useKnobs ? "active" : ""}
-              onClick={() => toggleKnobs(false)}
-            >
-              Sliders
-            </button>
-            <button
-              type="button"
-              className={useKnobs ? "active" : ""}
-              onClick={() => toggleKnobs(true)}
-            >
-              Knobs
-            </button>
-          </div>
-        )}
-
-        {currentExample && (
-          <div className={`param-grid${useKnobs ? " is-knobs" : ""}`}>
+          <div className="param-grid is-knobs">
             <ParamForm
               schema={currentExample.param_schema}
               values={currentValues}
               onChange={setParamAtPath}
-              useKnobs={useKnobs}
               // hexbeam_5band's daisy_chain mode emits NEC TL cards;
               // momwire engines reject any non-empty build_tls() so the
               // toggle has no effect there. Grey it out when the active
@@ -2740,46 +2758,55 @@ export function App() {
           )}
         </div>
 
-        <div className="field">
-          <label>
-            <span>measurement freq</span>
-            <span>{measFreq.toFixed(3)} MHz</span>
-          </label>
-          {/* Multi-band examples override meas_freq_range_mhz so the
-              slider spans every band rather than ±25% of one design freq. */}
-          <div className="band-row">
-            {currentBands.length > 0 && (
-              <select
-                className="band-select"
-                value={bandContaining(measFreq) ?? currentBands[0].key}
-                disabled={linkMeas}
-                onChange={(e) => selectMeasBand(e.target.value)}
-              >
-                {currentBands.map((b) => (
-                  <option key={b.key} value={b.key}>
-                    {b.label}
-                  </option>
-                ))}
-              </select>
-            )}
-            <input
-              type="range"
-              min={
-                currentExample?.meas_freq_range_mhz
-                  ? currentExample.meas_freq_range_mhz[0]
-                  : Math.max(0.5, measBandAnchor * 0.8)
-              }
-              max={
-                currentExample?.meas_freq_range_mhz
-                  ? currentExample.meas_freq_range_mhz[1]
-                  : Math.min(60, measBandAnchor * 1.25)
-              }
-              step={0.005}
-              value={measFreq}
-              disabled={linkMeas}
-              onInput={(e) => setMeasFreq(Number((e.target as HTMLInputElement).value))}
-            />
+        {/* Measurement freq is the rig's tuning control → a weighted VFO dial
+            with a frequency-counter readout, in place of a slider. The dial
+            spans the band (multi-band examples override meas_freq_range_mhz).
+            "lock to design freq" disables the dial. */}
+        <div className={`field vfo-field${linkMeas ? " is-locked" : ""}`}>
+          <span className="vfo-cap">measurement freq</span>
+          <div className="freq-lcd" title={`${measFreq.toFixed(3)} MHz`}>
+            <span className="lcd-digits">
+              <span className="lcd-ghost">
+                {measFreq.toFixed(3).replace(/\d/g, "8")}
+              </span>
+              <span className="lcd-live">{measFreq.toFixed(3)}</span>
+            </span>
+            <span className="lcd-unit">MHz</span>
           </div>
+          <Knob
+            variant="vfo"
+            value={measFreq}
+            min={
+              currentExample?.meas_freq_range_mhz
+                ? currentExample.meas_freq_range_mhz[0]
+                : Math.max(0.5, measBandAnchor * 0.8)
+            }
+            max={
+              currentExample?.meas_freq_range_mhz
+                ? currentExample.meas_freq_range_mhz[1]
+                : Math.min(60, measBandAnchor * 1.25)
+            }
+            step={0.005}
+            precision={3}
+            unit=" MHz"
+            label="measurement frequency"
+            onChange={setMeasFreq}
+            disabled={linkMeas}
+          />
+          {currentBands.length > 0 && (
+            <select
+              className="band-select"
+              value={bandContaining(measFreq) ?? currentBands[0].key}
+              disabled={linkMeas}
+              onChange={(e) => selectMeasBand(e.target.value)}
+            >
+              {currentBands.map((b) => (
+                <option key={b.key} value={b.key}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+          )}
           <label className="link-toggle">
             <input
               type="checkbox"
@@ -2792,34 +2819,49 @@ export function App() {
 
         <div className="group-label">far-field cuts</div>
 
-        <div className="field">
-          <label>
-            <span>azimuth at elevation</span>
-            <span>{azElevDeg.toFixed(0)}°</span>
-          </label>
-          <input
-            type="range"
-            min={0}
-            max={89}
-            step={1}
-            value={azElevDeg}
-            onInput={(e) => setAzElevDeg(Number((e.target as HTMLInputElement).value))}
-          />
-        </div>
-
-        <div className="field">
-          <label>
-            <span>elevation at azimuth</span>
-            <span>{elevAzDeg.toFixed(0)}°</span>
-          </label>
-          <input
-            type="range"
-            min={0}
-            max={359}
-            step={1}
-            value={elevAzDeg}
-            onInput={(e) => setElevAzDeg(Number((e.target as HTMLInputElement).value))}
-          />
+        <div className="cut-knobs">
+          <div className="field field-knob">
+            <span
+              className="knob-label"
+              title="elevation at which the azimuth-plane cut is taken"
+            >
+              elevation
+            </span>
+            <Knob
+              value={azElevDeg}
+              min={0}
+              max={89}
+              step={1}
+              precision={0}
+              unit="°"
+              label="cut elevation"
+              onChange={setAzElevDeg}
+              startDeg={90}
+              sweepDeg={-89}
+            />
+            <span className="knob-value">{azElevDeg.toFixed(0)}°</span>
+          </div>
+          <div className="field field-knob">
+            <span
+              className="knob-label"
+              title="azimuth bearing at which the elevation-plane cut is taken"
+            >
+              azimuth
+            </span>
+            <Knob
+              value={elevAzDeg}
+              min={0}
+              max={359}
+              step={1}
+              precision={0}
+              unit="°"
+              label="cut azimuth"
+              onChange={setElevAzDeg}
+              startDeg={90}
+              sweepDeg={-359}
+            />
+            <span className="knob-value">{elevAzDeg.toFixed(0)}°</span>
+          </div>
         </div>
 
         <div className={`readout${stale ? " stale" : ""}`}>
