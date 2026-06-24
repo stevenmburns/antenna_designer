@@ -331,7 +331,11 @@ class AntennaExample:
     # arms run along y and droop in z, like inverted_v / fan_dipole;
     # also the vertical-loop hentenna). The user can still override
     # via the projection buttons; this just sets the starting view.
-    default_view: str = "xy"
+    # None for a deferred (user) design with no override: the real view is
+    # auto-detected and arrives with the first geometry/solve response, so the
+    # frontend holds the current camera until then instead of snapping to a
+    # provisional value.
+    default_view: Optional[str] = None
     # The frequency this antenna is naturally designed for, in MHz.
     # Used by the frontend to snap the band selector + design-freq /
     # meas-freq sliders to the right starting value when the example

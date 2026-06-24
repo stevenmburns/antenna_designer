@@ -476,6 +476,39 @@ def test_examples_carry_default_backend(client: TestClient):
     assert by_name["arrays.bowtiearray2x4"]["default_backend"] == "arrayblock"
     # A plain single-element design keeps the default.
     assert by_name["specialty.bowtie"]["default_backend"] is None
+    # Regression: a Yagi is NOT a grid array — its equal-length directors used
+    # to collapse to one signature and trip the "any repeated shape" test. The
+    # recommendation now requires repetition to dominate (>= half the elements),
+    # so a Yagi (and a plain dipole) keep the dense default.
+    assert by_name["beams.yagi"]["default_backend"] is None
+    assert by_name["dipoles.invvee"]["default_backend"] is None
+
+
+def test_deferred_design_view_is_null_then_arrives_with_preview():
+    # Regression: a deferred (user) design with no default_view override must
+    # report default_view=None in the schema — NOT a hardcoded "xy" that makes
+    # the camera snap to the wrong plane and then flip when the auto-detected
+    # view arrives with the first geometry preview.
+    from types import MappingProxyType
+
+    from web import adapter
+    from antennaknobs.designs.dipoles.invvee import Builder as Inv
+
+    ui = {
+        k: v
+        for k, v in dict(dict(Inv.default_params).get("ui_params") or {}).items()
+        if k != "default_view"
+    }
+    dp = dict(Inv.default_params)
+    dp["ui_params"] = MappingProxyType(ui)
+
+    class NoView(Inv):
+        default_params = MappingProxyType(dp)
+
+    ex = adapter._make_example("user.noview", NoView, defer_hints=True)
+    assert ex.default_view is None  # schema holds; camera stays put
+    g = ex.momwire_geometry({})  # the builder runs here
+    assert g["default_view"] in {"xy", "yz", "xz"}  # real view rides the preview
 
 
 def test_geometry_endpoint_falls_back_when_geometry_unknown(client: TestClient):
