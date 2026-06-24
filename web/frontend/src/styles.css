@@ -978,6 +978,10 @@ button:focus-visible,
 .param-grid .field-bool,
 .param-grid .param-group {
   grid-column: 1 / -1;
+  /* The is-knobs grid sets justify-items:center, which would otherwise shrink
+     these full-width spanners to their content width (collapsing a band group's
+     nested grid to one column). Force them to fill the row. */
+  justify-self: stretch;
 }
 .param-grid.is-knobs .field {
   align-items: center;
