@@ -35,12 +35,19 @@ class Builder(AntennaBuilder):
     # Optional friendly name shown in the UI. Without it, the file name is used.
     label = "Example dipole"
 
-    # The knobs. Every entry here becomes a slider in the UI. ``freq`` (the
-    # measurement frequency in MHz) is special and should always be present.
+    # The knobs. Every entry here becomes a slider in the UI.
+    #
+    # This dipole is sized from ``design_freq`` rather than fixed metres, which
+    # is the recommended pattern: ``design_freq`` scales the geometry AND drives
+    # the app's band selector + measurement-freq slider, so the antenna lands on
+    # its band and can be tuned there. Change ``design_freq`` to retune to any
+    # band (e.g. 7.1 for 40m). A fixed-metre design instead strands the
+    # measurement frequency near 14 MHz -- see CLAUDE.md ("the 40m trap").
     default_params = MappingProxyType(
         {
-            "freq": 28.5,  # MHz -- where you measure SWR / impedance
-            "half_length": 2.5,  # metres -- length of each arm (~1/4 wave on 10 m)
+            "design_freq": 14.1,  # MHz -- the band this antenna is cut for (20m)
+            "freq": 14.1,  # MHz -- where you measure SWR / impedance
+            "length_factor": 0.96,  # fine length trim near 1.0 (drag to resonate)
             "height": 10.0,  # metres -- height above ground
             # Optional UI hints. "default_view" sets the first 2-D view:
             # "xy" (top-down), "xz" or "yz" (from the side).
@@ -58,7 +65,11 @@ class Builder(AntennaBuilder):
           * ``feed`` is ``1 + 0j`` on the ONE segment driven by the
             transmitter, and ``None`` on every other wire.
         """
-        h = self.half_length
+        # Size each arm from the design frequency: a half-wave dipole is about
+        # lambda/2 tip-to-tip, so each arm is ~lambda/4. ``length_factor`` trims
+        # it to resonance (real wire runs a few % short of the ideal).
+        wavelength = 299.792458 / self.design_freq  # metres
+        h = (wavelength / 4.0) * self.length_factor  # each arm, metres
         z = self.height
         eps = 0.01  # tiny half-gap at the centre where the feed point sits
 

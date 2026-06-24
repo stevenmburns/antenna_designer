@@ -34,7 +34,9 @@ this folder, run e.g. `antennaknobs draw --builder user.my_dipole` (or
 Every key becomes a slider in the UI, accessed in `build_wires` as
 `self.<key>`. Conventions:
 
-- `freq` — measurement frequency in **MHz**. Always include it.
+- `freq` — measurement frequency in **MHz** (seeds the meas-freq slider).
+  Always include it, and set it to your target band (e.g. `7.1` for 40m). See
+  the tuning note under `build_wires` about pairing this with `design_freq`.
 - Lengths/positions are in **metres**.
 - Add a nested `"ui_params": MappingProxyType({...})` for UI hints. The most
   useful is `"default_view"`: `"xy"` (top-down), `"xz"`, or `"yz"` (side).
@@ -62,12 +64,24 @@ small `eps` (e.g. 0.01 m) apart, with the radiator arms running outward from
 those two points. Wires connect where they share an endpoint, so the arms and
 the feed segment must share their centre points exactly. See `TEMPLATE.py`.
 
-**Frequency-scaled geometry (optional):** to size an antenna from a design
-frequency instead of fixed metres, add a `design_freq` param (MHz) and a
-`length_factor` (a multiplier near 1.0), then compute
-`wavelength = 299.792458 / self.design_freq` and build dimensions as
-fractions of `wavelength * self.length_factor`. This is how most built-in
-designs work and gives you a clean per-band tuning knob.
+**Tuning on a band — use `design_freq` (strongly recommended).** To place an
+antenna on a band *and be able to tune it there*, add a `design_freq` param
+(MHz) plus a `length_factor` (a multiplier near 1.0), compute
+`wavelength = 299.792458 / self.design_freq`, and build every dimension as a
+fraction of `wavelength * self.length_factor`. This does two things at once:
+it scales the geometry to the chosen frequency, **and** it makes the app's band
+selector and the measurement-frequency slider follow `design_freq`. So a design
+with `design_freq = 7.1` lands on 40m and tunes on 40m. This is how the built-in
+designs work.
+
+**Why this matters (the 40m trap):** without a `design_freq`, the geometry is
+fixed metres and the measurement-frequency window stays parked near 14 MHz
+(20m). A fixed-metre 40m antenna therefore *cannot be tuned on 40m* — the meas
+slider won't reach 7 MHz. So if the user asks for any band other than 20–10m,
+prefer `design_freq`. If you must keep fixed dimensions, instead widen the
+measurement slider to the target band by adding
+`"meas_freq_range": (low_mhz, high_mhz)` to `ui_params` (e.g. `(6.5, 8.0)` for
+40m).
 
 ## Arrays of identical elements (advanced)
 
