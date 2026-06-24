@@ -118,7 +118,9 @@ type ExampleDescriptor = {
   result_schema: ResultSchemaItem[];
   bands: BandSpec[];
   meas_freq_range_mhz: [number, number] | null;
-  default_view: Projection;
+  /** Null for a deferred (user) design with no override — the real view is
+   *  auto-detected and arrives with the first geometry/solve response. */
+  default_view: Projection | null;
   /** The freq this antenna is naturally designed for. Used by the
    *  band-snap-on-example-change effect; null = no preferred freq. */
   default_freq_mhz: number | null;
@@ -1593,8 +1595,15 @@ export function App() {
   // When the user switches antennas, reset the camera to that example's
   // natural starting view (declared on the backend via default_view).
   // Explicit user override sticks until the next geometry change.
+  //
+  // A deferred (user) design reports default_view === null — its real view is
+  // auto-detected and arrives with the first geometry preview (handled where
+  // the preview lands, below). Holding the current camera until then avoids
+  // snapping to a wrong provisional view and flipping when the preview arrives.
   useEffect(() => {
-    if (currentExample) setCameraProjection(currentExample.default_view);
+    if (currentExample?.default_view) {
+      setCameraProjection(currentExample.default_view);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentExample?.name]);
 

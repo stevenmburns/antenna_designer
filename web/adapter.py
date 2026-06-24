@@ -794,11 +794,18 @@ def _recommended_backend(cls) -> str | None:
     if len(polylines) < 2:
         return None
     wire_elem, n_elem = _wire_to_element(polylines)
-    if n_elem < 2:
+    # array-block only pays off for a genuine grid array: several elements where
+    # ONE shape repeats many times (so per-shape block reuse dominates). Require
+    # at least 4 elements — below that the speedup is marginal and 2-element
+    # symmetric things (a split dipole, a 1x2) are ambiguous.
+    if n_elem < 4:
         return None
-    # Signature each element by its points recentred on its own centroid; a
-    # repeated shape (fewer distinct signatures than elements) marks a real
-    # array — exactly what array-block accelerates via per-shape block reuse.
+    # Signature each element by its points recentred on its own centroid, then
+    # require repetition to *dominate*: at least half the elements must be
+    # duplicates of another (len(sigs) * 2 <= n_elem). The earlier test
+    # (len(sigs) < n_elem) fired on a single repeated pair, which wrongly tagged
+    # Yagis (their equal-length directors collapse to one signature while the
+    # driven element and reflector stay distinct) as arrays.
     sigs = set()
     for e in range(n_elem):
         pts = np.vstack(
@@ -808,7 +815,7 @@ def _recommended_backend(cls) -> str | None:
         key = np.round(pts / 1e-4).astype(np.int64)
         key = key[np.lexsort(key.T)]
         sigs.add(key.tobytes())
-    return "arrayblock" if len(sigs) < n_elem else None
+    return "arrayblock" if len(sigs) * 2 <= n_elem else None
 
 
 def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExample:
@@ -1162,7 +1169,11 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
         field_multi_feed = (
             bool(multi_feed_override) if multi_feed_override is not None else False
         )
-        field_default_view = str(view_override) if view_override is not None else "xy"
+        # No view override and hints deferred → leave it None rather than
+        # guessing "xy". The frontend keeps the current camera until the first
+        # geometry/solve response carries the real auto-detected view, instead
+        # of snapping to a wrong "xy" and then flipping when the preview lands.
+        field_default_view = str(view_override) if view_override is not None else None
         field_default_backend = None
     else:
         h = hints()
