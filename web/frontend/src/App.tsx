@@ -1841,7 +1841,12 @@ export function App() {
   // and the |I| envelope curve overlay. Either or both can be turned off;
   // the wires and feed marker are always drawn.
   const [showHeatmap, setShowHeatmap] = useState(true);
-  const [showEnvelope, setShowEnvelope] = useState(true);
+  const [showEnvelope, setShowEnvelope] = useState(false);
+  // Wire labels and feed names can crowd dense geometries (and PyNEC returns
+  // many more wires than the momwire engines), so let them be toggled. Wire
+  // labels default OFF — they're the noisiest, especially on PyNEC.
+  const [showWireLabels, setShowWireLabels] = useState(false);
+  const [showFeedNames, setShowFeedNames] = useState(true);
   const { ref: slideRef, size: chartSize } = useSlideSize(720);
   const thumbStripRef = useRef<HTMLDivElement>(null);
   const thumbSize = useThumbColumnSize(thumbStripRef, 280);
@@ -3086,6 +3091,28 @@ export function App() {
                 />
                 current waveforms
               </label>
+              <label
+                className="overlay-checkbox"
+                title="Draw the per-wire labels (off to declutter dense geometries)"
+              >
+                <input
+                  type="checkbox"
+                  checked={showWireLabels}
+                  onChange={(e) => setShowWireLabels(e.target.checked)}
+                />
+                wire labels
+              </label>
+              <label
+                className="overlay-checkbox"
+                title="Draw the 'feed' name beside each feedpoint marker"
+              >
+                <input
+                  type="checkbox"
+                  checked={showFeedNames}
+                  onChange={(e) => setShowFeedNames(e.target.checked)}
+                />
+                feed labels
+              </label>
             </div>
           )}
           {view === "smith" && (
@@ -3176,6 +3203,8 @@ export function App() {
             cameraProjection={cameraProjection}
             showHeatmap={showHeatmap}
             showEnvelope={showEnvelope}
+            showWireLabels={showWireLabels}
+            showFeedNames={showFeedNames}
             multiFeed={effectiveMultiFeed}
           />
         </div>
@@ -3559,6 +3588,8 @@ function ViewPanel({
   cameraProjection,
   showHeatmap,
   showEnvelope,
+  showWireLabels = false,
+  showFeedNames = true,
   multiFeed,
 }: {
   view: View;
@@ -3577,6 +3608,8 @@ function ViewPanel({
   cameraProjection: Projection;
   showHeatmap: boolean;
   showEnvelope: boolean;
+  showWireLabels?: boolean;
+  showFeedNames?: boolean;
   multiFeed: boolean;
 }) {
   if (view === "antenna") {
@@ -3592,6 +3625,8 @@ function ViewPanel({
           projection={cameraProjection}
           showHeatmap={showingPreview ? false : showHeatmap}
           showEnvelope={showingPreview ? false : showEnvelope}
+          showWireLabels={showWireLabels}
+          showFeedNames={showFeedNames}
         />
       </div>
     );
@@ -4533,11 +4568,15 @@ function CurrentCanvas({
   projection,
   showHeatmap,
   showEnvelope,
+  showWireLabels,
+  showFeedNames,
 }: {
   result: SolveResponse | null;
   projection: Projection;
   showHeatmap: boolean;
   showEnvelope: boolean;
+  showWireLabels: boolean;
+  showFeedNames: boolean;
 }) {
   const theme = useContext(ThemeContext); // repaint on theme toggle (dep below)
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -4729,7 +4768,7 @@ function CurrentCanvas({
         }
 
         // Wire label near the leftmost knot for multi-wire geometries.
-        if (result.wires.length > 1) {
+        if (showWireLabels && result.wires.length > 1) {
           const lp = project(wire.knot_positions[0]);
           ctx!.fillStyle = PC.label;
           ctx!.font = `${labelFontPx}px ui-monospace, monospace`;
@@ -4761,11 +4800,13 @@ function CurrentCanvas({
         ctx!.beginPath();
         ctx!.arc(feed.x, feed.y, 5 * s, 0, Math.PI * 2);
         ctx!.fill();
-        ctx!.font = `${feedFontPx}px ui-monospace, monospace`;
-        const label = feedList.length > 1
-          ? `feed ${fi} ∠${Math.round(Math.atan2(f.v_im, f.v_re) * 180 / Math.PI)}°`
-          : "feed";
-        ctx!.fillText(label, feed.x + 8 * s, feed.y - 8 * s);
+        if (showFeedNames) {
+          ctx!.font = `${feedFontPx}px ui-monospace, monospace`;
+          const label = feedList.length > 1
+            ? `feed ${fi} ∠${Math.round(Math.atan2(f.v_im, f.v_re) * 180 / Math.PI)}°`
+            : "feed";
+          ctx!.fillText(label, feed.x + 8 * s, feed.y - 8 * s);
+        }
       }
 
       // λ/4 scale bar, centered horizontally under the antenna.
@@ -4793,7 +4834,7 @@ function CurrentCanvas({
     const obs = new ResizeObserver(onResize);
     obs.observe(canvas);
     return () => obs.disconnect();
-  }, [result, projection, showHeatmap, showEnvelope, theme]);
+  }, [result, projection, showHeatmap, showEnvelope, showWireLabels, showFeedNames, theme]);
 
   return <canvas ref={canvasRef} />;
 }
