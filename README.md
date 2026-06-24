@@ -91,17 +91,17 @@
 | src/antennaknobs/engines/\_\_init\_\_.py                          |        6 |        2 |     67% |       3-4 |
 | src/antennaknobs/engines/momwire.py                               |      280 |        4 |     99% |36, 60, 273, 505 |
 | src/antennaknobs/engines/pynec.py                                 |      266 |       18 |     93% |119, 132, 152, 159, 173, 190, 270, 303-304, 316, 388, 390-394, 396, 401 |
-| src/antennaknobs/far\_field.py                                    |       94 |        0 |    100% |           |
+| src/antennaknobs/far\_field.py                                    |       96 |        0 |    100% |           |
 | src/antennaknobs/geometry.py                                      |      137 |        4 |     97% |60, 85, 89, 101 |
 | src/antennaknobs/nec\_export.py                                   |       52 |       12 |     77% |50, 92-102 |
 | src/antennaknobs/network.py                                       |      104 |        6 |     94% |188, 217, 234, 271, 281, 283 |
 | src/antennaknobs/network\_reduce.py                               |      138 |        6 |     96% |128, 193, 205, 245-251 |
 | src/antennaknobs/opt.py                                           |       90 |       14 |     84% |54-55, 57-60, 65-66, 72-76, 148 |
 | src/antennaknobs/sim.py                                           |        5 |        2 |     60% |       3-4 |
-| src/antennaknobs/sweep.py                                         |      123 |        7 |     94% |   105-116 |
+| src/antennaknobs/sweep.py                                         |      124 |        7 |     94% |   109-120 |
 | src/antennaknobs/transform.py                                     |       42 |        1 |     98% |        62 |
 | src/antennaknobs/user\_designs.py                                 |       61 |        5 |     92% |33, 43, 59, 81, 86 |
-| **TOTAL**                                                         | **4180** |  **134** | **97%** |           |
+| **TOTAL**                                                         | **4183** |  **134** | **97%** |           |
 
 
 ## Setup coverage badge
