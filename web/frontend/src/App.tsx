@@ -494,14 +494,19 @@ function ParamForm({
                   <div className="param-group-header">
                     {item.label_template.replace("{i}", String(i))}
                   </div>
-                  <ParamForm
-                    schema={item.params}
-                    values={instances[i]}
-                    onChange={onChange}
-                    pathPrefix={[...pathPrefix, item.name, i]}
-                    disabledFields={disabledFields}
-                    useKnobs={useKnobs}
-                  />
+                  {/* Wrap the band's controls in their own .param-grid so they
+                      pack 3-across just like the top-level rail. Without this
+                      the nested ParamForm block-stacks one control per row. */}
+                  <div className={`param-grid${useKnobs ? " is-knobs" : ""}`}>
+                    <ParamForm
+                      schema={item.params}
+                      values={instances[i]}
+                      onChange={onChange}
+                      pathPrefix={[...pathPrefix, item.name, i]}
+                      disabledFields={disabledFields}
+                      useKnobs={useKnobs}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
