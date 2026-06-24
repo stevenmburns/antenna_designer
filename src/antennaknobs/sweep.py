@@ -5,13 +5,12 @@ from icecream import ic
 
 import numpy as np
 
-import matplotlib.pyplot as plt
-
-# NOTE: scikit-rf (skrf) is imported lazily inside sweep()'s Smith-chart branch,
-# not here. Its package import is ~0.8 s (it pulls pandas + most of skrf), and
-# it's only needed when actually drawing a Smith chart — so loading it at module
-# import would tax every `import antennaknobs`, every CLI command, and web
-# startup for a feature most runs never touch.
+# NOTE: matplotlib.pyplot and scikit-rf (skrf) are imported lazily inside the
+# plotting functions below, not at module top. Both are import-heavy
+# (matplotlib ~0.1 s; skrf ~0.8 s, pulling pandas + most of skrf) and only
+# needed when actually drawing — loading them here would tax every
+# `import antennaknobs`, every CLI command, and web startup (which never plots)
+# for a feature most runs never touch.
 
 
 def build_and_get_elevation(antenna_builder, *, engine=Antenna):
@@ -52,6 +51,7 @@ def sweep_freq(
     fn=None,
     engine=Antenna,
 ):
+    import matplotlib.pyplot as plt
 
     rng = resolve_range(antenna_builder.freq, rng, center, fraction)
 
@@ -140,6 +140,7 @@ def sweep_gain(
     fn=None,
     engine=Antenna,
 ):
+    import matplotlib.pyplot as plt
 
     xs = gen_xs(getattr(antenna_builder, nm), rng, center, fraction, npoints)
 
@@ -175,6 +176,7 @@ def sweep(
     fn=None,
     engine=Antenna,
 ):
+    import matplotlib.pyplot as plt
 
     xs = gen_xs(getattr(antenna_builder, nm), rng, center, fraction, npoints)
 

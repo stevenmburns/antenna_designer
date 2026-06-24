@@ -1,11 +1,10 @@
 from .core import save_or_show
 import numpy as np
 
-import matplotlib.pyplot as plt
-
-# from matplotlib.collections import LineCollection
-# from mpl_toolkits.mplot3d import axes3d
-from mpl_toolkits.mplot3d.art3d import Line3DCollection
+# matplotlib (pyplot + the mplot3d Line3DCollection) is imported lazily inside
+# draw() below — it costs ~0.1 s to import and only the drawing path needs it,
+# so keeping it off module import keeps `import antennaknobs` and web startup
+# (which never plots) lean.
 
 
 class AntennaBuilder:
@@ -65,6 +64,8 @@ class AntennaBuilder:
 
     @staticmethod
     def draw(tups, fn=None):
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
         # Edges are 4-tuples (p0, p1, nsegs, excitation) or 5-tuples with a
         # trailing port name (named-edge designs like sterba_tl and the
