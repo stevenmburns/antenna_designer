@@ -98,10 +98,10 @@
 | src/antennaknobs/network\_reduce.py                               |      138 |        6 |     96% |128, 193, 205, 245-251 |
 | src/antennaknobs/opt.py                                           |       90 |       14 |     84% |54-55, 57-60, 65-66, 72-76, 148 |
 | src/antennaknobs/sim.py                                           |        5 |        2 |     60% |       3-4 |
-| src/antennaknobs/sweep.py                                         |      123 |        7 |     94% |   105-116 |
+| src/antennaknobs/sweep.py                                         |      122 |        7 |     94% |   109-120 |
 | src/antennaknobs/transform.py                                     |       42 |        1 |     98% |        62 |
 | src/antennaknobs/user\_designs.py                                 |       61 |        5 |     92% |33, 43, 59, 81, 86 |
-| **TOTAL**                                                         | **4180** |  **134** | **97%** |           |
+| **TOTAL**                                                         | **4179** |  **134** | **97%** |           |
 
 
 ## Setup coverage badge
