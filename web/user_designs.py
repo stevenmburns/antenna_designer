@@ -38,12 +38,17 @@ _ASSETS = Path(__file__).resolve().parent / "user_design_assets"
 
 
 def ensure_scaffold() -> None:
-    """Create the default user folder with a ``TEMPLATE.py`` + ``CLAUDE.md``
-    the first time, so there's something to copy and Claude Code has context.
+    """Create the default user folder and keep its reference assets current.
+
+    ``TEMPLATE.py`` and ``CLAUDE.md`` are shipped documentation, not user
+    content — the workflow is copy-then-rename, so they're safe to refresh from
+    the packaged copies on every startup. That's what lets an *existing* install
+    pick up updated authoring guidance (e.g. the design_freq tuning note) after
+    an upgrade, not just brand-new folders. Any other ``*.py`` in the folder is
+    a user design and is never touched.
+
     Idempotent and best-effort — never raises into startup."""
     d = default_user_dir()
-    if d.exists():
-        return
     try:
         d.mkdir(parents=True, exist_ok=True)
         for asset in ("TEMPLATE.py", "CLAUDE.md"):
