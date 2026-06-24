@@ -460,6 +460,96 @@ button:focus-visible,
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/* one-line antenna picker: searchable combobox + inline variant select */
+.antenna-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3);
+  margin: var(--space-2) 0 var(--space-4);
+}
+.combobox {
+  position: relative;
+  flex: 1 1 0; /* grow from a 0 basis so its text width can't crowd the variant */
+  min-width: 0;
+}
+.combobox-input {
+  width: 100%;
+  box-sizing: border-box; /* keep padding inside the box so it can't overflow
+                             right and paint over the variant select */
+  padding-right: 26px; /* room for the caret */
+}
+.combobox-caret {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.combobox-list {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-2);
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  box-shadow: 0 8px 22px var(--shadow);
+}
+.combobox-group + .combobox-group {
+  margin-top: var(--space-2);
+}
+.combobox-group > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.combobox-group-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  padding: var(--space-2) var(--space-3) var(--space-1);
+}
+.combobox-option {
+  padding: var(--space-3);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: var(--text-base);
+  color: var(--fg);
+}
+.combobox-option.is-active {
+  background: var(--inset);
+}
+.combobox-option.is-selected {
+  color: var(--accent);
+  font-weight: 600;
+}
+.combobox-option.is-selected.is-active {
+  background: var(--accent-soft);
+}
+.combobox-empty {
+  padding: var(--space-4) var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.variant-select {
+  flex: 0 0 auto;
+  min-width: 104px; /* always fits "default" + the dropdown arrow */
+  max-width: 45%;
+  font-size: var(--text-sm);
+  padding: var(--space-4) var(--space-3);
+}
+
 .geometry-filter-hint {
   color: var(--muted);
   font-family: var(--font-mono);
