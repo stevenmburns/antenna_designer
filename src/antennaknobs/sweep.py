@@ -6,8 +6,12 @@ from icecream import ic
 import numpy as np
 
 import matplotlib.pyplot as plt
-import skrf
-import skrf.plotting
+
+# NOTE: scikit-rf (skrf) is imported lazily inside sweep()'s Smith-chart branch,
+# not here. Its package import is ~0.8 s (it pulls pandas + most of skrf), and
+# it's only needed when actually drawing a Smith chart — so loading it at module
+# import would tax every `import antennaknobs`, every CLI command, and web
+# startup for a feature most runs never touch.
 
 
 def build_and_get_elevation(antenna_builder, *, engine=Antenna):
@@ -192,14 +196,18 @@ def sweep(
     ic(nwidth, npoints, markers, zs.shape, marker_zs.shape)
 
     if use_smithchart:
+        # Lazy import (see the note at the top of the module): only the two
+        # Smith-chart drawing helpers, and only when a chart is actually drawn.
+        from skrf.plotting import plot_smith, smith
+
         fig, ax0 = plt.subplots()
         color = "tab:red"
-        skrf.plotting.smith(draw_labels=True, chart_type="z")
+        smith(draw_labels=True, chart_type="z")
         for i in range(nwidth):
             if zs.shape[0] > 0:
                 normalized_zs = zs / z0
                 reflection_coefficients = (normalized_zs - 1) / (normalized_zs + 1)
-                skrf.plotting.plot_smith(
+                plot_smith(
                     reflection_coefficients,
                     color=color,
                     draw_labels=True,
@@ -209,7 +217,7 @@ def sweep(
             if marker_zs.shape[0] > 0:
                 normalized_zs = marker_zs / z0
                 reflection_coefficients = (normalized_zs - 1) / (normalized_zs + 1)
-                skrf.plotting.plot_smith(
+                plot_smith(
                     reflection_coefficients,
                     color=color,
                     draw_labels=True,
