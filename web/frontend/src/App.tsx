@@ -2922,53 +2922,6 @@ export function App() {
           )}
         </div>
 
-        <div className="group-label">far-field cuts</div>
-
-        <div className="cut-knobs">
-          <div className="field field-knob">
-            <span
-              className="knob-label"
-              title="elevation at which the azimuth-plane cut is taken"
-            >
-              elevation
-            </span>
-            <Knob
-              value={azElevDeg}
-              min={0}
-              max={89}
-              step={1}
-              precision={0}
-              unit="°"
-              label="cut elevation"
-              onChange={setAzElevDeg}
-              startDeg={90}
-              sweepDeg={-89}
-            />
-            <span className="knob-value">{azElevDeg.toFixed(0)}°</span>
-          </div>
-          <div className="field field-knob">
-            <span
-              className="knob-label"
-              title="azimuth bearing at which the elevation-plane cut is taken"
-            >
-              azimuth
-            </span>
-            <Knob
-              value={elevAzDeg}
-              min={0}
-              max={359}
-              step={1}
-              precision={0}
-              unit="°"
-              label="cut azimuth"
-              onChange={setElevAzDeg}
-              startDeg={90}
-              sweepDeg={-359}
-            />
-            <span className="knob-value">{elevAzDeg.toFixed(0)}°</span>
-          </div>
-        </div>
-
         <div className={`readout${stale ? " stale" : ""}`}>
           <div className="row">
             <span>R</span>
@@ -3159,6 +3112,51 @@ export function App() {
                 />
                 converge sweep
               </label>
+            </div>
+          )}
+          {/* The cut-angle knob lives on the plot it drives: the azimuth
+              (xy) cut is taken at elevation azElevDeg; the elevation (yz) cut
+              is taken at azimuth bearing elevAzDeg. CCW dials from 3 o'clock. */}
+          {view === "azimuth" && (
+            <div
+              className="cut-overlay"
+              title="elevation at which this azimuth cut is taken"
+            >
+              <span className="cut-overlay-label">elevation</span>
+              <Knob
+                value={azElevDeg}
+                min={0}
+                max={89}
+                step={1}
+                precision={0}
+                unit="°"
+                label="cut elevation"
+                onChange={setAzElevDeg}
+                startDeg={90}
+                sweepDeg={-89}
+              />
+              <span className="cut-overlay-value">{azElevDeg}°</span>
+            </div>
+          )}
+          {view === "elevation" && (
+            <div
+              className="cut-overlay"
+              title="azimuth bearing at which this elevation cut is taken"
+            >
+              <span className="cut-overlay-label">azimuth</span>
+              <Knob
+                value={elevAzDeg}
+                min={0}
+                max={359}
+                step={1}
+                precision={0}
+                unit="°"
+                label="cut azimuth"
+                onChange={setElevAzDeg}
+                startDeg={90}
+                sweepDeg={-359}
+              />
+              <span className="cut-overlay-value">{elevAzDeg}°</span>
             </div>
           )}
           <ViewPanel

@@ -1319,6 +1319,34 @@ input[type=checkbox] {
   gap: var(--space-4);
 }
 
+/* far-field cut-angle knob, overlaid bottom-right on the plot it drives */
+.cut-overlay {
+  position: absolute;
+  bottom: var(--space-6);
+  right: var(--space-6);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  box-shadow: 0 2px 10px var(--shadow);
+}
+.cut-overlay-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-2);
+}
+.cut-overlay-value {
+  font-size: var(--text-xs);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
 .projection-toggle {
   display: flex;
   gap: var(--space-2);
