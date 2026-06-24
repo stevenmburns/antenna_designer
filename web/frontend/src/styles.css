@@ -789,17 +789,25 @@ button:focus-visible,
 }
 
 /* measurement-freq VFO field: caption, LCD counter, dial, band select, lock */
+/* compact layout: band select + lock on the left, LCD + dial on the right */
 .vfo-field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+}
+.vfo-aux {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-4);
+}
+.vfo-main {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-4);
-}
-.vfo-cap {
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted-2);
+  gap: var(--space-3);
 }
 /* light bench-counter LCD: dark numerals over faint "off" segments */
 .freq-lcd {
@@ -839,8 +847,13 @@ button:focus-visible,
 .vfo-field.is-locked .lcd-live {
   color: var(--muted);
 }
-.vfo-field .band-select {
-  max-width: 200px;
+.vfo-aux .band-select {
+  max-width: 130px;
+}
+/* the lock toggle sits in the left aux column; "lock" label + full tooltip */
+.vfo-aux .link-toggle {
+  font-size: var(--text-xs);
+  white-space: nowrap;
 }
 .knob-edit {
   width: 54px;
