@@ -2679,6 +2679,69 @@ export function App() {
           );
         })()}
 
+        {/* Measurement freq = the rig's tuning control: a weighted VFO dial +
+            frequency-counter readout. Band select + lock sit to the LEFT of the
+            readout/dial to keep the field compact. "lock to design freq"
+            disables the dial. */}
+        <div className="group-label">measurement freq</div>
+        <div className={`field vfo-field${linkMeas ? " is-locked" : ""}`}>
+          <div className="vfo-aux">
+            {currentBands.length > 0 && (
+              <select
+                className="band-select"
+                value={bandContaining(measFreq) ?? currentBands[0].key}
+                disabled={linkMeas}
+                onChange={(e) => selectMeasBand(e.target.value)}
+              >
+                {currentBands.map((b) => (
+                  <option key={b.key} value={b.key}>
+                    {b.label}
+                  </option>
+                ))}
+              </select>
+            )}
+            <label className="link-toggle" title="lock to design freq">
+              <input
+                type="checkbox"
+                checked={linkMeas}
+                onChange={(e) => toggleLink(e.target.checked)}
+              />
+              lock
+            </label>
+          </div>
+          <div className="vfo-main">
+            <div className="freq-lcd" title={`${measFreq.toFixed(3)} MHz`}>
+              <span className="lcd-digits">
+                <span className="lcd-ghost">
+                  {measFreq.toFixed(3).replace(/\d/g, "8")}
+                </span>
+                <span className="lcd-live">{measFreq.toFixed(3)}</span>
+              </span>
+              <span className="lcd-unit">MHz</span>
+            </div>
+            <Knob
+              variant="vfo"
+              value={measFreq}
+              min={
+                currentExample?.meas_freq_range_mhz
+                  ? currentExample.meas_freq_range_mhz[0]
+                  : Math.max(0.5, measBandAnchor * 0.8)
+              }
+              max={
+                currentExample?.meas_freq_range_mhz
+                  ? currentExample.meas_freq_range_mhz[1]
+                  : Math.min(60, measBandAnchor * 1.25)
+              }
+              step={0.005}
+              precision={3}
+              unit=" MHz"
+              label="measurement frequency"
+              onChange={setMeasFreq}
+              disabled={linkMeas}
+            />
+          </div>
+        </div>
+
         <div className="group-label">simulation</div>
 
         <div className="field">
@@ -2756,65 +2819,6 @@ export function App() {
               fast ground (reflection coefficient)
             </label>
           )}
-        </div>
-
-        {/* Measurement freq is the rig's tuning control → a weighted VFO dial
-            with a frequency-counter readout, in place of a slider. The dial
-            spans the band (multi-band examples override meas_freq_range_mhz).
-            "lock to design freq" disables the dial. */}
-        <div className={`field vfo-field${linkMeas ? " is-locked" : ""}`}>
-          <span className="vfo-cap">measurement freq</span>
-          <div className="freq-lcd" title={`${measFreq.toFixed(3)} MHz`}>
-            <span className="lcd-digits">
-              <span className="lcd-ghost">
-                {measFreq.toFixed(3).replace(/\d/g, "8")}
-              </span>
-              <span className="lcd-live">{measFreq.toFixed(3)}</span>
-            </span>
-            <span className="lcd-unit">MHz</span>
-          </div>
-          <Knob
-            variant="vfo"
-            value={measFreq}
-            min={
-              currentExample?.meas_freq_range_mhz
-                ? currentExample.meas_freq_range_mhz[0]
-                : Math.max(0.5, measBandAnchor * 0.8)
-            }
-            max={
-              currentExample?.meas_freq_range_mhz
-                ? currentExample.meas_freq_range_mhz[1]
-                : Math.min(60, measBandAnchor * 1.25)
-            }
-            step={0.005}
-            precision={3}
-            unit=" MHz"
-            label="measurement frequency"
-            onChange={setMeasFreq}
-            disabled={linkMeas}
-          />
-          {currentBands.length > 0 && (
-            <select
-              className="band-select"
-              value={bandContaining(measFreq) ?? currentBands[0].key}
-              disabled={linkMeas}
-              onChange={(e) => selectMeasBand(e.target.value)}
-            >
-              {currentBands.map((b) => (
-                <option key={b.key} value={b.key}>
-                  {b.label}
-                </option>
-              ))}
-            </select>
-          )}
-          <label className="link-toggle">
-            <input
-              type="checkbox"
-              checked={linkMeas}
-              onChange={(e) => toggleLink(e.target.checked)}
-            />
-            lock to design freq
-          </label>
         </div>
 
         <div className="group-label">far-field cuts</div>
