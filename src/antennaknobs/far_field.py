@@ -4,7 +4,9 @@ from .engine import SimulationEngine
 
 import numpy as np
 
-import matplotlib.pyplot as plt
+# matplotlib.pyplot is imported lazily inside the plotting functions below
+# (plot_patterns / pattern / pattern3d) — it costs ~0.1 s to import and only the
+# plotting paths need it, so it stays off `import antennaknobs` and web startup.
 
 
 def _as_engine(obj):
@@ -67,6 +69,8 @@ def plot_patterns(
     azimuth_f=0,
     azimuth_r=180,
 ):
+    import matplotlib.pyplot as plt
+
     fig, axes = plt.subplots(
         ncols=2, subplot_kw={"projection": "polar"}, figsize=(12, 8)
     )
@@ -157,6 +161,7 @@ def compare_patterns(
 
 
 def pattern(builder_or_engine, elevation_angle=15, fn=None):
+    import matplotlib.pyplot as plt
 
     rings, max_gain, min_gain, thetas, phis = get_pattern_rings(builder_or_engine)
 
@@ -189,6 +194,8 @@ def pattern(builder_or_engine, elevation_angle=15, fn=None):
 
 
 def pattern3d(builder_or_engine, fn=None):
+    import matplotlib.pyplot as plt
+
     a = _as_engine(builder_or_engine)
     ff = a.far_field(n_theta=30, n_phi=60, del_theta=3, del_phi=6)
     del a
