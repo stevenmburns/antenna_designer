@@ -110,6 +110,15 @@ class ParamSpec:
     linked_to_design_freq: bool = False
     link_meas_freq_to_param: Optional[str] = None
     sweepable: bool = False
+    # Optional explicit placement in the param grid, opting this knob out
+    # of the default auto-flow packing. Shape: {"row", "col", "row_span",
+    # "col_span"} — all optional ints, 1-indexed (CSS grid lines). The
+    # frontend maps them straight onto grid-row / grid-column so a design
+    # can lay its knobs out in a deliberate row/column arrangement. Pairs
+    # with AntennaExample.layout["columns"], which fixes the grid's column
+    # count so these positions are stable rather than width-dependent.
+    # Authored under ui_params[<param>]["layout"]; None keeps auto-flow.
+    layout: Optional[dict] = None
 
 
 @dataclass(frozen=True)
@@ -364,3 +373,10 @@ class AntennaExample:
     # stripped. Single-variant designs ship {} since there's nothing
     # to switch between.
     variant_values: dict = field(default_factory=dict)
+    # Optional grid-level layout config for the top-level knob rail.
+    # Recognised key today: {"columns": int} — pins the param grid to a
+    # fixed column count so per-ParamSpec.layout col positions land
+    # predictably (the default auto-flow grid varies its column count with
+    # the rail width). None keeps the responsive auto-fill packing.
+    # Authored under the reserved ui_params["layout"] key.
+    layout: Optional[dict] = None

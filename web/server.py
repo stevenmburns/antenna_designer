@@ -754,6 +754,7 @@ def examples_endpoint():
             "on_change_set": item.on_change_set,
             "linked_to_design_freq": item.linked_to_design_freq,
             "link_meas_freq_to_param": item.link_meas_freq_to_param,
+            "layout": item.layout,
         }
 
     out = []
@@ -817,6 +818,7 @@ def examples_endpoint():
                     "hi_factor": ex.sweep_policy.hi_factor,
                     "band_locked": ex.sweep_policy.band_locked,
                 },
+                "layout": ex.layout,
             }
         )
     out.sort(key=lambda e: e["label"])

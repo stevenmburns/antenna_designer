@@ -339,3 +339,71 @@ def test_auto_derived_length_factors_resolve_at_one_per_mille(name):
         # 1-2-5 snapping caps the relative step at ~0.167%; assert well
         # under the old 1% to lock in the resolution fix.
         assert s.step / abs(s.default) <= 0.0018, (name, s.name, s.step, s.default)
+
+
+# ---------------------------------------------------------------------------
+# ui_param layout — explicit row/col knob placement
+# ---------------------------------------------------------------------------
+
+
+def test_layout_defaults_to_none():
+    """A param with no `layout` override carries layout=None (auto-flow),
+    and every shipped design defaults to auto-flow at both levels."""
+    assert _auto_paramspec("x", 1.0, None).layout is None
+    for ex in REGISTRY.values():
+        assert ex.layout is None
+        for s in ex.param_schema:
+            if not getattr(s, "params", None):  # scalar leaf
+                assert s.layout is None
+
+
+@pytest.mark.parametrize(
+    "default, override",
+    [
+        (1.0, {"layout": {"row": 1, "col": 2, "col_span": 2}}),  # float
+        (3, {"layout": {"row": 2, "col": 1}}),  # int
+        (True, {"layout": {"col": 1}}),  # bool
+        ("a", {"enum_options": ({"value": "a", "label": "A"},), "layout": {"row": 3}}),
+    ],
+)
+def test_per_param_layout_passes_through_every_kind(default, override):
+    spec = _auto_paramspec("p", default, dict(override))
+    assert spec.layout == override["layout"]
+
+
+def test_non_dict_layout_is_ignored():
+    """A malformed layout value is dropped rather than crashing derivation."""
+    assert _auto_paramspec("p", 1.0, {"layout": "nope"}).layout is None
+
+
+def test_grid_level_layout_from_ui_params():
+    """Reserved ui_params['layout'] surfaces on AntennaExample.layout and
+    does not leak into the param schema as a phantom slider."""
+    from types import MappingProxyType
+
+    from antennaknobs import AntennaBuilder
+
+    class _LayoutBuilder(AntennaBuilder):
+        default_params = MappingProxyType(
+            {
+                "freq": 14.0,
+                "a": 1.0,
+                "b": 2.0,
+                "ui_params": MappingProxyType(
+                    {
+                        "layout": {"columns": 3},
+                        "a": {"layout": {"row": 1, "col": 1}},
+                    }
+                ),
+            }
+        )
+
+        def build_wires(self):
+            return [((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), 3, None, None)]
+
+    ex = _make_example("layout_demo", _LayoutBuilder, defer_hints=True)
+    assert ex.layout == {"columns": 3}
+    assert "layout" not in {s.name for s in ex.param_schema}
+    by_name = {s.name: s for s in ex.param_schema}
+    assert by_name["a"].layout == {"row": 1, "col": 1}
+    assert by_name["b"].layout is None

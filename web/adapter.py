@@ -14,10 +14,16 @@ Reserved keys inside `ui_params`:
   bands            : tuple[BandSpec] — band tabs (default HF amateur set)
   sweep_policy     : (anchor, lo_factor, hi_factor)
   multi_feed       : bool — declare multi-feed response shape
+  layout           : dict {columns: int} — pin the knob grid to a fixed
+                     column count so per-param `layout` col positions are
+                     stable (default: responsive auto-flow packing)
   <param_name>     : dict of {min, max, step, unit, label, precision,
-                              kind, sweepable, enum_options}
+                              kind, sweepable, enum_options, layout}
                      — slider-bounds + metadata overrides for one param.
-                     Anything missing falls back to auto-derived defaults.
+                     `layout` is {row, col, row_span, col_span} (1-indexed
+                     CSS grid lines, all optional) to place this knob
+                     explicitly. Anything missing falls back to
+                     auto-derived defaults.
 
 Everything else in `default_params` becomes a `ParamSpec`. Numeric
 defaults become float sliders with auto bounds (±50% around default);
@@ -138,6 +144,11 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
     override = dict(override or {})
     label = override.pop("label", name)
     unit = override.pop("unit", None)
+    # Optional explicit grid placement for this knob (row/col/spans). Only a
+    # dict is meaningful; anything else is ignored so a typo can't crash the
+    # registry. Passed verbatim to ParamSpec.layout for every kind.
+    layout_raw = override.pop("layout", None)
+    layout = dict(layout_raw) if isinstance(layout_raw, dict) else None
     # Precision (decimal places shown on the slider label) defaults to None
     # here so the numeric branch can derive it from the resolved step. Any
     # non-numeric path falls back to 3, matching the historical default.
@@ -154,6 +165,7 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
             kind=kind,
             unit=unit,
             precision=precision,
+            layout=layout,
         )
 
     if isinstance(default, (int, float)) and not isinstance(default, bool):
@@ -220,6 +232,7 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
             precision=resolved_precision,
             unit=unit,
             sweepable=sweepable,
+            layout=layout,
         )
         if "linked_to_design_freq" in override:
             spec_kwargs["linked_to_design_freq"] = bool(
@@ -243,6 +256,7 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
             enum_options=tuple(opts),
             precision=precision,
             unit=unit,
+            layout=layout,
         )
 
     # complex, None, or anything exotic — skip the auto-UI; the request
@@ -857,6 +871,12 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
             _hints["default_backend"] = _recommended_backend(cls)
         return _hints
 
+    # Grid-level layout config (reserved ui_params["layout"]). A dict today
+    # carrying {"columns": int}; ignore non-dicts so a stray value can't
+    # break registration. None keeps the responsive auto-flow grid.
+    layout_raw = ui.get("layout")
+    grid_layout = dict(layout_raw) if isinstance(layout_raw, dict) else None
+
     meas_range = (
         ui.get("meas_freq_range")
         if not isinstance(ui.get("meas_freq_range"), dict)
@@ -1205,6 +1225,7 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
             v: _serialize_param_values(_strip_ui(_variant_params(cls, v)))
             for v in variants
         },
+        layout=grid_layout,
     )
 
 

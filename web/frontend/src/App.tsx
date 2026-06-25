@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { CSSProperties } from "react";
 
 type Wire = {
   label: string;
@@ -50,6 +51,19 @@ type SchemaParamSpec = {
   // measFreq. Self-reference is allowed (and used by freq_NN params
   // in multi-band antennas).
   link_meas_freq_to_param?: string | null;
+  // Optional explicit placement in the param grid (1-indexed CSS grid
+  // lines). When present the field opts out of auto-flow and lands at the
+  // given row/col, optionally spanning multiple tracks. null = auto-flow.
+  layout?: KnobLayout | null;
+};
+
+// Per-knob grid placement. All fields optional; mapped onto inline
+// grid-row / grid-column. Pairs with ExampleDescriptor.layout.columns.
+type KnobLayout = {
+  row?: number | null;
+  col?: number | null;
+  row_span?: number | null;
+  col_span?: number | null;
 };
 
 type SchemaParamGroupSpec = {
@@ -142,6 +156,10 @@ type ExampleDescriptor = {
    *  variants. Complex-valued params arrive as {re, im}. */
   variant_values: { [variant: string]: { [key: string]: unknown } };
   sweep_policy: SweepPolicy;
+  /** Grid-level layout for the top-level knob rail. {columns: N} pins the
+   *  grid to a fixed column count so per-knob `layout.col` positions are
+   *  stable. null = responsive auto-flow packing. */
+  layout?: { columns?: number | null } | null;
 };
 
 // A user design that failed to load, reported by GET /examples.
@@ -683,6 +701,31 @@ function GeometryCombobox({
   );
 }
 
+// Translate a knob's optional layout hint into inline grid-placement
+// styles. Returns undefined when nothing is set so auto-flow fields stay
+// untouched. `col_span` / `row_span` use the CSS `span N` form; an explicit
+// `col` / `row` pins the start line (1-indexed). `col` + `col_span`
+// together place a spanning field at a fixed column.
+function layoutStyle(layout?: KnobLayout | null): CSSProperties | undefined {
+  if (!layout) return undefined;
+  const style: CSSProperties = {};
+  const colStart = layout.col ?? null;
+  const rowStart = layout.row ?? null;
+  const colSpan = layout.col_span ?? null;
+  const rowSpan = layout.row_span ?? null;
+  if (colStart != null) {
+    style.gridColumn = colSpan != null ? `${colStart} / span ${colSpan}` : `${colStart}`;
+  } else if (colSpan != null) {
+    style.gridColumn = `span ${colSpan}`;
+  }
+  if (rowStart != null) {
+    style.gridRow = rowSpan != null ? `${rowStart} / span ${rowSpan}` : `${rowStart}`;
+  } else if (rowSpan != null) {
+    style.gridRow = `span ${rowSpan}`;
+  }
+  return Object.keys(style).length ? style : undefined;
+}
+
 function ParamForm({
   schema,
   values,
@@ -767,7 +810,7 @@ function ParamForm({
           const checked = Boolean(currentRaw ?? item.default);
           const isDisabled = disabledFields?.has(item.name) ?? false;
           return (
-            <div key={item.name} className="field field-bool">
+            <div key={item.name} className="field field-bool" style={layoutStyle(item.layout)}>
               <label
                 className={`field-bool-label${isDisabled ? " field-disabled" : ""}`}
               >
@@ -791,7 +834,7 @@ function ParamForm({
         if (item.kind === "enum") {
           const opts = item.enum_options ?? [];
           return (
-            <div key={item.name} className="field field-enum">
+            <div key={item.name} className="field field-enum" style={layoutStyle(item.layout)}>
               <label>
                 <span>{item.label}</span>
               </label>
@@ -831,7 +874,7 @@ function ParamForm({
         // middle, value on the bottom. (The slider alternative and its toggle
         // were retired — knobs are the brand.)
         return (
-          <div key={item.name} className="field field-knob">
+          <div key={item.name} className="field field-knob" style={layoutStyle(item.layout)}>
             <span className="knob-label" title={item.label}>{item.label}</span>
             <Knob
               value={currentNum}
@@ -2724,7 +2767,14 @@ export function App() {
 
 
         {currentExample && (
-          <div className="param-grid is-knobs">
+          <div
+            className="param-grid is-knobs"
+            style={
+              currentExample.layout?.columns
+                ? { gridTemplateColumns: `repeat(${currentExample.layout.columns}, minmax(0, 1fr))` }
+                : undefined
+            }
+          >
             <ParamForm
               schema={currentExample.param_schema}
               values={currentValues}
