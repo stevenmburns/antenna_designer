@@ -328,12 +328,19 @@ momwire is still fully functional; install it only if you want to cross-check
 against NEC2.
 
 ```bash
-# The self-contained wheel from the python-necpp fork's release (OpenBLAS
-# vendored). The fork is distributed as `pynec-accel` (the import name stays
-# `import PyNEC`); --no-index avoids upstream PyNEC/pynec on PyPI, whose builds
-# are broken on current Python and lack the fork's BLAS/OpenMP work.
+# Wheel from the python-necpp fork's release (OpenBLAS + libgfortran vendored).
+# The fork is distributed as `pynec-accel` (the import name stays `import
+# PyNEC`); --no-index avoids upstream PyNEC/pynec on PyPI, whose builds are
+# broken on current Python and lack the fork's BLAS/OpenMP work.
+#
+# Use >= 1.7.4.post1 (release v1.7.4-accel.5 or later). Earlier builds vendored
+# their own libgomp, which clashes with momwire's system libgomp via a static-
+# TLS limit and silently knocks momwire's C++ accelerator onto its slow pure-
+# Python path whenever both backends load in one process. 1.7.4.post1 binds the
+# system libgomp instead, so it needs a system libgomp at runtime (universal on
+# glibc Linux — the GCC OpenMP runtime).
 pip install pynec-accel --no-index \
-    --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.3
+    --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.5
 ```
 
 **4. Install AntennaKNoBs**
