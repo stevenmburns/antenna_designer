@@ -417,7 +417,7 @@ class PyNECEngine(SimulationEngine):
         currents. Boundary knots are zeroed at genuine free ends (open-wire
         BC) but carry the adjacent segment-centre current at junctions, where
         the current is physically continuous through the shared endpoint.
-        Mirrors web.pynec_backend._segment_centers_to_knot_currents."""
+        Mirrors antennaknobs.web.pynec_backend._segment_centers_to_knot_currents."""
         if self._use_reducer:
             self.c = self._excited_real_context(C_LIGHT / (self.builder.freq * 1e6))
         self._set_freq_and_execute()

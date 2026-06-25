@@ -75,9 +75,12 @@ jobs:
       # catalogs). Keeps representative engine/solver coverage + all
       # load/schema/unit tests. No coverage instrumentation on PRs.
       if: github.event_name == 'pull_request'
-      # `python -m pytest` (not bare `pytest`) so CWD is on sys.path and the
-      # top-level `web/` package imports — same reason the main-lane command
-      # below uses the `-m pytest` form.
+      # `python -m pytest` (not bare `pytest`) keeps CWD on sys.path, the
+      # conventional form shared with the main-lane command below. The web
+      # server now lives at src/antennaknobs/web and imports as the installed
+      # `antennaknobs.web` subpackage (pip install -e . above), so it no longer
+      # depends on the repo root being on sys.path the way the old top-level
+      # `web/` package did.
       run: python -m pytest -m "not antenna_computation_check" tests/
 
     - name: Full suite + coverage (push to main only)

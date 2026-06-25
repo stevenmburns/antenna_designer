@@ -19,10 +19,10 @@ src/antennaknobs/*.html
 .venv/
 pg/
 node_modules/
-web/frontend/dist/
-web/frontend/.vite/
+src/antennaknobs/web/frontend/dist/
+src/antennaknobs/web/frontend/.vite/
 # Built frontend bundle: produced by `npm run build` (vite outDir) and bundled
 # into the wheel as package data at publish time; never committed to source.
-web/static/
+src/antennaknobs/web/static/
 .claude/
 scripts/sterba_center_driven_pattern.png

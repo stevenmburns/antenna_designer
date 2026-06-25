@@ -4,7 +4,7 @@
 - Expose `needs_pynec`, a skip marker for tests that require the optional
   PyNEC engine (unavailable e.g. on Windows).
 - Point the user-design folder at a throwaway temp dir for the whole test
-  session, set *before* any `import web.server` (which scaffolds the folder
+  session, set *before* any `import antennaknobs.web.server` (which scaffolds the folder
   at import time). Keeps the suite from writing TEMPLATE.py / CLAUDE.md into
   the developer's real ~/.antennaknobs. Individual tests can still
   override ANTENNAKNOBS_USER_DIR via monkeypatch — user_designs reads it

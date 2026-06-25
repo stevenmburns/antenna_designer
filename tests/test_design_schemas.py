@@ -1,6 +1,6 @@
 """Per-antenna schema unit tests.
 
-For every Builder registered by web.adapter, assert the derived
+For every Builder registered by antennaknobs.web.adapter, assert the derived
 ParamSpec / variants / sweep policy / view shape the frontend depends on.
 This is the generic cousin of test_fandipole_schema.py — fandipole keeps
 its bespoke tests for the bands-group wiring; everything else is covered
@@ -19,15 +19,15 @@ import math
 
 import pytest
 
-import web.examples  # noqa: F401 — primes the adapter
-from web.adapter import (
+import antennaknobs.web.examples  # noqa: F401 — primes the adapter
+from antennaknobs.web.adapter import (
     _auto_paramspec,
     _make_example,
     _nice_step,
     _precision_for_step,
 )
-from web.examples import REGISTRY
-from web.examples._base import (
+from antennaknobs.web.examples import REGISTRY
+from antennaknobs.web.examples._base import (
     DEFAULT_HF_BANDS,
     AntennaExample,
     BandSpec,

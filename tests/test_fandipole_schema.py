@@ -8,10 +8,10 @@ band_locked=True, and the three intended variants must be discovered
 with the expected n_bands counts.
 """
 
-import web.examples  # noqa: F401  — registers examples; primes the adapter
+import antennaknobs.web.examples  # noqa: F401  — registers examples; primes the adapter
 from antennaknobs.designs.multiband.fandipole import Builder
-from web.adapter import _derive_schema, _make_example
-from web.examples._base import ParamGroupSpec, ParamSpec
+from antennaknobs.web.adapter import _derive_schema, _make_example
+from antennaknobs.web.examples._base import ParamGroupSpec, ParamSpec
 
 
 def _schema_by_name():
