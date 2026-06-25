@@ -135,7 +135,7 @@ def test_per_band_freq_scales_geometry():
 
 def test_registered_in_web_examples():
     """Adapter auto-discovers the new design and reports multi_feed."""
-    from web.examples import REGISTRY
+    from antennaknobs.web.examples import REGISTRY
 
     ex = REGISTRY.get("multiband.hexbeam_5band")
     assert ex is not None

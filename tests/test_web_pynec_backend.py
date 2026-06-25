@@ -16,8 +16,8 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from web import pynec_backend
-from web.examples._base import AntennaExample
+from antennaknobs.web import pynec_backend
+from antennaknobs.web.examples._base import AntennaExample
 
 
 def test_have_pynec_flag_is_bool():

@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from web.examples._feedline import daisy_chain_z_in
+from antennaknobs.web.examples._feedline import daisy_chain_z_in
 
 C_LIGHT = 299_792_458.0
 

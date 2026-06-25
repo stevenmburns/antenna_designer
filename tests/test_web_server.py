@@ -16,8 +16,8 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from web import server, user_designs
-from web.examples import REGISTRY
+from antennaknobs.web import server, user_designs
+from antennaknobs.web.examples import REGISTRY
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +215,7 @@ def test_pynec_path_also_reports_radiation_efficiency():
     (close to momwire's, both well under 1), and 1.0 for a lossless design --
     so the JS far-field cut is gain on either engine, not directivity on one
     and gain on the other."""
-    from web import pynec_backend
+    from antennaknobs.web import pynec_backend
 
     if not pynec_backend.HAVE_PYNEC:
         import pytest
@@ -491,7 +491,7 @@ def test_deferred_design_view_is_null_then_arrives_with_preview():
     # view arrives with the first geometry preview.
     from types import MappingProxyType
 
-    from web import adapter
+    from antennaknobs.web import adapter
     from antennaknobs.designs.dipoles.invvee import Builder as Inv
 
     ui = {
@@ -534,7 +534,9 @@ def test_geometry_endpoint_falls_back_when_geometry_unknown(client: TestClient):
 # dep on CI, but local devs without swig+gfortran shouldn't see a hard
 # failure). pynec_backend.HAVE_PYNEC is the same flag the dispatcher uses.
 pynec_required = pytest.mark.skipif(
-    not __import__("web.pynec_backend", fromlist=["HAVE_PYNEC"]).HAVE_PYNEC,
+    not __import__(
+        "antennaknobs.web.pynec_backend", fromlist=["HAVE_PYNEC"]
+    ).HAVE_PYNEC,
     reason="PyNEC not built in this environment",
 )
 
@@ -700,7 +702,7 @@ def test_auto_target_z0_scales_by_array_class(design_module, expected_z0):
     # 50. Pure-function check on _auto_target_z0 — no solver needed.
     import importlib
 
-    from web.adapter import _auto_target_z0
+    from antennaknobs.web.adapter import _auto_target_z0
 
     cls = importlib.import_module(f"antennaknobs.designs.{design_module}").Builder
     assert _auto_target_z0(cls) == expected_z0

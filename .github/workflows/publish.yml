@@ -27,11 +27,12 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: web/frontend/package-lock.json
+          cache-dependency-path: src/antennaknobs/web/frontend/package-lock.json
       - name: Build the React frontend
-        # Produces web/static (vite outDir) which setup.py ships as package
-        # data, so the wheel serves the browser UI with no Node at install time.
-        working-directory: web/frontend
+        # Produces src/antennaknobs/web/static (vite outDir) which setup.py ships
+        # as package data, so the wheel serves the browser UI with no Node at
+        # install time.
+        working-directory: src/antennaknobs/web/frontend
         run: |
           npm ci
           npm run build

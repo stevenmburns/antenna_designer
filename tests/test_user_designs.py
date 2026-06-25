@@ -6,9 +6,9 @@ and it registers under `user.<filename>` with no restart.
 
 import pytest
 
-import web.examples  # noqa: F401 — bootstraps the adapter + REGISTRY
-from web import user_designs
-from web.examples import REGISTRY
+import antennaknobs.web.examples  # noqa: F401 — bootstraps the adapter + REGISTRY
+from antennaknobs.web import user_designs
+from antennaknobs.web.examples import REGISTRY
 
 VALID = """
 from types import MappingProxyType
