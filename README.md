@@ -57,7 +57,7 @@
 | src/antennaknobs/designs/multiband/hexbeam\_5band.py              |      103 |        0 |    100% |           |
 | src/antennaknobs/designs/multiband/trap\_dipole.py                |       30 |        0 |    100% |           |
 | src/antennaknobs/designs/multiband/trap\_fan\_dipole.py           |       89 |        3 |     97% |240, 297, 303 |
-| src/antennaknobs/designs/multiband/twoband\_fan\_dipole.py        |       79 |       12 |     85% |210, 322-337 |
+| src/antennaknobs/designs/multiband/twoband\_fan\_dipole.py        |       79 |       12 |     85% |229, 341-356 |
 | src/antennaknobs/designs/specialty/\_\_init\_\_.py                |        0 |        0 |    100% |           |
 | src/antennaknobs/designs/specialty/bowtie.py                      |       26 |        0 |    100% |           |
 | src/antennaknobs/designs/specialty/helix.py                       |       39 |        2 |     95% |    99-100 |
