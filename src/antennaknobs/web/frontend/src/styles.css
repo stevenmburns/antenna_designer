@@ -786,23 +786,37 @@ button:focus-visible,
   outline: none;
   touch-action: none; /* let us own pointer drags; no page pan/zoom */
 }
-.knob:focus-visible {
+/* "Armed" state: the knob a physical dial (or the arrow keys) drives. Shown on
+   any focus — including a mouse click, which :focus-visible would suppress —
+   and on the sticky `.is-selected` flag, which persists after focus leaves so
+   the dial keeps a visible target. A soft ring plus an outward glow reads as
+   "this knob is live". */
+.knob:focus,
+.knob.is-selected {
   border-radius: 50%;
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 14px -2px var(--accent);
 }
 /* The VFO box is 112×99 (cropped), so the round box-shadow ring above renders
-   as an off-centre ellipse. Suppress it and use the in-SVG .vfo-focus-ring
-   circle instead, which is concentric with the dial. */
-.knob.is-vfo:focus-visible {
+   as an off-centre ellipse. Suppress it in every armed state (mouse focus and
+   the sticky `.is-selected` flag, not just keyboard `:focus-visible`) and use
+   the in-SVG .vfo-focus-ring circle instead, which is concentric with the dial. */
+.knob.is-vfo:focus,
+.knob.is-vfo.is-selected {
   box-shadow: none;
 }
+/* Same look as the small knobs' box-shadow ring above, just drawn in SVG space
+   because the VFO's non-square box can't take a concentric box-shadow circle.
+   stroke-width 2.7 renders ~3px (× the 112/100 box-to-viewBox scale), matching
+   the small knobs' 3px ring; the drop-shadow reproduces their outward glow. */
 .vfo-focus-ring {
   fill: none;
   stroke: var(--accent-soft);
-  stroke-width: 3.5;
+  stroke-width: 2.7;
   opacity: 0;
+  filter: drop-shadow(0 0 7px var(--accent));
 }
-.knob.is-vfo:focus-visible .vfo-focus-ring {
+.knob.is-vfo:focus .vfo-focus-ring,
+.knob.is-vfo.is-selected .vfo-focus-ring {
   opacity: 1;
 }
 .knob svg {
@@ -1069,6 +1083,14 @@ button:focus-visible,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* When a knob is armed (focused or sticky-selected), lift its label out of
+   muted so the active parameter the dial is turning is identifiable at a
+   glance. */
+.field-knob:focus-within .knob-label,
+.field-knob:has(.knob.is-selected) .knob-label {
+  color: var(--accent);
+  font-weight: 600;
 }
 .field-knob .knob-value {
   color: var(--fg);
