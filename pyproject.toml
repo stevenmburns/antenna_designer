@@ -55,6 +55,20 @@ dependencies = [
 #     misfires on chips without HT (pins to half the actual cores).
 web = ["fastapi", "uvicorn[standard]", "websockets", "psutil"]
 
+# Test suite: `pip install -e ".[test]"` makes `pytest` reproducible from a
+# clean clone (the runtime deps in [project] cover numpy/scipy/matplotlib/
+# scikit-rf that the solver tests need).
+#   - pytest + coverage run the suite.
+#   - the web-server tests import the FastAPI app and drive it through
+#     Starlette's TestClient, so they need the `web` extra (pulled in via the
+#     self-reference below) PLUS an HTTP client for TestClient. starlette>=1
+#     imports `httpx2` (it falls back to a deprecated `httpx`), so we pin
+#     `httpx2` to get the supported, warning-free path. Without it, the web
+#     tests error at collection.
+#   - PyNEC is deliberately NOT included (GPL, installed separately per README);
+#     the pynec-backed tests skip when it's absent.
+test = ["antennaknobs[web]", "pytest", "coverage", "httpx2"]
+
 [project.urls]
 Homepage = "https://github.com/stevenmburns/antennaknobs"
 Issues = "https://github.com/stevenmburns/antennaknobs/issues"

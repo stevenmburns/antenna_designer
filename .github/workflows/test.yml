@@ -43,9 +43,15 @@ jobs:
         # caches ccache but nothing routes through it (the compile isn't cached).
         create-symlink: true
     - name: Install dependencies
+      # Build prerequisites only: setuptools/pybind11/numpy must be present
+      # before momwire's --no-build-isolation source build below. The test
+      # tooling (pytest, coverage) and the web-server test client (fastapi,
+      # httpx2) are NOT pinned here — they come from the declared `.[test]`
+      # extra at "Install antennaknobs" so a clean clone reproduces CI with
+      # `pip install -e ".[test]"`.
       run: |
         python -m pip install --upgrade pip
-        pip install setuptools numpy scipy pytest matplotlib icecream scikit-rf coverage pybind11 fastapi httpx
+        pip install setuptools numpy scipy matplotlib icecream scikit-rf pybind11
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
     - name: Install PyNEC from the python-necpp release wheel
@@ -68,7 +74,10 @@ jobs:
         pip install --no-build-isolation -e ./momwire
 
     - name: Install antennaknobs
-      run: pip install -e .
+      # `.[test]` pulls in pytest + coverage + the web extra (fastapi, uvicorn,
+      # …) + httpx2 for Starlette's TestClient, so the full suite — including the
+      # web-server tests — runs without any ad-hoc pip installs.
+      run: pip install -e ".[test]"
 
     - name: Fast lane (PRs) — no per-design solver catalog, no coverage
       # Skips the antenna_computation_check tests (the per-design solver

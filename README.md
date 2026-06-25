@@ -346,7 +346,9 @@ pip install pynec-accel --no-index \
 **4. Install AntennaKNoBs**
 
 ```bash
-pip install -e .                 # or  pip install -e ".[web]"  for the web workbench
+pip install -e ".[test]"         # core + test deps (pytest, the web test client)
+# or  pip install -e ".[web]"    # just the web workbench, no test extras
+# or  pip install -e .           # library only
 ```
 
 **5. Run the tests**
@@ -354,6 +356,10 @@ pip install -e .                 # or  pip install -e ".[web]"  for the web work
 ```bash
 pytest -vv --durations=0 -- tests/
 ```
+
+(The `[test]` extra above is what makes this step work from a clean clone — it
+pulls in `pytest`, the `[web]` server deps, and `httpx2` for the web-server
+tests' TestClient.)
 
 > The authoritative, always-tested version of this whole sequence is the CI
 > workflow at [`.github/workflows/test.yml`](.github/workflows/test.yml) — it
