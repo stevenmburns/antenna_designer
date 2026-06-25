@@ -1,11 +1,14 @@
-"""Side-by-side solve-time comparison across 5 engines × 3 N values for
-both the fandipole and trap_fan_dipole designs.
+"""Side-by-side solve-time comparison across 7 engines × 3 N values over a
+range of antenna designs spanning the solver-selection space (single elements,
+beams, multiband dipoles, large single-wire structures, and arrays).
 
 Engines compared:
   Tri   — momwire TriangularSolver
   Bs1   — momwire BSplineSolver(degree=1)
   Bs2   — momwire BSplineSolver(degree=2)
   Sin   — momwire SinusoidalSolver
+  Arr   — momwire ArrayBlockSolver (element-aware block-low-rank)
+  ACA   — momwire HMatrixSolver (hierarchical matrix / adaptive cross approx)
   PyNEC — antennaknobs.engines.pynec.PyNECEngine (ground="free")
 
 Each cell is the mean wall-clock of impedance() across the design's
@@ -13,6 +16,9 @@ target bands, with an off-band warm-up call beforehand. Geometry/Z size
 is identical across band frequencies for a given (design, N), so the
 per-call cost is essentially N-and-solver-only and averaging hides
 one-shot jitter.
+
+See docs/status/2026-06-25-solver-selection-benchmark.md for a captured run
+and the by-antenna-class solver-selection guide derived from it.
 """
 
 from __future__ import annotations
@@ -55,21 +61,47 @@ os.environ.setdefault("MKL_NUM_THREADS", _NPROC)
 os.environ.setdefault("OMP_WAIT_POLICY", "PASSIVE")
 os.environ.setdefault("GOMP_SPINCOUNT", "0")
 
-import sys  # noqa: E402
 import time  # noqa: E402
 
-sys.path.insert(0, "/home/smburns/antennas/antennaknobs/src")
-sys.path.insert(0, "/home/smburns/antennas/antennaknobs/momwire/src")
-
+from antennaknobs.designs.arrays.bowtiearray2x4 import (  # noqa: E402
+    Builder as BowtieArrayBuilder,
+)
+from antennaknobs.designs.arrays.delta_looparray_1x4 import (  # noqa: E402
+    Builder as DeltaLoopArray1x4Builder,
+)
+from antennaknobs.designs.beams.moxon import (  # noqa: E402
+    Builder as MoxonBuilder,
+)
+from antennaknobs.designs.beams.yagi import (  # noqa: E402
+    Builder as YagiBuilder,
+)
+from antennaknobs.designs.broadband.lpda import (  # noqa: E402
+    Builder as LpdaBuilder,
+)
+from antennaknobs.designs.dipoles.invvee import (  # noqa: E402
+    Builder as InvVeeBuilder,
+)
+from antennaknobs.designs.loops.delta_loop import (  # noqa: E402
+    Builder as DeltaLoopBuilder,
+)
 from antennaknobs.designs.multiband.fandipole import (  # noqa: E402
     Builder as FanBuilder,
 )
 from antennaknobs.designs.multiband.trap_fan_dipole import (  # noqa: E402
     Builder as TrapBuilder,
 )
+from antennaknobs.designs.wire.rhombic import (  # noqa: E402
+    Builder as RhombicBuilder,
+)
 from antennaknobs.engines.pynec import PyNECEngine  # noqa: E402
 from antennaknobs.engines.momwire import MomwireEngine  # noqa: E402
-from momwire import BSplineSolver, SinusoidalSolver, TriangularSolver  # noqa: E402
+from momwire import (  # noqa: E402
+    ArrayBlockSolver,
+    BSplineSolver,
+    HMatrixSolver,
+    SinusoidalSolver,
+    TriangularSolver,
+)
 
 
 NSEGS = (21, 41, 81)
@@ -81,6 +113,11 @@ TRAP_WARMUP = 17.0
 # fandipole target bands (20m / 17m / 15m / 12m / 10m)
 FAN_BANDS = (14.300, 18.1575, 21.383, 24.97, 28.47)
 FAN_WARMUP = 13.0
+
+# Single-band 10m designs (moxon, bowtiearray2x4, delta_loop). Geometry/Z size
+# is fixed by (design, N), so these in-band points only average solve jitter.
+TEN_M_BANDS = (28.0, 28.3, 28.57, 28.85)
+TEN_M_WARMUP = 27.0
 
 
 def make_momwire_solver(solver_cls, solver_kwargs):
@@ -105,6 +142,11 @@ ENGINES = [
     ("Bs1", make_momwire_solver(BSplineSolver, {"degree": 1})),
     ("Bs2", make_momwire_solver(BSplineSolver, {"degree": 2})),
     ("Sin", make_momwire_solver(SinusoidalSolver, None)),
+    # ACA-accelerated B-spline solvers (degree=2 basis): the H-matrix solver
+    # and the element-aware array-block solver. Built to beat the dense path on
+    # large/array geometries; on small designs the ACA setup is pure overhead.
+    ("Arr", make_momwire_solver(ArrayBlockSolver, None)),
+    ("ACA", make_momwire_solver(HMatrixSolver, None)),
     ("PyNEC", solve_pynec),
 ]
 
@@ -143,8 +185,21 @@ def main():
         f"OMP_WAIT_POLICY={os.environ['OMP_WAIT_POLICY']} "
         f"GOMP_SPINCOUNT={os.environ['GOMP_SPINCOUNT']}"
     )
+    # Ordered small -> large so the timing matrix reads as a size sweep. Classes:
+    # single element, small loop, beams, multiband dipoles, large single-wire
+    # structures, then arrays (where the element-aware ArrayBlock solver pays off).
+    run_design("invvee", InvVeeBuilder, TEN_M_BANDS, TEN_M_WARMUP)
+    run_design("delta_loop", DeltaLoopBuilder, TEN_M_BANDS, TEN_M_WARMUP)
+    run_design("moxon", MoxonBuilder, TEN_M_BANDS, TEN_M_WARMUP)
+    run_design("yagi", YagiBuilder, TEN_M_BANDS, TEN_M_WARMUP)
     run_design("fandipole", FanBuilder, FAN_BANDS, FAN_WARMUP)
     run_design("trap_fan_dipole", TrapBuilder, TRAP_BANDS, TRAP_WARMUP)
+    run_design("rhombic", RhombicBuilder, TEN_M_BANDS, TEN_M_WARMUP)
+    run_design("lpda", LpdaBuilder, TEN_M_BANDS, TEN_M_WARMUP)
+    run_design(
+        "delta_looparray_1x4", DeltaLoopArray1x4Builder, TEN_M_BANDS, TEN_M_WARMUP
+    )
+    run_design("bowtiearray2x4", BowtieArrayBuilder, TEN_M_BANDS, TEN_M_WARMUP)
 
 
 if __name__ == "__main__":
