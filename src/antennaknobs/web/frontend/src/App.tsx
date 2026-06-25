@@ -2977,63 +2977,6 @@ export function App() {
           )}
         </div>
 
-        <div className={`readout${stale ? " stale" : ""}`}>
-          <div className="row">
-            <span>R</span>
-            <span className="val">{result ? `${result.z_in_re.toFixed(2)} Ω` : "—"}</span>
-          </div>
-          <div className="row">
-            <span>X</span>
-            <span className={result && Math.abs(result.z_in_im) < 2 ? "val val-hot" : "val"}>
-              {result ? `${result.z_in_im.toFixed(2)} Ω` : "—"}
-            </span>
-          </div>
-          {currentExample && (
-            <ResultPanel
-              schema={currentExample.result_schema}
-              result={result as Record<string, unknown> | null}
-            />
-          )}
-          {effectiveMultiFeed && result?.feeds && result.feeds.length > 1 && (
-            <div className="feeds-table">
-              <div className="feeds-table-header">per-feed Z (V/I)</div>
-              {result.feeds.map((f, i) => (
-                <div className="row" key={`feed-z-${i}`}>
-                  <span>
-                    feed {i} ∠{Math.round(Math.atan2(f.v_im, f.v_re) * 180 / Math.PI)}°
-                  </span>
-                  <span className="val">
-                    {f.z_re.toFixed(1)} {f.z_im >= 0 ? "+" : "−"} j
-                    {Math.abs(f.z_im).toFixed(1)} Ω
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="row">
-            <span>|I_feed|</span>
-            <span className="val">
-              {result ? feedMag(result).toExponential(3) : "—"}
-            </span>
-          </div>
-          <div className="row">
-            <span>solve</span>
-            <span className="val">{result ? `${result.solve_ms.toFixed(1)} ms` : "—"}</span>
-          </div>
-          <div className="row">
-            <span>SWR ({(result?.z0_ohms ?? 50).toFixed(0)} Ω)</span>
-            <span className="val">
-              {result
-                ? formatSwr(result.z_in_re, result.z_in_im, result.z0_ohms ?? 50)
-                : "—"}
-            </span>
-          </div>
-          <div className="row">
-            <span>rtt</span>
-            <span className="val">{rttMs != null ? `${rttMs.toFixed(1)} ms` : "—"}</span>
-          </div>
-        </div>
-
         {gearOpen && (
           <BackendConfigModal
             slot={gearOpen}
@@ -3257,6 +3200,65 @@ export function App() {
             showFeedNames={showFeedNames}
             multiFeed={effectiveMultiFeed}
           />
+          {/* Solve readout, pinned to the lower-left of whichever view the
+              carousel is centered on. Floats over the canvas as a HUD so the
+              left input rail stays inputs-only. */}
+          <div className={`readout stage-readout${stale ? " stale" : ""}`}>
+            <div className="row">
+              <span>R</span>
+              <span className="val">{result ? `${result.z_in_re.toFixed(2)} Ω` : "—"}</span>
+            </div>
+            <div className="row">
+              <span>X</span>
+              <span className={result && Math.abs(result.z_in_im) < 2 ? "val val-hot" : "val"}>
+                {result ? `${result.z_in_im.toFixed(2)} Ω` : "—"}
+              </span>
+            </div>
+            {currentExample && (
+              <ResultPanel
+                schema={currentExample.result_schema}
+                result={result as Record<string, unknown> | null}
+              />
+            )}
+            {effectiveMultiFeed && result?.feeds && result.feeds.length > 1 && (
+              <div className="feeds-table">
+                <div className="feeds-table-header">per-feed Z (V/I)</div>
+                {result.feeds.map((f, i) => (
+                  <div className="row" key={`feed-z-${i}`}>
+                    <span>
+                      feed {i} ∠{Math.round(Math.atan2(f.v_im, f.v_re) * 180 / Math.PI)}°
+                    </span>
+                    <span className="val">
+                      {f.z_re.toFixed(1)} {f.z_im >= 0 ? "+" : "−"} j
+                      {Math.abs(f.z_im).toFixed(1)} Ω
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="row">
+              <span>|I_feed|</span>
+              <span className="val">
+                {result ? feedMag(result).toExponential(3) : "—"}
+              </span>
+            </div>
+            <div className="row">
+              <span>solve</span>
+              <span className="val">{result ? `${result.solve_ms.toFixed(1)} ms` : "—"}</span>
+            </div>
+            <div className="row">
+              <span>SWR ({(result?.z0_ohms ?? 50).toFixed(0)} Ω)</span>
+              <span className="val">
+                {result
+                  ? formatSwr(result.z_in_re, result.z_in_im, result.z0_ohms ?? 50)
+                  : "—"}
+              </span>
+            </div>
+            <div className="row">
+              <span>rtt</span>
+              <span className="val">{rttMs != null ? `${rttMs.toFixed(1)} ms` : "—"}</span>
+            </div>
+          </div>
         </div>
         <div className="status">
           ws: {status}
