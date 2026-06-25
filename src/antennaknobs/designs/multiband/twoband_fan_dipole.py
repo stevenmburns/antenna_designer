@@ -198,6 +198,25 @@ class Builder(AntennaBuilder):
             "gap_slope": 0.0,
             "s": 0.15,
             "eps": 0.015,
+            # 2-column panel, one column per band (10m | 12m): rows pair the
+            # band's freq / length / slope so the two bands read side by side.
+            # Feed-gap / coupling knobs (gap_slope, s, eps) sit on the rows
+            # below.
+            "ui_params": MappingProxyType(
+                {
+                    "layout": {"columns": 2},
+                    "freq_10": {"layout": {"row": 1, "col": 1}},
+                    "freq_12": {"layout": {"row": 1, "col": 2}},
+                    "length_10": {"layout": {"row": 2, "col": 1}},
+                    "length_12": {"layout": {"row": 2, "col": 2}},
+                    "slope_10": {"layout": {"row": 3, "col": 1}},
+                    "slope_12": {"layout": {"row": 3, "col": 2}},
+                    "gap_slope": {"layout": {"row": 4, "col": 1}},
+                    "s": {"layout": {"row": 4, "col": 2}},
+                    "eps": {"layout": {"row": 5, "col": 1}},
+                    "base": {"layout": {"row": 5, "col": 2}},
+                }
+            ),
         }
     )
 

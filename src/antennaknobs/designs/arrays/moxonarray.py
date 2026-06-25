@@ -24,7 +24,32 @@ class Builder(Array2x2Builder):
             # Auto-view picks yz (y/z dominate from the 2x2 stacking),
             # but moxon-family geometry reads in xy — keep the array
             # consistent with the single moxon's view.
-            "ui_params": MappingProxyType({"default_view": "xy"}),
+            #
+            # Lay the panel out as two element columns: col 1 = the top
+            # element, col 2 = the bottom element; each row is one shape
+            # family (halfdriver / aspect_ratio / tipspacer / t0). The moxon
+            # param names are long, so a 2-wide grid keeps every label
+            # readable (a 4-wide family-per-column grid truncates them).
+            # Array spacing and feed phasing get their own rows beneath.
+            "ui_params": MappingProxyType(
+                {
+                    "default_view": "xy",
+                    "layout": {"columns": 2},
+                    "halfdriver_top": {"layout": {"row": 1, "col": 1}},
+                    "halfdriver_bot": {"layout": {"row": 1, "col": 2}},
+                    "aspect_ratio_top": {"layout": {"row": 2, "col": 1}},
+                    "aspect_ratio_bot": {"layout": {"row": 2, "col": 2}},
+                    "tipspacer_factor_top": {"layout": {"row": 3, "col": 1}},
+                    "tipspacer_factor_bot": {"layout": {"row": 3, "col": 2}},
+                    "t0_factor_top": {"layout": {"row": 4, "col": 1}},
+                    "t0_factor_bot": {"layout": {"row": 4, "col": 2}},
+                    "del_y": {"layout": {"row": 5, "col": 1}},
+                    "del_z": {"layout": {"row": 5, "col": 2}},
+                    "phase_lr": {"layout": {"row": 6, "col": 1}},
+                    "phase_tb": {"layout": {"row": 6, "col": 2}},
+                    "base": {"layout": {"row": 7, "col": 1}},
+                }
+            ),
         }
     )
 

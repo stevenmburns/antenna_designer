@@ -17,6 +17,22 @@ class Builder(Array1x4Builder):
             "del_y": 4.0,
             "del_z": 0.0,
             "phase_lr": 0.0,
+            # Per-element shape (length_factor / angle_radians) as an
+            # inner/outer matrix in cols 1-2; array spacing on row 3, feed
+            # phasing on row 4.
+            "ui_params": MappingProxyType(
+                {
+                    "layout": {"columns": 3},
+                    "length_factor_itop": {"layout": {"row": 1, "col": 1}},
+                    "angle_radians_itop": {"layout": {"row": 1, "col": 2}},
+                    "length_factor_otop": {"layout": {"row": 2, "col": 1}},
+                    "angle_radians_otop": {"layout": {"row": 2, "col": 2}},
+                    "base": {"layout": {"row": 3, "col": 1}},
+                    "del_y": {"layout": {"row": 3, "col": 2}},
+                    "del_z": {"layout": {"row": 3, "col": 3}},
+                    "phase_lr": {"layout": {"row": 4, "col": 1}},
+                }
+            ),
         }
     )
 

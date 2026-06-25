@@ -22,6 +22,27 @@ class Builder(Array2x2Builder):
             "reflector_factor": 1.05,
             "boom_factor": 0.2,
             "n_directors": 2,
+            # 3-column panel: the per-element shape (length_factor /
+            # angle_radians) forms a top/bottom matrix in cols 1-2; the
+            # shared Yagi element knobs (director count, reflector, boom) sit
+            # on their own row, with array spacing and phasing beneath.
+            "ui_params": MappingProxyType(
+                {
+                    "layout": {"columns": 3},
+                    "length_factor_top": {"layout": {"row": 1, "col": 1}},
+                    "angle_radians_top": {"layout": {"row": 1, "col": 2}},
+                    "length_factor_bot": {"layout": {"row": 2, "col": 1}},
+                    "angle_radians_bot": {"layout": {"row": 2, "col": 2}},
+                    "n_directors": {"layout": {"row": 3, "col": 1}},
+                    "reflector_factor": {"layout": {"row": 3, "col": 2}},
+                    "boom_factor": {"layout": {"row": 3, "col": 3}},
+                    "base": {"layout": {"row": 4, "col": 1}},
+                    "del_y": {"layout": {"row": 4, "col": 2}},
+                    "del_z": {"layout": {"row": 4, "col": 3}},
+                    "phase_lr": {"layout": {"row": 5, "col": 1}},
+                    "phase_tb": {"layout": {"row": 5, "col": 2}},
+                }
+            ),
         }
     )
 
