@@ -346,15 +346,23 @@ def test_auto_derived_length_factors_resolve_at_one_per_mille(name):
 # ---------------------------------------------------------------------------
 
 
-def test_layout_defaults_to_none():
-    """A param with no `layout` override carries layout=None (auto-flow),
-    and every shipped design defaults to auto-flow at both levels."""
+def test_layout_is_opt_in():
+    """Layout is opt-in: a param with no `layout` override carries
+    layout=None (auto-flow), and a design's grid layout is None unless it
+    declares a `ui_params["layout"]` dict. Per-param layout likewise only
+    appears where the design declared one under ui_params[<param>]."""
     assert _auto_paramspec("x", 1.0, None).layout is None
-    for ex in REGISTRY.values():
-        assert ex.layout is None
+    for name, ex in REGISTRY.items():
+        ui = dict(_builder_cls(name).default_params).get("ui_params") or {}
+        expects_grid = isinstance(ui.get("layout"), dict)
+        assert (ex.layout is not None) == expects_grid, name
         for s in ex.param_schema:
-            if not getattr(s, "params", None):  # scalar leaf
-                assert s.layout is None
+            if getattr(s, "params", None):  # group — leaves checked elsewhere
+                continue
+            declared = isinstance(ui.get(s.name), dict) and isinstance(
+                ui[s.name].get("layout"), dict
+            )
+            assert (s.layout is not None) == declared, (name, s.name)
 
 
 @pytest.mark.parametrize(
