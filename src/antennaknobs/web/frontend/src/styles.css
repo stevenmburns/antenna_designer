@@ -1351,6 +1351,21 @@ input[type=checkbox] {
   font-variant-numeric: tabular-nums;
 }
 
+/* Solve readout floated over the lower-left of the centered carousel view.
+   Inherits the .readout card look (bg/border/radius/mono); this just pins it
+   to the corner as a compact HUD and keeps it clear of the canvas content. */
+.stage-readout {
+  position: absolute;
+  bottom: var(--space-6);
+  left: var(--space-6);
+  z-index: 2;
+  min-width: 172px;
+  max-width: 240px;
+  line-height: 1.6;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+  pointer-events: none; /* a passive HUD — never intercept drags on the view */
+}
+
 .projection-toggle {
   display: flex;
   gap: var(--space-2);
