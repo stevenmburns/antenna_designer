@@ -1,6 +1,7 @@
 import {
   createContext,
   Fragment,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -298,6 +299,26 @@ function mixHex(a: string, b: string, t: number): string {
   return `rgb(${r}, ${g}, ${bl})`;
 }
 
+// Sticky knob selection. A physical dial (Ulanzi D100H et al.) emits plain
+// arrow-key presses, so "which knob the dial drives" must survive losing DOM
+// focus — otherwise clicking the canvas silently kills the dial. Each Knob
+// registers an imperative key handler under a stable id and marks itself
+// selected on focus; App's global keydown listener routes nav keys to the
+// selected knob whenever no knob is itself focused (and the target isn't a
+// text field). Esc disarms. Physical arrow keys ride the exact same path.
+type KnobSelectionCtx = {
+  selectedId: string | null;
+  select: (id: string | null) => void;
+  register: (id: string, handler: (key: string) => void) => void;
+  unregister: (id: string) => void;
+};
+const KnobSelectionContext = createContext<KnobSelectionCtx>({
+  selectedId: null,
+  select: () => {},
+  register: () => {},
+  unregister: () => {},
+});
+
 // A dependency-free rotary knob — a drop-in alternative to the range
 // slider for float/int params. Semantically a slider (role="slider"), so
 // it stays keyboard- and screen-reader-accessible: vertical drag, scroll
@@ -307,6 +328,7 @@ function mixHex(a: string, b: string, t: number): string {
 // drag is a *relative* vertical delta, which is far easier to do
 // precisely than chasing the pointer around a circle.
 function Knob({
+  knobId,
   value,
   min,
   max,
@@ -320,6 +342,9 @@ function Knob({
   variant = "param",
   disabled = false,
 }: {
+  // Stable id used by the sticky-selection registry; the dial drives whichever
+  // knob is selected, independent of DOM focus.
+  knobId: string;
   value: number;
   min: number;
   max: number;
@@ -348,6 +373,8 @@ function Knob({
   const [editing, setEditing] = useState(false);
   const [dragging, setDragging] = useState(false);
   const isVfo = variant === "vfo";
+  const sel = useContext(KnobSelectionContext);
+  const selected = sel.selectedId === knobId;
 
   const span = max - min || 1;
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
@@ -436,10 +463,18 @@ function Knob({
     (e.target as Element).releasePointerCapture?.(e.pointerId);
   };
 
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (disabled) return;
+  // Apply a single nav/edit key to this knob. Shared by the local onKeyDown
+  // (when the knob is focused) and the global sticky-selection router (when it
+  // isn't). Returns true when the key was consumed, so callers can
+  // preventDefault only for keys we actually handled.
+  const applyKey = (key: string): boolean => {
+    if (disabled) return false;
+    if (key === "Enter") {
+      setEditing(true);
+      return true;
+    }
     let next: number | null = null;
-    switch (e.key) {
+    switch (key) {
       case "ArrowUp":
       case "ArrowRight":
         next = value + step;
@@ -458,22 +493,35 @@ function Knob({
         // Jump to exactly min/max — these are bounds, not grid points, so skip
         // the step snap (roundP clamps + rounds to precision only).
         onChange(roundP(min));
-        e.preventDefault();
-        return;
+        return true;
       case "End":
         onChange(roundP(max));
-        e.preventDefault();
-        return;
-      case "Enter":
-        setEditing(true);
-        e.preventDefault();
-        return;
+        return true;
       default:
-        return;
+        return false;
     }
-    e.preventDefault();
     onChange(snap(next));
+    return true;
   };
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (applyKey(e.key)) e.preventDefault();
+  };
+
+  // Register an always-current handler under this knob's id so the global
+  // router can drive it after focus has moved elsewhere. A ref keeps the
+  // closure fresh (latest value/min/max) without re-registering every render.
+  const applyRef = useRef(applyKey);
+  applyRef.current = applyKey;
+  // Register on mount / unregister on unmount only. Depend on the *stable*
+  // register/unregister callbacks — NOT the whole `sel` context object, whose
+  // identity changes on every selection. Depending on `sel` re-runs this effect
+  // each time a knob is armed, firing the unmount-disarm path in unregister and
+  // instantly clearing the very knob we just selected.
+  const { register, unregister } = sel;
+  useEffect(() => {
+    register(knobId, (key) => applyRef.current(key));
+    return () => unregister(knobId);
+  }, [knobId, register, unregister]);
 
   const commit = (raw: string) => {
     const n = Number(raw);
@@ -484,7 +532,7 @@ function Knob({
   const p = Math.max(0, precision);
   return (
     <div
-      className={`knob${isVfo ? " is-vfo" : ""}${disabled ? " is-disabled" : ""}`}
+      className={`knob${isVfo ? " is-vfo" : ""}${disabled ? " is-disabled" : ""}${selected ? " is-selected" : ""}`}
       ref={wrapRef}
       role="slider"
       tabIndex={editing || disabled ? -1 : 0}
@@ -494,6 +542,9 @@ function Knob({
       aria-valuenow={value}
       aria-valuetext={`${value.toFixed(p)}${unit ?? ""}`}
       aria-disabled={disabled || undefined}
+      onFocus={() => {
+        if (!disabled) sel.select(knobId);
+      }}
       onKeyDown={onKeyDown}
     >
       {editing ? (
@@ -919,6 +970,7 @@ function ParamForm({
               {item.label}
             </span>
             <Knob
+              knobId={[...pathPrefix, item.name].join(".")}
               value={currentNum}
               min={knobMin}
               max={knobMax}
@@ -1561,6 +1613,83 @@ export function App() {
     }
     setTheme(next);
   };
+
+  // ---- Sticky knob selection (physical-dial support) ---------------------
+  // `selectedKnob` drives the visible "armed" highlight; the ref mirror lets
+  // the always-mounted global key listener read the latest selection without
+  // re-subscribing. `knobHandlers` maps each mounted knob's id to its
+  // imperative key handler.
+  const [selectedKnob, setSelectedKnob] = useState<string | null>(null);
+  const selectedKnobRef = useRef<string | null>(null);
+  const knobHandlers = useRef(new Map<string, (key: string) => void>());
+
+  const selectKnob = useCallback((id: string | null) => {
+    selectedKnobRef.current = id;
+    setSelectedKnob(id);
+  }, []);
+  const registerKnob = useCallback(
+    (id: string, handler: (key: string) => void) => {
+      knobHandlers.current.set(id, handler);
+    },
+    [],
+  );
+  const unregisterKnob = useCallback((id: string) => {
+    knobHandlers.current.delete(id);
+    // If the armed knob just unmounted (antenna switch, visibility change),
+    // disarm so a stale id can't silently swallow the dial's keys.
+    if (selectedKnobRef.current === id) {
+      selectedKnobRef.current = null;
+      setSelectedKnob(null);
+    }
+  }, []);
+  const knobSelection = useMemo<KnobSelectionCtx>(
+    () => ({
+      selectedId: selectedKnob,
+      select: selectKnob,
+      register: registerKnob,
+      unregister: unregisterKnob,
+    }),
+    [selectedKnob, selectKnob, registerKnob, unregisterKnob],
+  );
+
+  // Global key router: forward nav keys to the armed knob from anywhere on the
+  // page, so a physical dial (or the keyboard arrows) keeps working after focus
+  // has left the knob. Skips when a knob is itself focused (it handles its own
+  // keydown — avoids double-stepping) and when typing in a real field. Esc
+  // disarms, freeing the arrow keys for normal page use again.
+  useEffect(() => {
+    const NAV = new Set([
+      "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+      "PageUp", "PageDown", "Home", "End", "Enter",
+    ]);
+    const onKey = (e: KeyboardEvent) => {
+      const id = selectedKnobRef.current;
+      if (!id) return;
+      if (e.key === "Escape") {
+        selectedKnobRef.current = null;
+        setSelectedKnob(null);
+        return;
+      }
+      if (!NAV.has(e.key)) return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable ||
+          t.classList.contains("knob"))
+      ) {
+        return;
+      }
+      const handler = knobHandlers.current.get(id);
+      if (!handler) return;
+      e.preventDefault();
+      handler(e.key);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Tools (gear) dropdown in the header. Tucked away because it holds
   // occasional actions like the NEC deck export, not per-solve controls.
@@ -3104,6 +3233,7 @@ export function App() {
 
   return (
     <ThemeContext.Provider value={theme}>
+    <KnobSelectionContext.Provider value={knobSelection}>
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-header">
@@ -3509,6 +3639,7 @@ export function App() {
 
             <div className="vfo-dial">
               <Knob
+                knobId="meas_freq"
                 variant="vfo"
                 value={measFreq}
                 min={
@@ -3842,6 +3973,7 @@ export function App() {
             >
               <span className="cut-overlay-label">elevation</span>
               <Knob
+                knobId="ff_cut_elevation"
                 value={azElevDeg}
                 min={0}
                 max={89}
@@ -3863,6 +3995,7 @@ export function App() {
             >
               <span className="cut-overlay-label">azimuth</span>
               <Knob
+                knobId="ff_cut_azimuth"
                 value={elevAzDeg}
                 min={0}
                 max={359}
@@ -3996,6 +4129,7 @@ export function App() {
         </div>
       </main>
     </div>
+    </KnobSelectionContext.Provider>
     </ThemeContext.Provider>
   );
 }
