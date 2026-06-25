@@ -45,6 +45,22 @@ Every key becomes a slider in the UI, accessed in `build_wires` as
 Slider bounds and step are auto-derived (±50% around the default, fine
 resolution). You usually don't need to specify them.
 
+### Arranging the knobs (optional)
+
+By default knobs auto-flow into the panel. To place them deliberately, add
+a `"layout"` to a param's override dict — `{row, col, row_span, col_span}`,
+1-indexed, all optional — and pin the grid width with a panel-level
+`"layout": {"columns": N}` so the columns don't shift with the panel size:
+
+```python
+"ui_params": MappingProxyType({
+    "layout": {"columns": 2},                 # 2-column knob grid
+    "length": {"layout": {"row": 1, "col": 1}},
+    "height": {"layout": {"row": 1, "col": 2}},
+    "feed_z": {"layout": {"row": 2, "col": 1, "col_span": 2}},  # full-width
+}),
+```
+
 ## `build_wires(self)`
 
 Return a list of straight wire segments. Each entry is:
