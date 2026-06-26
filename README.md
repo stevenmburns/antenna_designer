@@ -203,12 +203,12 @@ import antennaknobs as ant
 from antennaknobs.designs.dipoles.invvee import Builder
 
 p = dict(Builder.default_params)
-bounds = ((p['length_factor'] * .8, p['length_factor'] * 1.25), (0, 1))
+bounds = ((p['length_factor'] * .8, p['length_factor'] * 1.25), (0, 60))
 
 builders = (
     ant.optimize(
         Builder(dict(p, base=base)),
-        ['length_factor', 'angle_radians'], z0=50, bounds=bounds,
+        ['length_factor', 'angle_deg'], z0=50, bounds=bounds,
     )
     for base in [5, 6, 7, 8]
 )
@@ -244,7 +244,7 @@ python -m antennaknobs compare_patterns \
 
 # Optimize length and arm angle of an inverted-V dipole for a 50 Ω match
 python -m antennaknobs optimize --builder dipoles.invvee \
-    --params length_factor angle_radians
+    --params length_factor angle_deg
 
 # Export a NEC2 card deck for use in external tools
 python -m antennaknobs export --builder beams.hexbeam --out hexbeam.nec

@@ -14,7 +14,7 @@ class Builder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 1.0800,
-            "angle_radians": 1.0889,
+            "angle_deg": 62.3894,
         }
     )
 
@@ -24,7 +24,7 @@ class Builder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 1.0650,
-            "angle_radians": 0.7671,
+            "angle_deg": 43.9516,
         }
     )
 
@@ -34,7 +34,7 @@ class Builder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 1.0800,
-            "angle_radians": 1.0889,
+            "angle_deg": 62.3894,
         }
     )
 
@@ -46,8 +46,9 @@ class Builder(AntennaBuilder):
 
         driver = wavelength * self.length_factor
 
-        cos_theta = math.cos(self.angle_radians)
-        tan_theta = math.tan(self.angle_radians)
+        angle = math.radians(self.angle_deg)
+        cos_theta = math.cos(angle)
+        tan_theta = math.tan(angle)
 
         def build_path(lst, ns, ex):
             return ((a, b, ns, ex) for a, b in zip(lst[:-1], lst[1:]))
@@ -80,7 +81,7 @@ class Builder(AntennaBuilder):
 
         B, T = ry(A), ry(S)
 
-        logger.debug("theta = %.1f", self.angle_radians * 180 / math.pi)
+        logger.debug("theta = %.1f", angle * 180 / math.pi)
         logger.debug(
             "wires AB = %.3f AS = %.3f BT = %.3f",
             dist(A, B),

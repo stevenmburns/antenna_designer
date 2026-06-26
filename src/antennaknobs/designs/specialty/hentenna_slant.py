@@ -15,7 +15,7 @@ Tuning split:
     bottom is a parasitic loop that pulls the impedance and pattern
     around; tunes the match independently of the top.
 
-  - `slant_degrees` — corner droop angle (independent of the above).
+  - `slant_deg` — corner droop angle (independent of the above).
 
 Underlying geometry derived as:
 
@@ -62,7 +62,7 @@ class Builder(AntennaBuilder):
             "length_factor": 1.0876,
             "top_aspect": 2.449,
             "bot_aspect": 0.661,
-            "slant_degrees": 30.0,
+            "slant_deg": 30.0,
             # Resonance / Z / bottom-aspect are all primary tuning
             # knobs — auto step (~1% of default) is too coarse to
             # find a nice match. 0.001 → ~1000 ticks across the
@@ -81,7 +81,7 @@ class Builder(AntennaBuilder):
                         "step": 0.001,
                         "precision": 4,
                     },
-                    "slant_degrees": {
+                    "slant_deg": {
                         "min": 0.0,
                         "max": 45.0,
                         "step": 1.0,
@@ -100,7 +100,7 @@ class Builder(AntennaBuilder):
             "length_factor": 1.1114,
             "top_aspect": 1.672,
             "bot_aspect": 0.423,
-            "slant_degrees": 30.0,
+            "slant_deg": 30.0,
         }
     )
 
@@ -122,7 +122,7 @@ class Builder(AntennaBuilder):
 
         wavelength = 299.792458 / self.design_freq
 
-        slant_radians = self.slant_degrees / 180 * math.pi
+        slant_radians = self.slant_deg / 180 * math.pi
         cos_slant = math.cos(slant_radians)
         sin_slant = math.sin(slant_radians)
 

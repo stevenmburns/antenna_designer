@@ -8,7 +8,7 @@ class Builder(Array1x2Builder):
     default_params = MappingProxyType(
         {
             "freq": 28.47,
-            "slope_top": 0.580,
+            "angle_deg_top": 30.1137,
             "base": 7.0,
             "length_top": 5.53,
             "del_y": 4.0,

@@ -13,8 +13,8 @@ class Builder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 1.0893,
-            "angle_radians": 1.1086,
-            "slant": 15.0,
+            "angle_deg": 63.5181,
+            "slant_deg": 15.0,
         }
     )
 
@@ -24,8 +24,8 @@ class Builder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 1.0850,
-            "angle_radians": 1.1605,
-            "slant": 30,
+            "angle_deg": 66.4918,
+            "slant_deg": 30,
         }
     )
 
@@ -35,8 +35,8 @@ class Builder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 1.0839,
-            "angle_radians": 1.0728,
-            "slant": 0,
+            "angle_deg": 61.4669,
+            "slant_deg": 0,
         }
     )
 
@@ -48,8 +48,9 @@ class Builder(AntennaBuilder):
 
         driver = wavelength * self.length_factor
 
-        cos_theta = math.cos(self.angle_radians)
-        tan_theta = math.tan(self.angle_radians)
+        angle = math.radians(self.angle_deg)
+        cos_theta = math.cos(angle)
+        tan_theta = math.tan(angle)
 
         def build_path(lst, ns, ex):
             return ((a, b, ns, ex) for a, b in zip(lst[:-1], lst[1:]))
@@ -84,7 +85,7 @@ class Builder(AntennaBuilder):
 
         st = TransformStack()
         st.push(Transform.translate(0, 0, b))
-        st.push(Transform.rotX(-self.slant))
+        st.push(Transform.rotX(-self.slant_deg))
         st.push(Transform.translate(0, 4, -b))
 
         SS, AA, BB, TT = st.hit(S), st.hit(A), st.hit(B), st.hit(T)

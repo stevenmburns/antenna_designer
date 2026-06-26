@@ -17,9 +17,9 @@ class Builder(AntennaBuilder):
             "base": 7.0,
             "length_12": 5.1102,
             "length_10": 4.4682,
-            "slope_12": 0.5,
-            "slope_10": 0.5,
-            "gap_slope": 0.0,
+            "angle_12_deg": 26.5651,
+            "angle_10_deg": 26.5651,
+            "gap_angle_deg": 0.0,
             "s": 0.7,
             "eps": 0.01,
         }
@@ -33,9 +33,9 @@ class Builder(AntennaBuilder):
             "base": 7.0,
             "length_12": 5.2949,
             "length_10": 4.6531,
-            "slope_12": 0.5,
-            "slope_10": 0.5,
-            "gap_slope": 0.0,
+            "angle_12_deg": 26.5651,
+            "angle_10_deg": 26.5651,
+            "gap_angle_deg": 0.0,
             "s": 0.5,
             "eps": 0.01,
         }
@@ -49,9 +49,9 @@ class Builder(AntennaBuilder):
             "base": 7.0,
             "length_12": 5.4725,
             "length_10": 4.8370,
-            "slope_12": 0.5,
-            "slope_10": 0.5,
-            "gap_slope": 0.0,
+            "angle_12_deg": 26.5651,
+            "angle_10_deg": 26.5651,
+            "gap_angle_deg": 0.0,
             "s": 0.3,
             "eps": 0.01,
         }
@@ -65,9 +65,9 @@ class Builder(AntennaBuilder):
             "base": 7.0,
             "length_12": 5.5153,
             "length_10": 4.8837,
-            "slope_12": 0.5,
-            "slope_10": 0.5,
-            "gap_slope": 0.0,
+            "angle_12_deg": 26.5651,
+            "angle_10_deg": 26.5651,
+            "gap_angle_deg": 0.0,
             "s": 0.25,
             "eps": 0.01,
         }
@@ -81,9 +81,9 @@ class Builder(AntennaBuilder):
             "base": 7.0,
             "length_12": 5.5571,
             "length_10": 4.9312,
-            "slope_12": 0.5,
-            "slope_10": 0.5,
-            "gap_slope": 0.0,
+            "angle_12_deg": 26.5651,
+            "angle_10_deg": 26.5651,
+            "gap_angle_deg": 0.0,
             "s": 0.2,
             "eps": 0.01,
         }
@@ -97,9 +97,9 @@ class Builder(AntennaBuilder):
             "base": 7.0,
             "length_12": 5.5978,
             "length_10": 4.9803,
-            "slope_12": 0.5,
-            "slope_10": 0.5,
-            "gap_slope": 0.0,
+            "angle_12_deg": 26.5651,
+            "angle_10_deg": 26.5651,
+            "gap_angle_deg": 0.0,
             "s": 0.15,
             "eps": 0.01,
         }
@@ -113,9 +113,9 @@ class Builder(AntennaBuilder):
             "base": 7.0,
             "length_12": 5.6371,
             "length_10": 5.0331,
-            "slope_12": 0.5,
-            "slope_10": 0.5,
-            "gap_slope": 0.0,
+            "angle_12_deg": 26.5651,
+            "angle_10_deg": 26.5651,
+            "gap_angle_deg": 0.0,
             "s": 0.10,
             "eps": 0.01,
         }
@@ -129,9 +129,9 @@ class Builder(AntennaBuilder):
             "base": 7.0,
             "length_12": 5.7628,
             "length_10": 5.0717,
-            "slope_12": 0.5,
-            "slope_10": 0.5,
-            "gap_slope": 0.0,
+            "angle_12_deg": 26.5651,
+            "angle_10_deg": 26.5651,
+            "gap_angle_deg": 0.0,
             "s": 0.10,
             "eps": 0.001,
         }
@@ -145,9 +145,9 @@ class Builder(AntennaBuilder):
             "base": 7.0,
             "length_12": 5.494,
             "length_10": 5.0517,
-            "slope_12": 0.5,
-            "slope_10": 0.5,
-            "gap_slope": 0.0,
+            "angle_12_deg": 26.5651,
+            "angle_10_deg": 26.5651,
+            "gap_angle_deg": 0.0,
             "s": 0.15,
             "eps": 0.015,
         }
@@ -177,9 +177,9 @@ class Builder(AntennaBuilder):
             "base": 7.0,
             "length_12": 5.8770,
             "length_10": 5.1944,
-            "slope_12": 0.5,
-            "slope_10": 0.5,
-            "gap_slope": 0.0,
+            "angle_12_deg": 26.5651,
+            "angle_10_deg": 26.5651,
+            "gap_angle_deg": 0.0,
             "s": 0.15,
             "eps": 0.015,
         }
@@ -193,15 +193,15 @@ class Builder(AntennaBuilder):
             "base": 7.0,
             "length_12": 5.877,
             "length_10": 5.19,
-            "slope_12": 0.5,
-            "slope_10": 0.5,
-            "gap_slope": 0.0,
+            "angle_12_deg": 26.5651,
+            "angle_10_deg": 26.5651,
+            "gap_angle_deg": 0.0,
             "s": 0.15,
             "eps": 0.015,
             # 2-column panel, one column per band (10m | 12m): rows pair the
-            # band's freq / length / slope so the two bands read side by side.
-            # Feed-gap / coupling knobs (gap_slope, s, eps) sit on the rows
-            # below.
+            # band's freq / length / droop angle (deg) so the two bands read
+            # side by side. Feed-gap / coupling knobs (gap_angle_deg, s, eps)
+            # sit on the rows below.
             "ui_params": MappingProxyType(
                 {
                     "layout": {"columns": 2},
@@ -209,9 +209,9 @@ class Builder(AntennaBuilder):
                     "freq_12": {"layout": {"row": 1, "col": 2}},
                     "length_10": {"layout": {"row": 2, "col": 1}},
                     "length_12": {"layout": {"row": 2, "col": 2}},
-                    "slope_10": {"layout": {"row": 3, "col": 1}},
-                    "slope_12": {"layout": {"row": 3, "col": 2}},
-                    "gap_slope": {"layout": {"row": 4, "col": 1}},
+                    "angle_10_deg": {"layout": {"row": 3, "col": 1}},
+                    "angle_12_deg": {"layout": {"row": 3, "col": 2}},
+                    "gap_angle_deg": {"layout": {"row": 4, "col": 1}},
                     "s": {"layout": {"row": 4, "col": 2}},
                     "eps": {"layout": {"row": 5, "col": 1}},
                     "base": {"layout": {"row": 5, "col": 2}},
@@ -235,6 +235,10 @@ class Builder(AntennaBuilder):
             return -p[0], p[1], p[2]
 
         """
+    The droop/gap angles are stored in degrees; here slope refers to the
+    ratio dz/dy = tan(radians(angle_deg)) (and gap_slope = tan of the
+    gap angle), recovered at the call sites above.
+
     r^2 = x^2 + y^2 + z^2
     rho^2 = x^2 + y^2
     (x^2 + y^2)*slope^2 = z^2
@@ -267,12 +271,15 @@ class Builder(AntennaBuilder):
 
             return sqrt(x_sq), sqrt(y_sq), sqrt(z_sq)
 
-        x_12, y_12, z_12 = compute(
-            self.length_12 - 2 * self.s, self.slope_12, self.gap_slope
-        )
-        x_10, y_10, z_10 = compute(
-            self.length_10 - 2 * self.s, self.slope_10, self.gap_slope
-        )
+        # The compute() helper still works in the slope ratio (dz/dy =
+        # tan of the droop angle); convert the stored angles back to
+        # slopes at the call sites. slope = tan(radians(angle_deg)).
+        slope_12 = math.tan(math.radians(self.angle_12_deg))
+        slope_10 = math.tan(math.radians(self.angle_10_deg))
+        gap_slope = math.tan(math.radians(self.gap_angle_deg))
+
+        x_12, y_12, z_12 = compute(self.length_12 - 2 * self.s, slope_12, gap_slope)
+        x_10, y_10, z_10 = compute(self.length_10 - 2 * self.s, slope_10, gap_slope)
 
         S = (0, eps, 0)
         T = ry(S)

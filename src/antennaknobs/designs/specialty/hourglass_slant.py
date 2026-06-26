@@ -15,7 +15,7 @@ class Builder(AntennaBuilder):
             "height_factor": 0.8867,
             "width_factor": 0.7326,
             "waist_factor": 0.4198,
-            "slant_degrees": 30.0,
+            "slant_deg": 30.0,
         }
     )
 
@@ -33,7 +33,7 @@ class Builder(AntennaBuilder):
         def rz(p):
             return p[0], p[1], -p[2]
 
-        slant_radians = self.slant_degrees / 180 * math.pi
+        slant_radians = self.slant_deg / 180 * math.pi
         slant_cos = math.cos(slant_radians)
         slant_sin = math.sin(slant_radians)
 

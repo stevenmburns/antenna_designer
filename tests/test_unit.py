@@ -74,7 +74,7 @@ def test_unit_params():
             "design_freq": 14,
             "base": 7,
             "length_factor": 0.9,
-            "angle_radians": 0.5,
+            "angle_deg": 28.6479,
         }
     )
     assert dp.freq == 1

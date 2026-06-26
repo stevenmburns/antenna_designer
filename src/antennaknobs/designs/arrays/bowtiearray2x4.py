@@ -8,10 +8,10 @@ class Builder(Array2x4Builder):
     default_params = MappingProxyType(
         {
             "freq": 28.57,
-            "slope_itop": 0.658,
-            "slope_ibot": 0.512,
-            "slope_otop": 0.658,
-            "slope_obot": 0.512,
+            "angle_deg_itop": 33.3449,
+            "angle_deg_ibot": 27.1124,
+            "angle_deg_otop": 33.3449,
+            "angle_deg_obot": 27.1124,
             "base": 7.0,
             "length_itop": 5.771,
             "length_ibot": 5.68,
@@ -22,19 +22,19 @@ class Builder(Array2x4Builder):
             "phase_lr": 0.0,
             "phase_tb": 0.0,
             # Lay the panel out to mirror the array's physical structure on a
-            # 4-column grid. The slope and length knobs are each a 2x2
-            # (rows = top/bottom, cols = outer/inner) block — slopes on the
-            # left half, matching lengths on the right — so the four element
-            # shapes line up where they sit in the array. Geometry spacing
-            # and feed phasing get their own rows underneath.
+            # 4-column grid. The droop-angle and length knobs are each a 2x2
+            # (rows = top/bottom, cols = outer/inner) block — droop angles on
+            # the left half, matching lengths on the right — so the four
+            # element shapes line up where they sit in the array. Geometry
+            # spacing and feed phasing get their own rows underneath.
             "ui_params": MappingProxyType(
                 {
                     "layout": {"columns": 4},
-                    # slope block (cols 1-2: outer | inner)
-                    "slope_otop": {"layout": {"row": 1, "col": 1}},
-                    "slope_itop": {"layout": {"row": 1, "col": 2}},
-                    "slope_obot": {"layout": {"row": 2, "col": 1}},
-                    "slope_ibot": {"layout": {"row": 2, "col": 2}},
+                    # droop-angle block (cols 1-2: outer | inner)
+                    "angle_deg_otop": {"layout": {"row": 1, "col": 1}},
+                    "angle_deg_itop": {"layout": {"row": 1, "col": 2}},
+                    "angle_deg_obot": {"layout": {"row": 2, "col": 1}},
+                    "angle_deg_ibot": {"layout": {"row": 2, "col": 2}},
                     # length block (cols 3-4: outer | inner)
                     "length_otop": {"layout": {"row": 1, "col": 3}},
                     "length_itop": {"layout": {"row": 1, "col": 4}},

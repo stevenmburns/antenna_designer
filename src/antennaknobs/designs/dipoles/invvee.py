@@ -11,8 +11,8 @@ class Builder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 0.9719,
-            #    'angle_radians': 0.0,
-            "angle_radians": 0.5530,
+            #    'angle_deg': 0.0,
+            "angle_deg": 31.6846,
             # length_factor span has to cover both the half-wave default
             # (~0.97) and the EDZ variant (~2.97, encoding a ~1.5λ
             # element). Auto-derive's ±50% window would clip at ~1.46.
@@ -28,7 +28,7 @@ class Builder(AntennaBuilder):
     )
 
     # Straight half-wave dipole: same V-dipole geometry as the default
-    # invvee but with angle_radians=0, so the arms run flat (no droop).
+    # invvee but with angle_deg=0, so the arms run flat (no droop).
     # length_factor=0.967 puts a free-space dipole at 28.47 MHz near
     # resonance (Z ≈ 66 + j1 Ω). Equivalent to the old top-level
     # dipole.py geometry, now reachable as the "dipole" variant on
@@ -39,7 +39,7 @@ class Builder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 0.967,
-            "angle_radians": 0.0,
+            "angle_deg": 0.0,
         }
     )
 
@@ -59,7 +59,7 @@ class Builder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 2.9688,
-            "angle_radians": 0.0,
+            "angle_deg": 0.0,
         }
     )
 
@@ -75,7 +75,7 @@ class Builder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 2.56,
-            "angle_radians": 0.0,
+            "angle_deg": 0.0,
         }
     )
 
@@ -87,8 +87,9 @@ class Builder(AntennaBuilder):
 
         driver_y = 0.25 * wavelength * self.length_factor
 
-        z_sin = math.sin(self.angle_radians)
-        y_cos = math.cos(self.angle_radians)
+        angle = math.radians(self.angle_deg)
+        z_sin = math.sin(angle)
+        y_cos = math.cos(angle)
 
         def build_path(lst, ns, ex):
             return ((a, b, ns, ex) for a, b in zip(lst[:-1], lst[1:]))
