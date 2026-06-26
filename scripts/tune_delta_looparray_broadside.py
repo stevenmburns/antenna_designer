@@ -2,7 +2,7 @@
 
 Strategy: ignore the TLs and central driver for tuning. Drive the two
 loop ports directly with V_loop1 = V_loop2 = 1+0j (broadside) and tune
-length_factor + angle_radians for Z_loop ≈ 100+0j at the design freq.
+length_factor + angle_deg for Z_loop ≈ 100+0j at the design freq.
 
 Once we have a clean broadside geometry, the TL design (a separate step)
 sizes the two TL lengths so a central 100Ω-matched driver delivers the
@@ -38,8 +38,8 @@ class BroadsideTuningBuilder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 1.0664,
-            "angle_radians": 1.0688,
-            "slant": 0.0,
+            "angle_deg": 61.2377,
+            "slant_deg": 0.0,
             "del_y": 4.0,
             "v_loop2": 1 + 0j,  # V at loop2; V_loop1 fixed to 1+0j
         }
@@ -50,8 +50,9 @@ class BroadsideTuningBuilder(AntennaBuilder):
         b = self.base
         wavelength = 299.792458 / self.design_freq
         driver = wavelength * self.length_factor
-        cos_t = math.cos(self.angle_radians)
-        tan_t = math.tan(self.angle_radians)
+        angle = math.radians(self.angle_deg)
+        cos_t = math.cos(angle)
+        tan_t = math.tan(angle)
 
         def build_path(lst, ns, ex):
             return ((a, b, ns, ex) for a, b in zip(lst[:-1], lst[1:]))
@@ -70,7 +71,7 @@ class BroadsideTuningBuilder(AntennaBuilder):
 
         st = TransformStack()
         st.push(Transform.translate(0, 0, b))
-        st.push(Transform.rotX(-self.slant))
+        st.push(Transform.rotX(-self.slant_deg))
         st.push(Transform.translate(0, self.del_y, -b))
         SS, AA, BB, TT = st.hit(S), st.hit(A), st.hit(B), st.hit(T)
         SSS, AAA, BBB, TTT = ry(SS), ry(AA), ry(BB), ry(TT)
@@ -136,7 +137,7 @@ def main():
 
     report(f"baseline (phase={args.phase_deg}°, z0={args.z0})")
 
-    knob_names = ["length_factor", "angle_radians", "del_y"]
+    knob_names = ["length_factor", "angle_deg", "del_y"]
     x0 = [getattr(b, n) for n in knob_names]
     bounds = [(x * 0.7, x * 1.3) for x in x0]
 

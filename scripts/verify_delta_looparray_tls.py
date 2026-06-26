@@ -39,7 +39,7 @@ from tune_delta_looparray_broadside import (
 # Tuned at broadside (V_loop1 = V_loop2 = 1+0j) for Z = 100+0j.
 TUNED = {
     "length_factor": 1.068115,
-    "angle_radians": 1.089331,
+    "angle_deg": 62.4141,
     "del_y": 4.068715,
 }
 
@@ -55,8 +55,8 @@ class TLArrayBuilder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": TUNED["length_factor"],
-            "angle_radians": TUNED["angle_radians"],
-            "slant": 0.0,
+            "angle_deg": TUNED["angle_deg"],
+            "slant_deg": 0.0,
             "del_y": TUNED["del_y"],
             "tl_z0": 100.0,
             "tl_len_1": TUNED["del_y"] - 0.5 * (299.792458 / 28.47) / 6.0,
@@ -72,8 +72,9 @@ class TLArrayBuilder(AntennaBuilder):
         b = self.base
         wavelength = 299.792458 / self.design_freq
         driver = wavelength * self.length_factor
-        cos_t = math.cos(self.angle_radians)
-        tan_t = math.tan(self.angle_radians)
+        angle = math.radians(self.angle_deg)
+        cos_t = math.cos(angle)
+        tan_t = math.tan(angle)
 
         def build_path(lst, ns, ex):
             return ((a, b, ns, ex) for a, b in zip(lst[:-1], lst[1:]))
@@ -92,7 +93,7 @@ class TLArrayBuilder(AntennaBuilder):
 
         st = TransformStack()
         st.push(Transform.translate(0, 0, b))
-        st.push(Transform.rotX(-self.slant))
+        st.push(Transform.rotX(-self.slant_deg))
         st.push(Transform.translate(0, self.del_y, -b))
         SS, AA, BB, TT = st.hit(S), st.hit(A), st.hit(B), st.hit(T)
         SSS, AAA, BBB, TTT = ry(SS), ry(AA), ry(BB), ry(TT)

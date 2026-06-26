@@ -68,10 +68,10 @@ def test_cli_sweep():
 @needs_pynec
 def test_cli_optimize():
     ant.cli(
-        f"optimize --params length_factor angle_radians --builder dipoles.invvee{o}".split()
+        f"optimize --params length_factor angle_deg --builder dipoles.invvee{o}".split()
     )
     ant.cli(
-        f"optimize --opt_gain --params length_factor angle_radians --resonance --builder dipoles.invvee{o}".split()
+        f"optimize --opt_gain --params length_factor angle_deg --resonance --builder dipoles.invvee{o}".split()
     )
 
 

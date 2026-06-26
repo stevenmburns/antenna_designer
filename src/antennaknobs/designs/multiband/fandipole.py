@@ -37,7 +37,7 @@ class Builder(AntennaBuilder):
         {
             "freq": _BAND_10M["freq"],
             "base": 7.0,
-            "slope": 0.5,
+            "angle_deg": 26.5651,
             "n_bands": _MAX_BANDS,
             "bands": (_BAND_20M, _BAND_17M, _BAND_15M, _BAND_12M, _BAND_10M),
             "ui_params": MappingProxyType(
@@ -92,7 +92,7 @@ class Builder(AntennaBuilder):
         {
             "freq": _BAND_15M["freq"],
             "base": 7.0,
-            "slope": 0.5,
+            "angle_deg": 26.5651,
             "n_bands": 2,
             "bands": (_BAND_17M, _BAND_15M, _BAND_20M, _BAND_12M, _BAND_10M),
         }
@@ -103,7 +103,7 @@ class Builder(AntennaBuilder):
         {
             "freq": _BAND_10M["freq"],
             "base": 7.0,
-            "slope": 0.5,
+            "angle_deg": 26.5651,
             "n_bands": 2,
             "bands": (_BAND_12M, _BAND_10M, _BAND_20M, _BAND_17M, _BAND_15M),
         }
@@ -136,8 +136,11 @@ class Builder(AntennaBuilder):
         def ry(p):
             return p[0], -p[1], p[2]
 
-        Zc = 1 / math.sqrt(1 + self.slope**2)
-        Zs = self.slope * Zc
+        # Zc, Zs are the cos/sin of the droop angle — the unit fan-spoke
+        # direction (0, Zc, -Zs) from the cone apex outward.
+        theta = math.radians(self.angle_deg)
+        Zc = math.cos(theta)
+        Zs = math.sin(theta)
 
         S = (0, eps, 0)
         T = ry(S)

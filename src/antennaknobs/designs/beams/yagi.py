@@ -14,9 +14,9 @@ class Builder(AntennaBuilder):
             "director_factor": 0.95,
             "reflector_factor": 1.05,
             "boom_factor": 0.2,
-            "angle_radians": 0.0,
-            #    'angle_radians': 0.2,
-            #    'angle_radians': 0.4636476090008061,
+            "angle_deg": 0.0,
+            #    'angle_deg': 11.4592,
+            #    'angle_deg': 26.5651,
             "n_directors": 2,
         }
     )
@@ -32,8 +32,9 @@ class Builder(AntennaBuilder):
         director_y = driver_y * self.director_factor
         boom_x = wavelength * self.boom_factor
 
-        z_sin = math.sin(self.angle_radians)
-        y_cos = math.cos(self.angle_radians)
+        angle = math.radians(self.angle_deg)
+        z_sin = math.sin(angle)
+        y_cos = math.cos(angle)
 
         def build_path(lst, ns, ex):
             return ((a, b, ns, ex) for a, b in zip(lst[:-1], lst[1:]))

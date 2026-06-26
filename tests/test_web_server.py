@@ -987,7 +987,7 @@ _CANONICAL_REQ = {
     "params": {},
     # A representative builder param the adapter pulls from the top level.
     "base": 7.0,
-    "slope": 0.5,
+    "angle_deg": 0.5,
     "n_bands": 5,
 }
 
@@ -1007,7 +1007,7 @@ _PHYSICAL_FIELDS = frozenset(
         "measurement_freq_mhz",
         "params",
         "base",
-        "slope",
+        "angle_deg",
         "n_bands",
     }
 )

@@ -171,7 +171,7 @@ def test_yagi_factor_sliders_present():
 
 # ---------------------------------------------------------------------------
 # specialty.hentenna_slant — explicit ui_params overrides on
-# length_factor, top_aspect, bot_aspect, slant_degrees.
+# length_factor, top_aspect, bot_aspect, slant_deg.
 # ---------------------------------------------------------------------------
 
 
@@ -179,7 +179,7 @@ def test_hentenna_slant_aspect_overrides_applied():
     schema = {s.name: s for s in REGISTRY["specialty.hentenna_slant"].param_schema}
     top = schema["top_aspect"]
     bot = schema["bot_aspect"]
-    slant = schema["slant_degrees"]
+    slant = schema["slant_deg"]
     assert (top.min, top.max) == (0.5, 4.5)
     assert (bot.min, bot.max) == (0.0, 2.0)
     assert (slant.min, slant.max) == (0.0, 45.0)

@@ -18,7 +18,8 @@ Default tuning:
 → four bands (10m / 12m / 15m / 17m) from a single shared feed.
 
 The cone geometry is the same fan layout as `fandipole.py`: each spoke
-shares a common slope direction (0, Zc, −Zs) from the cone apex outward.
+shares a common droop-angle direction (0, Zc, −Zs) from the cone apex
+outward.
 Each arm of each spoke is broken into
 
     S → A[i]              (cone segment)
@@ -59,8 +60,9 @@ C_LIGHT_MHZ_M = 299.792458
 #     resonant Re(Z) toward 50 Ω, shaving max SWR50 from 1.31 to 1.27.
 #     Beyond ~11.9 µH the 17m series resonance merges with the adjacent
 #     parallel-resonance pole and disappears.
-# Slope=0.62 (instead of the original 0.5) drops the resistances
-# uniformly so they straddle 50 Ω: 17m and 10m sit at the extremes with
+# A droop angle ≈34.2° (instead of the original ~26.6°) drops the
+# resistances uniformly so they straddle 50 Ω: 17m and 10m sit at the
+# extremes with
 # matching SWR50≈1.21, and the in-band bands (15m/12m) come in lower.
 # A small `freq_shift` = 0.98 on band 1 nudges 10m into a different mode
 # where Re(Z) ≈ 50 Ω (the trap doesn't fully open at 10m, the outer
@@ -130,15 +132,16 @@ class Builder(AntennaBuilder):
             # tick; this default only seeds the very first response.
             "freq": _BAND_15_10["trap_freq"],
             "base": 7.0,
-            # Same fan-spoke slope as fandipole — each spoke drops at this
-            # slope from the cone apex outward (y_dir=Zc, z_dir=−Zs).
-            # Slope of the inverted-vee arms (descent angle from horizontal).
-            # Steeper slope lowers radiation resistance for all four bands
-            # simultaneously. Tuned to ~0.62 so the resonant Re(Z) values
-            # straddle 50 Ω evenly — 17m and 10m end up at the two extremes
-            # (~60 Ω and ~42 Ω) with matching SWR50 ≈ 1.21, the lower bound
-            # for max-SWR given the geometry.
-            "slope": 0.68,
+            # Same fan-spoke droop angle as fandipole — each spoke drops at
+            # this droop angle (deg) from the cone apex outward
+            # (y_dir=Zc, z_dir=−Zs). Droop angle of the inverted-vee arms
+            # (descent angle from horizontal). A steeper angle lowers
+            # radiation resistance for all four bands simultaneously. Tuned
+            # to ~34.2° so the resonant Re(Z) values straddle 50 Ω evenly —
+            # 17m and 10m end up at the two extremes (~60 Ω and ~42 Ω) with
+            # matching SWR50 ≈ 1.21, the lower bound for max-SWR given the
+            # geometry.
+            "angle_deg": 34.2157,
             # Length (m) of the single-segment "trap wire" carrying the
             # named Load port. Should be much shorter than λ so radiation
             # from the trap segment itself is negligible.
@@ -242,8 +245,11 @@ class Builder(AntennaBuilder):
             )
         bands = tuple(self.bands)[:n_bands]
 
-        Zc = 1 / math.sqrt(1 + self.slope**2)
-        Zs = self.slope * Zc
+        # Zc, Zs are the cos/sin of the droop angle — the unit fan-spoke
+        # direction (0, Zc, -Zs) shared by every spoke beyond the cone.
+        theta = math.radians(self.angle_deg)
+        Zc = math.cos(theta)
+        Zs = math.sin(theta)
 
         def ry(p):
             return p[0], -p[1], p[2]
@@ -257,9 +263,10 @@ class Builder(AntennaBuilder):
         # beyond the pigtail each spoke extends in the shared inverted-vee
         # direction (0, Zc, −Zs). The two spokes are then parallel
         # everywhere except the small horizontal segment near the feed,
-        # which keeps the `slope` parameter from also controlling the
+        # which keeps the `angle_deg` parameter from also controlling the
         # band-spacing direction (a problem the original cone-apex layout
-        # had — slope and band spacing were entangled near the feed).
+        # had — the droop angle and band spacing were entangled near the
+        # feed).
         A = [
             (+radius, S[1], S[2]),  # band 0 on the +x side
             (-radius, S[1], S[2]),  # band 1 on the −x side

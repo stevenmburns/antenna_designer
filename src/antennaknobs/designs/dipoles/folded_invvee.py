@@ -11,8 +11,8 @@ class Builder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 0.955,
-            #    'angle_radians': 0.0,
-            "angle_radians": 0.5424,
+            #    'angle_deg': 0.0,
+            "angle_deg": 31.0772,
             "space": 0.05,
         }
     )
@@ -25,8 +25,9 @@ class Builder(AntennaBuilder):
 
         driver_y = 0.25 * wavelength * self.length_factor
 
-        z_sin = math.sin(self.angle_radians)
-        y_cos = math.cos(self.angle_radians)
+        angle = math.radians(self.angle_deg)
+        z_sin = math.sin(angle)
+        y_cos = math.cos(angle)
 
         def build_path(lst, ns, ex):
             return ((a, b, ns, ex) for a, b in zip(lst[:-1], lst[1:]))
