@@ -134,6 +134,23 @@ def _precision_for_step(step: float) -> int:
     return min(6, max(0, -math.floor(math.log10(step))) + 1)
 
 
+def _is_degree_param(name: str) -> bool:
+    """True for the standardized angle params (keys carry a `_deg` token,
+    e.g. `angle_deg`, `slant_deg`, `angle_deg_itop`, `gap_angle_deg`)."""
+    return name.endswith("_deg") or "_deg_" in name
+
+
+def _display_label(name: str) -> str:
+    """Default knob label for a param key. Angle params drop the redundant
+    `_deg` token (the degree unit is shown on the slider instead), so
+    `angle_deg_itop` reads as `angle_itop` and the panel stays compact. The
+    underlying param *name* is unchanged — the frontend surfaces it via the
+    knob tooltip so the displayed and program names never silently diverge."""
+    if _is_degree_param(name):
+        return name.replace("_deg_", "_").removesuffix("_deg")
+    return name
+
+
 def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec | None:
     """Build a ParamSpec from a default value plus optional UI overrides.
 
@@ -142,7 +159,7 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
     still settable via the API, it just doesn't appear in the UI.
     """
     override = dict(override or {})
-    label = override.pop("label", name)
+    label = override.pop("label", _display_label(name))
     unit = override.pop("unit", None)
     # Optional explicit grid placement for this knob (row/col/spans). Only a
     # dict is meaningful; anything else is ignored so a typo can't crash the
@@ -211,6 +228,10 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
         if name == "design_freq":
             unit = unit or "MHz"
             override["linked_to_design_freq"] = True  # keep around
+        # Angle params read in degrees; show the ° unit on the slider so the
+        # label can drop the redundant `_deg` token (see _display_label).
+        if _is_degree_param(name):
+            unit = unit or "°"
         final_step = float(override.pop("step", step))
         # Derive display precision from the resolved step (matching its
         # decimals plus one digit of headroom), unless the design pinned a

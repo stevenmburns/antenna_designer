@@ -875,7 +875,12 @@ function ParamForm({
         // were retired — knobs are the brand.)
         return (
           <div key={item.name} className="field field-knob" style={layoutStyle(item.layout)}>
-            <span className="knob-label" title={item.label}>{item.label}</span>
+            <span
+              className="knob-label"
+              title={item.name === item.label ? item.label : `${item.label} · param: ${item.name}`}
+            >
+              {item.label}
+            </span>
             <Knob
               value={currentNum}
               min={effMin}

@@ -175,6 +175,28 @@ def test_yagi_factor_sliders_present():
 # ---------------------------------------------------------------------------
 
 
+def test_degree_params_get_compact_label_and_unit():
+    # Angle params keep their `_deg` key (used by tests/CLI/API/configs) but
+    # the panel shows a compact label with a ° unit; the real name is still
+    # surfaced via the knob tooltip on the frontend. Suffixed array params
+    # drop the `_deg` token from the middle (angle_deg_itop -> angle_itop).
+    arr = {s.name: s for s in REGISTRY["arrays.bowtiearray2x4"].param_schema}
+    itop = arr["angle_deg_itop"]  # key unchanged
+    assert itop.label == "angle_itop"
+    assert itop.unit == "°"
+
+    loop = {s.name: s for s in REGISTRY["loops.delta_loop"].param_schema}
+    assert loop["angle_deg"].label == "angle"
+    assert loop["angle_deg"].unit == "°"
+
+    slant = {s.name: s for s in REGISTRY["specialty.hentenna_slant"].param_schema}
+    assert slant["slant_deg"].label == "slant" and slant["slant_deg"].unit == "°"
+
+    # Non-angle params are untouched.
+    bowtie = {s.name: s for s in REGISTRY["specialty.bowtie"].param_schema}
+    assert bowtie["length"].label == "length" and bowtie["length"].unit is None
+
+
 def test_hentenna_slant_aspect_overrides_applied():
     schema = {s.name: s for s in REGISTRY["specialty.hentenna_slant"].param_schema}
     top = schema["top_aspect"]
