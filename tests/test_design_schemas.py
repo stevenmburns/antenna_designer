@@ -197,6 +197,22 @@ def test_degree_params_get_compact_label_and_unit():
     assert bowtie["length"].label == "length" and bowtie["length"].unit is None
 
 
+def test_degree_params_default_to_half_degree_step():
+    # Angle sliders default to a 0.5° step...
+    loop = {s.name: s for s in REGISTRY["loops.delta_loop"].param_schema}
+    assert loop["angle_deg"].step == 0.5
+    arr = {s.name: s for s in REGISTRY["arrays.bowtiearray2x4"].param_schema}
+    assert arr["angle_deg_itop"].step == 0.5
+
+    # ...but a design's explicit ui_params step still wins.
+    t2fd = {s.name: s for s in REGISTRY["broadband.t2fd"].param_schema}
+    assert t2fd["tilt_deg"].step == 1.0
+
+    # Non-angle params keep their auto-derived step (not the 0.5° default).
+    bowtie = {s.name: s for s in REGISTRY["specialty.bowtie"].param_schema}
+    assert bowtie["length"].step != 0.5
+
+
 def test_hentenna_slant_aspect_overrides_applied():
     schema = {s.name: s for s in REGISTRY["specialty.hentenna_slant"].param_schema}
     top = schema["top_aspect"]

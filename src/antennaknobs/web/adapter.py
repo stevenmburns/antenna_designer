@@ -229,9 +229,14 @@ def _auto_paramspec(name: str, default: Any, override: dict | None) -> ParamSpec
             unit = unit or "MHz"
             override["linked_to_design_freq"] = True  # keep around
         # Angle params read in degrees; show the ° unit on the slider so the
-        # label can drop the redundant `_deg` token (see _display_label).
+        # label can drop the redundant `_deg` token (see _display_label), and
+        # default to a 0.5° step (finer than the auto 1-2-5 step is overkill,
+        # coarser loses the half-degree tuning hams expect). A design's
+        # ui_params `step` still overrides; int-typed angles keep whole steps.
         if _is_degree_param(name):
             unit = unit or "°"
+            if kind != "int":
+                step = 0.5
         final_step = float(override.pop("step", step))
         # Derive display precision from the resolved step (matching its
         # decimals plus one digit of headroom), unless the design pinned a
