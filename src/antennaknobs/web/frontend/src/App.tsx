@@ -746,6 +746,7 @@ function ParamForm({
   onChange,
   pathPrefix = [],
   disabledFields,
+  opt,
 }: {
   schema: SchemaItem[];
   values: ParamValueBag;
@@ -756,6 +757,12 @@ function ParamForm({
   // depends on the active backend (e.g. daisy_chain only works on
   // PyNEC; momwire engines don't support transmission lines yet).
   disabledFields?: Set<string>;
+  // Optimiser integration (top-level rail only). `settings` overrides a knob's
+  // effective min/max/step; `onContext` opens that knob's right-click menu.
+  opt?: {
+    settings: Record<string, KnobOpt>;
+    onContext: (name: string, e: React.MouseEvent) => void;
+  };
 }) {
   return (
     <>
@@ -887,8 +894,19 @@ function ParamForm({
         // Every float/int param is a rotary knob: label on top, dial in the
         // middle, value on the bottom. (The slider alternative and its toggle
         // were retired — knobs are the brand.)
+        // Per-knob optimiser override: display extents + manual step come from
+        // the knob's menu when set, and `vary` marks it a free variable.
+        const ko = opt?.settings[item.name];
+        const knobMin = ko ? ko.dispMin : effMin;
+        const knobMax = ko ? ko.dispMax : effMax;
+        const knobStep = ko?.step ?? item.step ?? 0.001;
         return (
-          <div key={item.name} className="field field-knob" style={layoutStyle(item.layout)}>
+          <div
+            key={item.name}
+            className={`field field-knob${ko?.vary ? " is-opt-var" : ""}`}
+            style={layoutStyle(item.layout)}
+            onContextMenu={opt ? (e) => opt.onContext(item.name, e) : undefined}
+          >
             <span
               className="knob-label"
               title={item.name === item.label ? item.label : `${item.label} · param: ${item.name}`}
@@ -897,9 +915,9 @@ function ParamForm({
             </span>
             <Knob
               value={currentNum}
-              min={effMin}
-              max={effMax}
-              step={item.step ?? 0.001}
+              min={knobMin}
+              max={knobMax}
+              step={knobStep}
               precision={item.kind === "int" ? 0 : item.precision}
               unit={item.unit}
               label={item.label}
@@ -1465,6 +1483,41 @@ function useThumbColumnSize(
 type Theme = "light" | "dark";
 const ThemeContext = createContext<Theme>("light");
 
+// Response from POST /optimize.
+type OptMetrics = { z_in_re: number; z_in_im: number; z0_ohms: number; swr: number };
+type OptimizeResult = {
+  objective: string;
+  params: Record<string, number>;
+  objective_before: number;
+  objective_after: number;
+  metrics_before: OptMetrics;
+  metrics_after: OptMetrics;
+  n_evals: number;
+  improved: boolean;
+};
+type OptObjective = "swr" | "resonance" | "match_z0";
+const OPT_OBJECTIVE_LABELS: Record<OptObjective, string> = {
+  swr: "SWR",
+  resonance: "Resonance",
+  match_z0: "Match Z₀",
+};
+// The two objectives offered in the compact control next to meas-freq.
+const OPT_OBJECTIVES: OptObjective[] = ["resonance", "swr"];
+
+// Per-knob optimisation settings (per geometry, per param name). `vary` marks
+// the knob as a free variable the optimiser may change; opt extents bound the
+// search; display extents are the knob's own slider range; step is the manual
+// turn granularity (the optimiser itself is continuous). Absent for a knob =
+// schema defaults.
+type KnobOpt = {
+  vary: boolean;
+  optMin: number;
+  optMax: number;
+  dispMin: number;
+  dispMax: number;
+  step: number;
+};
+
 export function App() {
   const [geometry, setGeometry] = useState<string>("");
 
@@ -1517,6 +1570,30 @@ export function App() {
   // when this map has no entry — `default` for designs that declare
   // it, otherwise whatever the example shipped first.
   const [variantByGeom, setVariantByGeom] = useState<Record<string, string>>({});
+
+  // --- Reactive knob optimiser (POST /optimize) ---
+  // Master enable + objective live in the compact control by meas-freq; per-knob
+  // "vary" + extents + step live in each knob's right-click menu (knobOpt).
+  const [optEnabled, setOptEnabled] = useState(false);
+  const [optObjective, setOptObjective] = useState<OptObjective>("resonance");
+  const [knobOpt, setKnobOpt] = useState<Record<string, Record<string, KnobOpt>>>({});
+  // Open knob context menu: which param + anchor position.
+  const [knobMenu, setKnobMenu] = useState<{ name: string; x: number; y: number } | null>(
+    null,
+  );
+  const [optRunning, setOptRunning] = useState(false);
+  const [optResult, setOptResult] = useState<OptimizeResult | null>(null);
+  const [optError, setOptError] = useState<string | null>(null);
+  const optAbortRef = useRef<AbortController | null>(null);
+  // Per-knob settings persist per geometry (knobOpt is keyed by geometry); just
+  // close any open menu / clear the last result / abort any in-flight run when
+  // the antenna changes.
+  useEffect(() => {
+    optAbortRef.current?.abort();
+    setKnobMenu(null);
+    setOptResult(null);
+    setOptError(null);
+  }, [geometry]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1992,6 +2069,138 @@ export function App() {
     }
     return base;
   }
+
+  // Run the optimiser once: POST the current solve request + the free knobs
+  // (from each knob's menu) and objective, then apply the returned params to the
+  // knobs (re-solving via the normal onChange path). Warm-started from the
+  // current values; a newer run aborts the previous so stale results are
+  // dropped. Always uses the momwire engine server-side.
+  async function runOptimize() {
+    const settings = knobOpt[geometry] ?? {};
+    const free = Object.entries(settings)
+      .filter(([, o]) => o.vary)
+      .map(([name, o]) => ({ name, min: o.optMin, max: o.optMax }));
+    if (free.length === 0) return;
+    optAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    optAbortRef.current = ctrl;
+    setOptRunning(true);
+    setOptError(null);
+    try {
+      const resp = await fetch("/optimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: ctrl.signal,
+        body: JSON.stringify({
+          ...buildRequest(),
+          // Reactive runs are warm-started, so a modest eval cap keeps them snappy.
+          optimize: { free, objective: optObjective, max_evals: 40 },
+        }),
+      });
+      const data = await resp.json();
+      if (ctrl.signal.aborted) return; // superseded by a newer run
+      if (data.error) {
+        setOptError(String(data.error));
+      } else {
+        setOptResult(data as OptimizeResult);
+        for (const [name, val] of Object.entries((data as OptimizeResult).params)) {
+          setParamAtPath([name], val);
+        }
+      }
+    } catch (e) {
+      if (!ctrl.signal.aborted) setOptError(String(e));
+    } finally {
+      if (optAbortRef.current === ctrl) {
+        optAbortRef.current = null;
+        setOptRunning(false);
+      }
+    }
+  }
+
+  // Reactive optimisation. When enabled with >=1 free knob, re-tune shortly
+  // after the user pauses on any *fixed* input. The trigger is a signature of
+  // everything the optimiser depends on EXCEPT the free knobs' values — the
+  // optimiser writes those, so including them would loop. Turning it on produces
+  // a fresh signature, so it also tunes immediately on enable.
+  const optFixedSig = useMemo(() => {
+    if (!optEnabled) return "";
+    const settings = knobOpt[geometry] ?? {};
+    const free = Object.entries(settings).filter(([, o]) => o.vary);
+    if (free.length === 0) return "";
+    const freeSet = new Set(free.map(([n]) => n));
+    const fixed: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(currentValues)) {
+      if (!freeSet.has(k)) fixed[k] = v;
+    }
+    return JSON.stringify({
+      geometry,
+      objective: optObjective,
+      backend,
+      designFreq,
+      measFreq,
+      bounds: free.map(([n, o]) => [n, o.optMin, o.optMax]),
+      fixed,
+    });
+    // currentValuesKey stands in for currentValues' contents in the deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    optEnabled,
+    knobOpt,
+    geometry,
+    optObjective,
+    backend,
+    designFreq,
+    measFreq,
+    currentValuesKey,
+  ]);
+
+  useEffect(() => {
+    if (!optFixedSig) return;
+    const t = setTimeout(() => {
+      runOptimize();
+    }, 400);
+    return () => clearTimeout(t);
+    // runOptimize captured here reflects the state at this signature; re-running
+    // only when the signature changes is intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [optFixedSig]);
+
+  // The effective per-knob optimiser settings: the stored entry, or seeded from
+  // the schema (extents = slider bounds, step = schema step, not varying).
+  function knobOptFor(name: string): KnobOpt {
+    const existing = knobOpt[geometry]?.[name];
+    if (existing) return existing;
+    const s = currentExample?.param_schema.find(
+      (x): x is SchemaParamSpec => !isGroup(x) && x.name === name,
+    );
+    const min = s?.min ?? 0;
+    const max = s?.max ?? 1;
+    return {
+      vary: false,
+      optMin: min,
+      optMax: max,
+      dispMin: min,
+      dispMax: max,
+      step: s?.step ?? 0.001,
+    };
+  }
+  function updateKnobOpt(name: string, patch: Partial<KnobOpt>) {
+    const base = knobOptFor(name);
+    setKnobOpt((prev) => ({
+      ...prev,
+      [geometry]: { ...(prev[geometry] ?? {}), [name]: { ...base, ...patch } },
+    }));
+  }
+
+  // Close the knob menu on Escape.
+  useEffect(() => {
+    if (!knobMenu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setKnobMenu(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [knobMenu]);
 
   // Export the current design as a NEC2 .nec card deck and trigger a
   // browser download. The backend reuses the same builder construction as
@@ -2807,6 +3016,16 @@ export function App() {
               disabledFields={
                 backend !== "pynec" ? new Set(["daisy_chain"]) : undefined
               }
+              // Per-knob optimiser hooks: effective min/max/step come from the
+              // knob's menu settings (overriding schema), and right-click opens
+              // that menu.
+              opt={{
+                settings: knobOpt[geometry] ?? {},
+                onContext: (name, e) => {
+                  e.preventDefault();
+                  setKnobMenu({ name, x: e.clientX, y: e.clientY });
+                },
+              }}
             />
           </div>
         )}
@@ -2854,6 +3073,86 @@ export function App() {
           );
         })()}
 
+        {/* Per-knob optimiser menu (right-click a knob): vary toggle + extents +
+            turn step. Position-fixed at the click point. */}
+        {knobMenu &&
+          currentExample &&
+          (() => {
+            const name = knobMenu.name;
+            const ko = knobOptFor(name);
+            const s = currentExample.param_schema.find(
+              (x): x is SchemaParamSpec => !isGroup(x) && x.name === name,
+            );
+            const num = (v: number) => (Number.isFinite(v) ? v : 0);
+            const set = (patch: Partial<KnobOpt>) => updateKnobOpt(name, patch);
+            return (
+              <>
+                <div
+                  className="knob-menu-backdrop"
+                  onClick={() => setKnobMenu(null)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setKnobMenu(null);
+                  }}
+                />
+                <div
+                  className="knob-menu"
+                  style={{ left: knobMenu.x, top: knobMenu.y }}
+                  onContextMenu={(e) => e.preventDefault()}
+                >
+                  <div className="knob-menu-title">{s?.label ?? name}</div>
+                  <label className="knob-menu-vary">
+                    <input
+                      type="checkbox"
+                      checked={ko.vary}
+                      onChange={(e) => set({ vary: e.target.checked })}
+                    />
+                    Optimize this knob
+                  </label>
+                  <div className="knob-menu-row">
+                    <span>Optimize range</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={num(ko.optMin)}
+                      onChange={(e) => set({ optMin: Number(e.target.value) })}
+                    />
+                    <input
+                      type="number"
+                      step="any"
+                      value={num(ko.optMax)}
+                      onChange={(e) => set({ optMax: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="knob-menu-row">
+                    <span>Display range</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={num(ko.dispMin)}
+                      onChange={(e) => set({ dispMin: Number(e.target.value) })}
+                    />
+                    <input
+                      type="number"
+                      step="any"
+                      value={num(ko.dispMax)}
+                      onChange={(e) => set({ dispMax: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="knob-menu-row">
+                    <span>Turn step</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={num(ko.step)}
+                      onChange={(e) => set({ step: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+
         {/* Measurement freq = the rig's tuning control: a weighted VFO dial +
             frequency-counter readout. Band select + lock sit to the LEFT of the
             readout/dial to keep the field compact. "lock to design freq"
@@ -2883,6 +3182,39 @@ export function App() {
               />
               lock
             </label>
+            {/* Reactive optimiser: enable + objective. Mark knobs to vary via
+                their right-click menu; turning a fixed knob re-tunes. */}
+            <div className="opt-control" title="reactive optimisation">
+              <label className="link-toggle">
+                <input
+                  type="checkbox"
+                  checked={optEnabled}
+                  onChange={(e) => setOptEnabled(e.target.checked)}
+                />
+                opt{optRunning ? <span className="opt-pip">●</span> : null}
+              </label>
+              {optEnabled && (
+                <select
+                  className="opt-objective"
+                  value={optObjective}
+                  onChange={(e) => setOptObjective(e.target.value as OptObjective)}
+                >
+                  {OPT_OBJECTIVES.map((k) => (
+                    <option key={k} value={k}>
+                      {OPT_OBJECTIVE_LABELS[k]}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {optEnabled && optResult && (
+                <span className="opt-readout" title="SWR after optimisation">
+                  SWR {optResult.metrics_after.swr.toFixed(2)}
+                </span>
+              )}
+              {optEnabled && optError && (
+                <span className="opt-readout opt-readout-err">{optError}</span>
+              )}
+            </div>
           </div>
           <div className="vfo-main">
             <div className="freq-lcd" title={`${measFreq.toFixed(3)} MHz`}>
