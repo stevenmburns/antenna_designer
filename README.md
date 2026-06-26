@@ -4,7 +4,7 @@
 
 | Name                                                              |    Stmts |     Miss |   Cover |   Missing |
 |------------------------------------------------------------------ | -------: | -------: | ------: | --------: |
-| src/antennaknobs/\_\_init\_\_.py                                  |       13 |        2 |     85% |     50-51 |
+| src/antennaknobs/\_\_init\_\_.py                                  |       14 |        2 |     86% |     52-53 |
 | src/antennaknobs/\_\_main\_\_.py                                  |        0 |        0 |    100% |           |
 | src/antennaknobs/builder.py                                       |      229 |        1 |     99% |        80 |
 | src/antennaknobs/cli.py                                           |      301 |       26 |     91% |154, 173, 207, 221-229, 428, 597-611 |
@@ -46,6 +46,7 @@
 | src/antennaknobs/designs/loops/\_\_init\_\_.py                    |        0 |        0 |    100% |           |
 | src/antennaknobs/designs/loops/bisquare.py                        |       26 |        0 |    100% |           |
 | src/antennaknobs/designs/loops/delta\_loop.py                     |       31 |        0 |    100% |           |
+| src/antennaknobs/designs/loops/delta\_loop\_drone.py              |       30 |        0 |    100% |           |
 | src/antennaknobs/designs/loops/delta\_loop\_slanted.py            |       40 |        0 |    100% |           |
 | src/antennaknobs/designs/loops/diamond\_loop.py                   |       32 |        0 |    100% |           |
 | src/antennaknobs/designs/loops/diamond\_loop\_turnstile.py        |       38 |        0 |    100% |           |
@@ -87,6 +88,7 @@
 | src/antennaknobs/designs/wire/vbeam.py                            |       24 |        0 |    100% |           |
 | src/antennaknobs/designs/wire/w8jk.py                             |       22 |        0 |    100% |           |
 | src/antennaknobs/designs/wire/zepp.py                             |       16 |        0 |    100% |           |
+| src/antennaknobs/drone.py                                         |       92 |        6 |     93% |132, 147-148, 152-153, 164 |
 | src/antennaknobs/engine.py                                        |       43 |        3 |     93% |65, 94, 100 |
 | src/antennaknobs/engines/\_\_init\_\_.py                          |        6 |        2 |     67% |       3-4 |
 | src/antennaknobs/engines/momwire.py                               |      280 |        4 |     99% |36, 60, 273, 505 |
@@ -109,7 +111,7 @@
 | src/antennaknobs/web/pynec\_backend.py                            |       83 |       31 |     63% |20-22, 72-90, 117, 128-131, 187-192, 199-204 |
 | src/antennaknobs/web/server.py                                    |      341 |       37 |     89% |66-68, 175-176, 340-343, 400, 441, 474, 476-479, 520, 571, 606, 611-625, 636-637, 661-672, 691, 855, 858-859, 876 |
 | src/antennaknobs/web/user\_designs.py                             |       56 |        6 |     89% |58-59, 83-84, 89-90 |
-| **TOTAL**                                                         | **5255** |  **271** | **95%** |           |
+| **TOTAL**                                                         | **5378** |  **277** | **95%** |           |
 
 
 ## Setup coverage badge
