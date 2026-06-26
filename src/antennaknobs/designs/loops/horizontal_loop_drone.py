@@ -9,14 +9,21 @@ angles.
 The loop lies flat in the plane ``z = base``. Each side is a quarter wavelength
 scaled by a common ``length_factor`` (so the perimeter is ~1 wavelength at
 ``length_factor = 1`` -- a full-wave horizontal loop). It is driven by a short
-one-segment gap right at one corner: a *vertex feed* (unlike ``horizontal_loop``,
+one-segment gap at one corner: a *vertex feed* (unlike ``horizontal_loop``,
 which feeds the midpoint of a side).
+
+For the pattern to stay symmetric the feed itself must sit on a mirror plane of
+the square. A gap placed along one side starting at the corner does NOT -- it
+skews the current distribution. So instead the two sides stop a hair short of
+corner A and the driven segment bridges the corner *diagonally*; that segment is
+bisected by the A-C diagonal, which is a mirror plane of the square, so the feed
+(and the pattern) stays symmetric.
 
         D-----------C       (loop lies flat at z = base, viewed from above)
         |           |
         |           |
-        |           |
-        A==>--------B       feed gap at vertex A, along side A->B
+         \\          |       driven segment cuts across corner A,
+        A `\\--------B       bisected by the A-C diagonal (a mirror plane)
 """
 
 from types import MappingProxyType
@@ -52,22 +59,23 @@ class Builder(AntennaBuilder):
 
         side = quarter * self.length_factor  # each side ~ a quarter wave
         h = side / 2.0
-        feed = 2 * eps  # length of the one-segment driven gap
+        inset = eps  # how far short of corner A each adjacent side stops
 
-        # Start at the feed vertex A = (-h, -h, base). The drone's default pose
-        # faces +x with 'up' = +z, so the loop is horizontal and yaw(90) turns
-        # stay in the z = base plane -- the whole figure needs no trig.
+        # The drone's default pose faces +x with 'up' = +z, so the loop is
+        # horizontal and yaw(90) turns stay in the z = base plane -- no trig.
+        # Start just past corner A on side A->B; we'll fly back to the matching
+        # point on side D->A and let the driven segment bridge the corner.
         drone = Drone(
-            position=(-h, -h, self.base),
+            position=(-h + inset, -h, self.base),
             nominal_nsegs=self.nominal_nsegs,
             ref=quarter,
         )
 
-        drone.feed(1 + 0j).forward(feed, nsegs=1)  # driven gap at vertex A
         drone.pay_out()
-        drone.forward(side - feed)  # finish side A->B
-        drone.yaw(90).forward(side)  # side B->C
-        drone.yaw(90).forward(side)  # side C->D
-        drone.yaw(90).close()  # side D->A, fly home (exact close)
+        drone.forward(side - inset)  # -> B   (rest of side A->B)
+        drone.yaw(90).forward(side)  # B -> C
+        drone.yaw(90).forward(side)  # C -> D
+        drone.yaw(90).forward(side - inset)  # D -> just short of corner A
+        drone.feed(1 + 0j).close(nsegs=1)  # diagonal feed across A, fly home
 
         return drone.wires()

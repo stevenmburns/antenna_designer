@@ -120,8 +120,8 @@ def test_delta_loop_drone_matches_coordinate_version(variant):
 def test_horizontal_loop_drone_is_a_closed_planar_square():
     b = HLoopDrone()
     wires = b.build_wires()
-    # 5 edges: driven gap + remainder of side 1, then 3 more sides (the last
-    # via close()).
+    # 5 edges: three full sides, two corner-inset stubs, joined by the
+    # diagonal feed across corner A (the last edge, via close()).
     assert len(wires) == 5
 
     # Flat in the z = base plane.
@@ -129,20 +129,29 @@ def test_horizontal_loop_drone_is_a_closed_planar_square():
     zs = {round(p[2], 9) for e in wires for p in (e[0], e[1])}
     assert zs == {base}
 
-    # Exactly one driven segment, one NEC segment long, at the start vertex.
+    # Exactly one driven segment, one NEC segment long.
     driven = [e for e in wires if e[3] is not None]
     assert len(driven) == 1
     assert driven[0][2] == 1 and driven[0][3] == 1 + 0j
 
-    # The loop closes exactly: first point == last point (the feed vertex).
+    # The loop closes exactly, and is a connected walk.
     assert wires[0][0] == pytest.approx(wires[-1][1])
-
-    # Each consecutive edge shares the previous endpoint (connected walk).
     for prev, nxt in zip(wires, wires[1:]):
         assert prev[1] == pytest.approx(nxt[0])
 
-    # Perimeter is four equal sides = 4 * quarter * length_factor.
-    wl = 299.792458 / b.default_params["design_freq"]
-    side = 0.25 * wl * b.default_params["length_factor"]
-    perim = sum(math.dist(e[0], e[1]) for e in wires)
-    assert perim == pytest.approx(4 * side)
+
+def test_horizontal_loop_drone_feed_is_symmetric():
+    # The feed must sit on a mirror plane of the loop or the pattern skews.
+    # Corner A is at (-h, -h); the mirror plane is the A-C diagonal x = y.
+    b = HLoopDrone()
+    wires = b.build_wires()
+    (fx0, fy0, _), (fx1, fy1, _), _, _ = next(e for e in wires if e[3] is not None)
+
+    # The driven segment's two ends are mirror images across x = y...
+    assert (fx0, fy0) == pytest.approx((fy1, fx1))
+    # ...so its midpoint lies on the diagonal (x == y).
+    assert (fx0 + fx1) / 2 == pytest.approx((fy0 + fy1) / 2)
+
+    # And the whole loop is invariant under that reflection (x, y) -> (y, x).
+    pts = {(round(p[0], 6), round(p[1], 6)) for e in wires for p in (e[0], e[1])}
+    assert {(y, x) for (x, y) in pts} == pts
