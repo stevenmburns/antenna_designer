@@ -11,13 +11,15 @@ class Builder(AntennaBuilder):
     def build_wires(self):
         eps = 0.05
 
-        # angle_deg is the arm droop angle; slope = tan(droop angle) = dz/dy.
-        # diag = sqrt(y^2 + (y*slope)^2) = y*sqrt(1+slope^2)
-        # length/2 = diag + y*slope = y*(slope + sqrt(1+slope^2))
-
-        slope = math.tan(math.radians(self.angle_deg))
-        y = 0.5 * self.length / (slope + math.sqrt(1 + slope**2))
-        z = slope * y
+        # angle_deg is the arm droop angle theta from horizontal. The tip
+        # (y, z) sits at distance diag = sqrt(y^2+z^2) = y/cos(theta) along
+        # the arm, with z = y*tan(theta). Half the bowtie spans
+        # length/2 = diag + z = y*(sec(theta) + tan(theta)) = y*(1+sin)/cos,
+        # so y = (length/2)*cos/(1+sin) and z = (length/2)*sin/(1+sin).
+        theta = math.radians(self.angle_deg)
+        half = 0.5 * self.length / (1 + math.sin(theta))
+        y = half * math.cos(theta)
+        z = half * math.sin(theta)
 
         n_seg0 = self.nominal_nsegs
         n_seg1 = max(3, self.nominal_nsegs // 7)
