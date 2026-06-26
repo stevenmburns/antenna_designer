@@ -100,20 +100,39 @@ class Builder(AntennaBuilder):
         z_bot = self.base
         z_top = self.base + vert
 
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         tups = []
 
         # Top phasing wire: -span -> 0 -> +span, split at the centre so the
         # centre vertical shares the junction node.
-        tups.append(((0.0, -span, z_top), (0.0, 0.0, z_top), nsegs(span), None))
-        tups.append(((0.0, 0.0, z_top), (0.0, span, z_top), nsegs(span), None))
+        tups.append(
+            (
+                (0.0, -span, z_top),
+                (0.0, 0.0, z_top),
+                self.odd_nsegs(span, quarter),
+                None,
+            )
+        )
+        tups.append(
+            ((0.0, 0.0, z_top), (0.0, span, z_top), self.odd_nsegs(span, quarter), None)
+        )
 
         # Outer verticals (passive, open at the bottom).
-        tups.append(((0.0, -span, z_top), (0.0, -span, z_bot), nsegs(vert), None))
-        tups.append(((0.0, span, z_top), (0.0, span, z_bot), nsegs(vert), None))
+        tups.append(
+            (
+                (0.0, -span, z_top),
+                (0.0, -span, z_bot),
+                self.odd_nsegs(vert, quarter),
+                None,
+            )
+        )
+        tups.append(
+            (
+                (0.0, span, z_top),
+                (0.0, span, z_bot),
+                self.odd_nsegs(vert, quarter),
+                None,
+            )
+        )
 
         # Centre vertical: a one-segment driven gap tapped `feed_height_frac`
         # of the way up (a current maximum), with passive wire above and below.
@@ -121,9 +140,21 @@ class Builder(AntennaBuilder):
         feed = 2 * eps
         zf = z_bot + self.feed_height_frac * (vert - feed)
         tups.append(
-            ((0.0, 0.0, z_top), (0.0, 0.0, zf + feed), nsegs(z_top - (zf + feed)), None)
+            (
+                (0.0, 0.0, z_top),
+                (0.0, 0.0, zf + feed),
+                self.odd_nsegs(z_top - (zf + feed), quarter),
+                None,
+            )
         )
         tups.append(((0.0, 0.0, zf + feed), (0.0, 0.0, zf), 1, 1 + 0j))
-        tups.append(((0.0, 0.0, zf), (0.0, 0.0, z_bot), nsegs(zf - z_bot), None))
+        tups.append(
+            (
+                (0.0, 0.0, zf),
+                (0.0, 0.0, z_bot),
+                self.odd_nsegs(zf - z_bot, quarter),
+                None,
+            )
+        )
 
         return tups

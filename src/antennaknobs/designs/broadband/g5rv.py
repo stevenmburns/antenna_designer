@@ -92,15 +92,11 @@ class Builder(AntennaBuilder):
         half = top / 2.0
         z = self.base
 
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         L = (0.0, -half, z)
         C0 = (0.0, -eps, z)
         C1 = (0.0, eps, z)
         R = (0.0, half, z)
-        arm = nsegs(half - eps)
+        arm = self.odd_nsegs(half - eps, quarter)
         # Centre-fed doublet; the named centre gap "feed" is the antenna-side
         # port the matched line connects to (no direct voltage source here).
         return [

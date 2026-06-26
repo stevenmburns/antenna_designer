@@ -85,17 +85,13 @@ class Builder(AntennaBuilder):
         half = D / 2
         tilt = math.radians(self.tilt_deg)
 
-        def nsegs(length):
-            m = max(3, round(self.nominal_nsegs * length / quarter))
-            return m if m % 2 == 1 else m + 1
-
         def P(x, y):
             # Place in a plane tilted about the x-axis: the long axis (y)
             # slopes up by `tilt`; the fold spacing (x) stays horizontal.
             return (x, y * math.cos(tilt), y * math.sin(tilt) + self.base)
 
-        arm = nsegs(half - eps)
-        short = nsegs(s)
+        arm = self.odd_nsegs(half - eps, quarter)
+        short = self.odd_nsegs(s, quarter)
 
         # near wire (feed) at x=0; far wire (termination) at x=s
         nL, nR = P(0.0, -half), P(0.0, half)

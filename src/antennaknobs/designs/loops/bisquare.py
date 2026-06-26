@@ -76,11 +76,7 @@ class Builder(AntennaBuilder):
         Tc = (0.0, 0.0, self.base + 2 * hd)  # top corner
         Lc = (0.0, -hd, self.base + hd)  # left corner
 
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
-        ns = nsegs(side)
+        ns = self.odd_nsegs(side, quarter)
         feed = 2 * eps
         # Feed gap on the lower-right side, a short `feed` distance up from the
         # bottom corner along the Bc -> Rc direction (unit (0, 1, 1)/sqrt(2)).
@@ -89,7 +85,7 @@ class Builder(AntennaBuilder):
 
         tups = []
         tups.append((Bc, F, 1, 1 + 0j))  # one-segment driven gap at the corner
-        tups.append((F, Rc, nsegs(side - feed), None))
+        tups.append((F, Rc, self.odd_nsegs(side - feed, quarter), None))
         tups.append((Rc, Tc, ns, None))  # upper-right side
         tups.append((Tc, Lc, ns, None))  # upper-left side
         tups.append((Lc, Bc, ns, None))  # lower-left side

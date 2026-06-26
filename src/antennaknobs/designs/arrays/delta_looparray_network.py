@@ -56,8 +56,7 @@ class Builder(AntennaBuilder):
         n_seg0 = self.nominal_nsegs
         n_seg1 = max(3, self.nominal_nsegs // 7)
 
-        d = driver
-        h = (cos_t * (d - 2 * eps) + 2 * eps) / (2 * (cos_t + 1))
+        h = (cos_t * (driver - 2 * eps) + 2 * eps) / (2 * (cos_t + 1))
         S = (0, eps, b - (h - eps) * tan_t)
         A = (0, h, b)
         B, T = ry(A), ry(S)

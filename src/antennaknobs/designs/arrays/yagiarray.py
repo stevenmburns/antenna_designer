@@ -11,8 +11,6 @@ class Builder(Array2x2Builder):
             "base": 7.0,
             "length_factor_top": 0.9866,
             "length_factor_bot": 0.9866,
-            #    'angle_deg_top': 0,
-            #    'angle_deg_bot': 0,
             "angle_deg_top": 24.6372,
             "angle_deg_bot": 24.6372,
             "del_y": 4.0,

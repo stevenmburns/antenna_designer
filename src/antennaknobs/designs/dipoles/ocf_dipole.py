@@ -74,10 +74,6 @@ class Builder(AntennaBuilder):
         y_right = length / 2
         y_feed = y_left + self.feed_frac * length
 
-        def nsegs(seg_len):
-            n = max(3, round(self.nominal_nsegs * seg_len / quarter))
-            return n if n % 2 == 1 else n + 1
-
         L = (0.0, y_left, z)
         F0 = (0.0, y_feed - eps, z)
         F1 = (0.0, y_feed + eps, z)
@@ -87,7 +83,11 @@ class Builder(AntennaBuilder):
         right_arm = y_right - (y_feed + eps)
 
         tups = []
-        tups.append((L, F0, nsegs(left_arm), None))  # short arm (to -y end)
+        tups.append(
+            (L, F0, self.odd_nsegs(left_arm, quarter), None)
+        )  # short arm (to -y end)
         tups.append((F0, F1, 1, 1 + 0j))  # off-centre feed
-        tups.append((F1, R, nsegs(right_arm), None))  # long arm (to +y end)
+        tups.append(
+            (F1, R, self.odd_nsegs(right_arm, quarter), None)
+        )  # long arm (to +y end)
         return tups

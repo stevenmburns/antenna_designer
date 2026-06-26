@@ -79,14 +79,6 @@ class Builder(AntennaBuilder):
 
         z = self.base
 
-        # Keep the per-segment length roughly uniform: scale the segment count
-        # by the wire length relative to a quarter wave. A ~3 wl wire is ~12
-        # quarter-waves, so this gives MANY segments (the point of the design).
-        # Odd counts so a segment centre falls at the feed.
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         # Single straight wire along y, with a one-segment driven gap at the
         # centre (the current maximum). Split into a passive left half, the
         # driven gap, and a passive right half (cf. half_square / lazy_h
@@ -98,10 +90,10 @@ class Builder(AntennaBuilder):
 
         tups = []
         # Left half (end -> -eps), passive.
-        tups.append((left_end, gap_m, nsegs(half - eps), None))
+        tups.append((left_end, gap_m, self.odd_nsegs(half - eps, quarter), None))
         # Driven feed gap across the centre.
         tups.append((gap_m, gap_p, 1, 1 + 0j))
         # Right half (+eps -> end), passive.
-        tups.append((gap_p, right_end, nsegs(half - eps), None))
+        tups.append((gap_p, right_end, self.odd_nsegs(half - eps, quarter), None))
 
         return tups

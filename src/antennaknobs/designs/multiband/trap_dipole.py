@@ -96,7 +96,9 @@ class Builder(AntennaBuilder):
         def p(x):
             return (x, 0.0, z)
 
-        n_outer = max(3, int(round(outer / (wavelength / 40))))
+        # Target ~40 MoM segments per wavelength on the radiating arms.
+        seg_len = wavelength / 40
+        n_outer = max(3, int(round(outer / seg_len)))
         # Single continuous inner wire spanning −X_inner → +X_inner so the
         # named "feed" middle segment lands exactly at the geometric centre
         # (x = 0). Splitting the inner span at the origin would put `feed`
@@ -104,7 +106,7 @@ class Builder(AntennaBuilder):
         # X_inner/2 — a real asymmetry that broke the symmetric design.
         # Engine parity coercion bumps to odd/even as needed; we just pick a
         # plausible segment count.
-        n_inner = max(21, int(round(2 * inner_arm / (wavelength / 40))))
+        n_inner = max(21, int(round(2 * inner_arm / seg_len)))
 
         return [
             # Left arm, outer → trap.

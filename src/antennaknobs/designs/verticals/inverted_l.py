@@ -72,10 +72,6 @@ class Builder(AntennaBuilder):
         horiz = self.horiz_frac * wavelength * self.length_factor
         z = self.base
 
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         n_seg_radials = 5
         n_radials = 4
         radial_len = quarter  # quarter-wave radials, like a ground-plane vert
@@ -85,8 +81,22 @@ class Builder(AntennaBuilder):
         # the radial counterpoise (cf. designs/vertical.py).
         tups.append(((0.0, 0.0, z), (0.0, 0.0, z + eps), 1, 1 + 0j))
         # Vertical riser, then the horizontal top section.
-        tups.append(((0.0, 0.0, z + eps), (0.0, 0.0, z + vert), nsegs(vert), None))
-        tups.append(((0.0, 0.0, z + vert), (0.0, horiz, z + vert), nsegs(horiz), None))
+        tups.append(
+            (
+                (0.0, 0.0, z + eps),
+                (0.0, 0.0, z + vert),
+                self.odd_nsegs(vert, quarter),
+                None,
+            )
+        )
+        tups.append(
+            (
+                (0.0, 0.0, z + vert),
+                (0.0, horiz, z + vert),
+                self.odd_nsegs(horiz, quarter),
+                None,
+            )
+        )
 
         # Elevated radials spreading from the feedpoint in the x/y plane.
         for i in range(n_radials):

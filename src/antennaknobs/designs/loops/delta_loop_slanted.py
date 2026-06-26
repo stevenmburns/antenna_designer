@@ -80,9 +80,6 @@ class Builder(AntennaBuilder):
 
         B, T = ry(A), ry(S)
 
-        """
-    """
-
         st = TransformStack()
         st.push(Transform.translate(0, 0, b))
         st.push(Transform.rotX(-self.slant_deg))

@@ -73,10 +73,6 @@ class Builder(AntennaBuilder):
         spacing = self.spacing_frac * wavelength
         half = elem / 2
 
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         def element(z):
             """A 1 wl horizontal wire along y at height z, centre-fed in
             phase (one-segment driven gap at y = 0)."""
@@ -85,9 +81,9 @@ class Builder(AntennaBuilder):
             C0 = (0.0, -eps, z)
             C1 = (0.0, eps, z)
             return [
-                (L, C0, nsegs(half - eps), None),
+                (L, C0, self.odd_nsegs(half - eps, quarter), None),
                 (C0, C1, 1, 1 + 0j),
-                (C1, R, nsegs(half - eps), None),
+                (C1, R, self.odd_nsegs(half - eps, quarter), None),
             ]
 
         tups = []

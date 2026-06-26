@@ -95,10 +95,6 @@ class Builder(AntennaBuilder):
 
         z0 = self.base
 
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         tups = []
 
         # Base feed: a one-segment driven gap at the foot, against the radials.

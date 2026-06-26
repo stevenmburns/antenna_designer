@@ -91,16 +91,12 @@ class Builder(AntennaBuilder):
         h_front = quarter * self.front_factor
         z = self.base
 
-        def nsegs(length):
-            m = max(3, round(self.nominal_nsegs * length / quarter))
-            return m if m % 2 == 1 else m + 1
-
         def dipole(x, h, name):
             L = (x, -h, z)
             C0 = (x, -eps, z)
             C1 = (x, eps, z)
             R = (x, h, z)
-            arm = nsegs(h - eps)
+            arm = self.odd_nsegs(h - eps, quarter)
             return [
                 (L, C0, arm, None, None),
                 (C0, C1, 1, None, name),

@@ -122,9 +122,9 @@ class Builder(AntennaBuilder):
 
         wavelength = 299.792458 / self.design_freq
 
-        slant_radians = self.slant_deg / 180 * math.pi
-        cos_slant = math.cos(slant_radians)
-        sin_slant = math.sin(slant_radians)
+        slant_radians = math.radians(self.slant_deg)
+        slant_cos = math.cos(slant_radians)
+        slant_sin = math.sin(slant_radians)
 
         top_height_factor, mid_height_factor, width_factor = self._shape_factors()
 
@@ -137,22 +137,22 @@ class Builder(AntennaBuilder):
         S = (0, eps, wavelength * (mid_height_factor - top_height_factor))
         B = (
             0,
-            wavelength * width_factor / 2 * cos_slant,
+            wavelength * width_factor / 2 * slant_cos,
             wavelength * (mid_height_factor - top_height_factor)
-            - wavelength * width_factor / 2 * sin_slant,
+            - wavelength * width_factor / 2 * slant_sin,
         )
         A = (
             0,
-            wavelength * width_factor / 2 * cos_slant,
-            -wavelength * width_factor / 2 * sin_slant,
+            wavelength * width_factor / 2 * slant_cos,
+            -wavelength * width_factor / 2 * slant_sin,
         )
         AA = (0, 0, 0)
 
         F = (
             0,
-            wavelength * width_factor / 2 * cos_slant,
+            wavelength * width_factor / 2 * slant_cos,
             wavelength * (-top_height_factor)
-            - wavelength * width_factor / 2 * sin_slant,
+            - wavelength * width_factor / 2 * slant_sin,
         )
         FF = (0, 0, wavelength * (-top_height_factor))
 

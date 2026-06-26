@@ -77,7 +77,7 @@ class Builder(AntennaBuilder):
     )
 
     def build_wires(self):
-        g = 0.05  # half-gap at the feed / termination apexes
+        eps = 0.05  # half-gap at the feed / termination apexes
         wavelength = 299.792458 / self.design_freq
         quarter = 0.25 * wavelength
 
@@ -87,17 +87,13 @@ class Builder(AntennaBuilder):
         w = L * math.sin(tilt)
         z = self.base
 
-        def nsegs(length):
-            m = max(3, round(self.nominal_nsegs * length / quarter))
-            return m if m % 2 == 1 else m + 1
-
-        leg = nsegs(L)
-        FU = (0.0, g, z)  # feed apex, upper terminal
-        FL = (0.0, -g, z)  # feed apex, lower terminal
+        leg = self.odd_nsegs(L, quarter)
+        FU = (0.0, eps, z)  # feed apex, upper terminal
+        FL = (0.0, -eps, z)  # feed apex, lower terminal
         SU = (d, w, z)  # upper side apex
         SD = (d, -w, z)  # lower side apex
-        TU = (2 * d, g, z)  # terminated apex, upper terminal
-        TL = (2 * d, -g, z)  # terminated apex, lower terminal
+        TU = (2 * d, eps, z)  # terminated apex, upper terminal
+        TL = (2 * d, -eps, z)  # terminated apex, lower terminal
 
         return [
             # feed gap at the rear apex (driven via build_network)

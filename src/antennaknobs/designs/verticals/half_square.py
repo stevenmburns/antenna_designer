@@ -83,10 +83,6 @@ class Builder(AntennaBuilder):
         # different lengths (good NEC practice at the corner junctions):
         # scale each wire's segment count by its length relative to a
         # quarter wave. Odd counts so the centre falls on a segment.
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         # A short feed gap just below the left top corner, at the current
         # maximum. One segment carries the excitation (cf. moxon.py).
         feed = 2 * eps
@@ -98,12 +94,12 @@ class Builder(AntennaBuilder):
 
         tups = []
         # Left leg (bottom -> just below corner), passive.
-        tups.append((A, F, nsegs(vert - feed), None))
+        tups.append((A, F, self.odd_nsegs(vert - feed, quarter), None))
         # Feed segment at the corner, driven.
         tups.append((F, C, 1, 1 + 0j))
         # Top wire, passive.
-        tups.append((C, D, nsegs(horiz), None))
+        tups.append((C, D, self.odd_nsegs(horiz, quarter), None))
         # Right leg (corner -> bottom), passive.
-        tups.append((D, B, nsegs(vert), None))
+        tups.append((D, B, self.odd_nsegs(vert, quarter), None))
 
         return tups

@@ -126,7 +126,7 @@ class Builder(AntennaBuilder):
         # whenever they toggled n_bands.)
         n = _MAX_BANDS
         lst = [
-            (math.cos(math.pi * i / 180), math.sin(math.pi * i / 180))
+            (math.cos(math.radians(i)), math.sin(math.radians(i)))
             for i in range(360 // (2 * n), 360, 360 // n)
         ][:n_bands]
 

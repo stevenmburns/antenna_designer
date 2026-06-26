@@ -11,7 +11,6 @@ class Builder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 0.955,
-            #    'angle_deg': 0.0,
             "angle_deg": 31.0772,
             "space": 0.05,
         }

@@ -111,10 +111,6 @@ class Builder(AntennaBuilder):
         zc = self.base + half  # geometric centre height of each vertical
         s2 = spacing / 2
 
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         def vertical(x, y, voltage):
             """A vertical (z-axis) half-wave dipole at (x, y), centre-fed by a
             one-segment driven gap with the given complex excitation."""
@@ -123,9 +119,9 @@ class Builder(AntennaBuilder):
             C0 = (x, y, zc - eps)
             C1 = (x, y, zc + eps)
             return [
-                (B, C0, nsegs(half - eps), None),
+                (B, C0, self.odd_nsegs(half - eps, quarter), None),
                 (C0, C1, 1, voltage),
-                (C1, T, nsegs(half - eps), None),
+                (C1, T, self.odd_nsegs(half - eps, quarter), None),
             ]
 
         side = complex(self.side_mag) * (-1j)

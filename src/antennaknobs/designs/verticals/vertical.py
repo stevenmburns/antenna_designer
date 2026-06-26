@@ -26,12 +26,14 @@ class Builder(AntennaBuilder):
         n_seg0 = self.nominal_nsegs
         n_seg1 = max(3, self.nominal_nsegs // 7)
         n_seg_radials = 5
+        n_radials = 3
+        # Radials run the full self.length (not a quarter-wave): self.length is
+        # already the ~quarter-wave radiator length, so the radials match the
+        # radiator and form an equal-length elevated counterpoise.
 
         tups = []
         tups.extend([((0, 0, 0), (0, 0, eps), n_seg1, 1 + 0j)])
         tups.extend([((0, 0, eps), (0, 0, z), n_seg0, None)])
-
-        n_radials = 3
 
         for i in range(n_radials):
             theta = 2 * math.pi / n_radials * i
