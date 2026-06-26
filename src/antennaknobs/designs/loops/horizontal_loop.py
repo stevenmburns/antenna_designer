@@ -83,10 +83,6 @@ class Builder(AntennaBuilder):
         # Keep the per-segment length roughly uniform across wires (good NEC
         # practice at the corner junctions). Odd counts so the side centre
         # falls on a segment.
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         # Four corners of the flat square, all at z = base.
         A = (-h, -h, z)
         B = (h, -h, z)
@@ -101,10 +97,12 @@ class Builder(AntennaBuilder):
         tups = []
         # Side A->D split into: A->gap-start (passive), gap (driven, 1 seg),
         # gap-end->D (passive). The remaining three sides close the loop.
-        tups.append((A, F0, nsegs(h - feed / 2.0), None))
+        tups.append((A, F0, self.odd_nsegs(h - feed / 2.0, quarter), None))
         tups.append((F0, F1, 1, 1 + 0j))  # one-segment driven gap
-        tups.append((F1, D, nsegs(h - feed / 2.0), None))
-        tups.append((D, C, nsegs(side), None))  # top side
-        tups.append((C, B, nsegs(side), None))  # right side
-        tups.append((B, A, nsegs(side), None))  # bottom side, closes the loop
+        tups.append((F1, D, self.odd_nsegs(h - feed / 2.0, quarter), None))
+        tups.append((D, C, self.odd_nsegs(side, quarter), None))  # top side
+        tups.append((C, B, self.odd_nsegs(side, quarter), None))  # right side
+        tups.append(
+            (B, A, self.odd_nsegs(side, quarter), None)
+        )  # bottom side, closes the loop
         return tups

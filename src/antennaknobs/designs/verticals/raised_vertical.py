@@ -27,6 +27,7 @@ class Builder(AntennaBuilder):
         tups.extend([((0, 0, 0), (0, 0, eps), n_seg1, 1 + 0j)])
         tups.extend([((0, 0, eps), (0, 0, z), n_seg0, None)])
 
+        # ±45° spread of the two sloping radials
         radial_angle = math.pi / 4
 
         theta = math.pi / 180 * self.theta
@@ -36,9 +37,9 @@ class Builder(AntennaBuilder):
 
             x = r * math.cos(phi) * math.sin(theta)
             y = r * math.sin(phi) * math.sin(theta)
-            z = r * math.cos(theta)
+            rz = r * math.cos(theta)
 
-            tups.extend([((0, 0, 0), (x, y, z), n_seg0, None)])
+            tups.extend([((0, 0, 0), (x, y, rz), n_seg0, None)])
 
         base = self.base
         new_tups = []

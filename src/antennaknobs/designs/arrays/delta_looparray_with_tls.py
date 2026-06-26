@@ -44,8 +44,7 @@ class Builder(AntennaBuilder):
         n_seg0 = self.nominal_nsegs
         n_seg1 = max(3, self.nominal_nsegs // 7)
 
-        d = driver
-        h = (cos_theta * (d - 2 * eps) + 2 * eps) / (2 * (cos_theta + 1))
+        h = (cos_theta * (driver - 2 * eps) + 2 * eps) / (2 * (cos_theta + 1))
 
         r"""
          B-----------------A
@@ -62,9 +61,6 @@ class Builder(AntennaBuilder):
         A = (0, h, b)
 
         B, T = ry(A), ry(S)
-
-        """
-    """
 
         st = TransformStack()
         st.push(Transform.translate(0, 0, b))

@@ -30,10 +30,7 @@ class Builder(AntennaBuilder):
         def ry(p):
             return p[0], -p[1], p[2]
 
-        def rz(p):
-            return p[0], p[1], -p[2]
-
-        slant_radians = self.slant_deg / 180 * math.pi
+        slant_radians = math.radians(self.slant_deg)
         slant_cos = math.cos(slant_radians)
         slant_sin = math.sin(slant_radians)
 

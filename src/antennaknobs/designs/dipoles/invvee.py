@@ -11,7 +11,6 @@ class Builder(AntennaBuilder):
             "freq": 28.47,
             "base": 7.0,
             "length_factor": 0.9719,
-            #    'angle_deg': 0.0,
             "angle_deg": 31.6846,
             # length_factor span has to cover both the half-wave default
             # (~0.97) and the EDZ variant (~2.97, encoding a ~1.5λ

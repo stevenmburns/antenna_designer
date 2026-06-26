@@ -79,10 +79,6 @@ class Builder(AntennaBuilder):
         z_stub_top = self.base + stub
         z_rad_top = z_stub_top + radiator
 
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         # Leg A at x = 0 carries the radiator on top; leg B at x = gap is the
         # short open-ended stub leg.
         tups = []
@@ -90,18 +86,37 @@ class Builder(AntennaBuilder):
         tups.append(((0.0, 0.0, z_short), (gap, 0.0, z_short), 1, None))
 
         # Leg A: short -> tap node -> stub top, then the radiator continues up.
-        tups.append(((0.0, 0.0, z_short), (0.0, 0.0, z_tap), nsegs(tap), None))
         tups.append(
-            ((0.0, 0.0, z_tap), (0.0, 0.0, z_stub_top), nsegs(stub - tap), None)
+            ((0.0, 0.0, z_short), (0.0, 0.0, z_tap), self.odd_nsegs(tap, quarter), None)
         )
         tups.append(
-            ((0.0, 0.0, z_stub_top), (0.0, 0.0, z_rad_top), nsegs(radiator), None)
+            (
+                (0.0, 0.0, z_tap),
+                (0.0, 0.0, z_stub_top),
+                self.odd_nsegs(stub - tap, quarter),
+                None,
+            )
+        )
+        tups.append(
+            (
+                (0.0, 0.0, z_stub_top),
+                (0.0, 0.0, z_rad_top),
+                self.odd_nsegs(radiator, quarter),
+                None,
+            )
         )
 
         # Leg B: short -> tap node -> stub top (open).
-        tups.append(((gap, 0.0, z_short), (gap, 0.0, z_tap), nsegs(tap), None))
         tups.append(
-            ((gap, 0.0, z_tap), (gap, 0.0, z_stub_top), nsegs(stub - tap), None)
+            ((gap, 0.0, z_short), (gap, 0.0, z_tap), self.odd_nsegs(tap, quarter), None)
+        )
+        tups.append(
+            (
+                (gap, 0.0, z_tap),
+                (gap, 0.0, z_stub_top),
+                self.odd_nsegs(stub - tap, quarter),
+                None,
+            )
         )
 
         # Feed: a one-segment driven gap bridging the two legs at the tap.

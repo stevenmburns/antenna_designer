@@ -1,10 +1,7 @@
-import logging
 import math
 from types import MappingProxyType
 
 from ... import AntennaBuilder
-
-logger = logging.getLogger(__name__)
 
 
 class Builder(AntennaBuilder):
@@ -56,9 +53,6 @@ class Builder(AntennaBuilder):
         def ry(p):
             return p[0], -p[1], p[2]
 
-        def dist(p0, p1):
-            return math.sqrt(sum((e0 - e1) ** 2 for e0, e1 in zip(p0, p1)))
-
         n_seg0 = self.nominal_nsegs
         n_seg1 = max(3, self.nominal_nsegs // 7)
 
@@ -80,14 +74,6 @@ class Builder(AntennaBuilder):
         A = (0, h, b)
 
         B, T = ry(A), ry(S)
-
-        logger.debug("theta = %.1f", angle * 180 / math.pi)
-        logger.debug(
-            "wires AB = %.3f AS = %.3f BT = %.3f",
-            dist(A, B),
-            dist(A, S),
-            dist(B, T),
-        )
 
         tups = []
 

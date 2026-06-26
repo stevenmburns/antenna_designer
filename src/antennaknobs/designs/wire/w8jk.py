@@ -79,10 +79,6 @@ class Builder(AntennaBuilder):
         half = elem / 2
         z = self.base
 
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         def element(x, voltage):
             """A horizontal wire along y at (x, z), centre-fed with `voltage`."""
             L = (x, -half, z)
@@ -90,9 +86,9 @@ class Builder(AntennaBuilder):
             C0 = (x, -eps, z)
             C1 = (x, eps, z)
             return [
-                (L, C0, nsegs(half - eps), None),
+                (L, C0, self.odd_nsegs(half - eps, quarter), None),
                 (C0, C1, 1, voltage),
-                (C1, R, nsegs(half - eps), None),
+                (C1, R, self.odd_nsegs(half - eps, quarter), None),
             ]
 
         tups = []

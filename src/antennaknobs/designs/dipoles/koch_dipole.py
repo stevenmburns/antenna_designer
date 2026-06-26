@@ -97,10 +97,6 @@ class Builder(AntennaBuilder):
         z = self.base
         it = int(self.iterations)
 
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         tups = []
         # Centre feed: a one-segment driven gap along y at the origin.
         tups.append(((0.0, -eps, z), (0.0, eps, z), 1, 1 + 0j))
@@ -110,12 +106,26 @@ class Builder(AntennaBuilder):
         right = _koch((eps, 0.0), (half, 0.0), it)
         for (ya, za), (yb, zb) in zip(right[:-1], right[1:]):
             seg = math.hypot(yb - ya, zb - za)
-            tups.append(((0.0, ya, z + za), (0.0, yb, z + zb), nsegs(seg), None))
+            tups.append(
+                (
+                    (0.0, ya, z + za),
+                    (0.0, yb, z + zb),
+                    self.odd_nsegs(seg, quarter),
+                    None,
+                )
+            )
 
         # Left arm: mirror of the right arm in y.
         left = _koch((-eps, 0.0), (-half, 0.0), it)
         for (ya, za), (yb, zb) in zip(left[:-1], left[1:]):
             seg = math.hypot(yb - ya, zb - za)
-            tups.append(((0.0, ya, z + za), (0.0, yb, z + zb), nsegs(seg), None))
+            tups.append(
+                (
+                    (0.0, ya, z + za),
+                    (0.0, yb, z + zb),
+                    self.odd_nsegs(seg, quarter),
+                    None,
+                )
+            )
 
         return tups

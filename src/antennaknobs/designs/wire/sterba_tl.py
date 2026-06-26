@@ -97,7 +97,6 @@ class Builder(AntennaBuilder):
             return bot if i % 2 == 0 else top
 
         self._tl_length = h  # consumed by build_network()
-        self._junctions_y = [yb[j] for j in range(1, n_sections)]
 
         tups = []
 
@@ -132,7 +131,7 @@ class Builder(AntennaBuilder):
         return tups
 
     def build_network(self):
-        # build_wires must run first to populate _tl_length / _junctions_y.
+        # build_wires must run first to populate _tl_length.
         self.build_wires()
         n = int(self.n_cells)
         n_sections = n + 2

@@ -15,8 +15,6 @@ class Builder(AntennaBuilder):
             "reflector_factor": 1.05,
             "boom_factor": 0.2,
             "angle_deg": 0.0,
-            #    'angle_deg': 11.4592,
-            #    'angle_deg': 26.5651,
             "n_directors": 2,
         }
     )

@@ -106,10 +106,6 @@ class Builder(AntennaBuilder):
         z0 = self.base
         M = int(self.n_vert)
 
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         # Walk the square wave, recording the (y, z) node path. Each riser
         # alternates direction; horizontal jogs connect successive risers.
         nodes = [(0.0, z0)]
@@ -136,17 +132,26 @@ class Builder(AntennaBuilder):
             if k == fa:
                 # Split the end riser: passive below, 1-seg driven gap, passive
                 # above (a current-maximum-style tap, but on a current minimum).
-                tups.append(((0.0, ya, za), (0.0, ya, zf), nsegs(zf - za), None))
+                tups.append(
+                    (
+                        (0.0, ya, za),
+                        (0.0, ya, zf),
+                        self.odd_nsegs(zf - za, quarter),
+                        None,
+                    )
+                )
                 tups.append(((0.0, ya, zf), (0.0, ya, zf + 2 * eps), 1, 1 + 0j))
                 tups.append(
                     (
                         (0.0, ya, zf + 2 * eps),
                         (0.0, yb, zb),
-                        nsegs(zb - (zf + 2 * eps)),
+                        self.odd_nsegs(zb - (zf + 2 * eps), quarter),
                         None,
                     )
                 )
             else:
-                tups.append(((0.0, ya, za), (0.0, yb, zb), nsegs(seg), None))
+                tups.append(
+                    ((0.0, ya, za), (0.0, yb, zb), self.odd_nsegs(seg, quarter), None)
+                )
 
         return tups

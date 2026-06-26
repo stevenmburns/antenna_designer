@@ -92,10 +92,6 @@ class Builder(AntennaBuilder):
         z_apex = self.base - 2 * eps  # cone apex
         z_cone_base = self.base - cone_h
 
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         tups = []
         # Feed: a one-segment driven gap between the disc centre and the cone
         # apex (the coax point of a discone).
@@ -109,7 +105,7 @@ class Builder(AntennaBuilder):
                 (
                     (0.0, 0.0, z_disc),
                     (disc_r * c, disc_r * s, z_disc),
-                    nsegs(disc_r),
+                    self.odd_nsegs(disc_r, quarter),
                     None,
                 )
             )
@@ -118,7 +114,7 @@ class Builder(AntennaBuilder):
                 (
                     (0.0, 0.0, z_apex),
                     (cone_r * c, cone_r * s, z_cone_base),
-                    nsegs(cone),
+                    self.odd_nsegs(cone, quarter),
                     None,
                 )
             )

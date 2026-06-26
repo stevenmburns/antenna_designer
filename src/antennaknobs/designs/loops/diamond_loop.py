@@ -57,6 +57,8 @@ class Builder(AntennaBuilder):
         n_seg1 = max(3, self.nominal_nsegs // 7)
 
         d = driver
+        # Apex height, solved from the constraint that the total wire perimeter
+        # equals the driver length d.
         h = d * cos_theta / 4 - eps * cos_theta / 2 + eps / 2
 
         r"""
@@ -81,7 +83,7 @@ class Builder(AntennaBuilder):
 
         B = (0, 0, b)
         A = (0, h, b - tan_theta * h)
-        S = (0, eps, b - h * tan_theta - (h - eps) * tan_theta)
+        S = (0, eps, b - (2 * h - eps) * tan_theta)
 
         C, T = ry(A), ry(S)
 

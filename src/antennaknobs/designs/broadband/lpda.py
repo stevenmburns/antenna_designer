@@ -118,10 +118,6 @@ class Builder(AntennaBuilder):
         n = int(self.n_elements)
         z = self.base
 
-        def nsegs(length):
-            m = max(3, round(self.nominal_nsegs * length / quarter))
-            return m if m % 2 == 1 else m + 1
-
         tups = []
         for k in range(n):
             h = half[k]
@@ -130,7 +126,7 @@ class Builder(AntennaBuilder):
             C0 = (xk, -eps, z)
             C1 = (xk, eps, z)
             R = (xk, h, z)
-            arm = nsegs(h - eps)
+            arm = self.odd_nsegs(h - eps, quarter)
             # left arm, named centre gap (a feeder port), right arm
             tups.append((L, C0, arm, None, None))
             tups.append((C0, C1, 1, None, f"d{k}"))

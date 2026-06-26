@@ -62,6 +62,24 @@ class AntennaBuilder:
         a dummy stub wire, branches refer to ports by name, etc."""
         return None
 
+    def odd_nsegs(self, length, ref):
+        """Mesh segment count for a wire of the given `length`.
+
+        Scales `self.nominal_nsegs` (the segment count for a reference-length
+        wire) by `length / ref`, so longer wires get proportionally more
+        segments and the segment length stays roughly constant. `ref` is
+        usually a quarter-wavelength. Floored at 3 and forced odd so a
+        center-fed element has a true center segment for the feed/excitation."""
+        n = max(3, round(self.nominal_nsegs * length / ref))
+        return n if n % 2 == 1 else n + 1
+
+    def _phasor(self, name):
+        """Unit phasor exp(j·phase) for a degrees-valued phase param (e.g.
+        phase_lr/phase_tb), or 1 if the param is absent."""
+        if not hasattr(self, name):
+            return 1
+        return np.exp(1j * np.pi * getattr(self, name) / 180)
+
     @staticmethod
     def draw(tups, fn=None):
         import matplotlib.pyplot as plt
@@ -126,10 +144,8 @@ class Array2x2Builder(AntennaBuilder):
         tups_top = build_element_wires("_top")
         tups_bot = build_element_wires("_bot")
 
-        phasor_lr, phasor_tb = (
-            np.exp((0 + 1j) * np.pi * getattr(self, p) / 180) if hasattr(self, p) else 1
-            for p in ("phase_lr", "phase_tb")
-        )
+        phasor_lr = self._phasor("phase_lr")
+        phasor_tb = self._phasor("phase_tb")
 
         new_tups = []
         for yoff, ph0 in ((-self.del_y, 1), (self.del_y, phasor_lr)):
@@ -197,10 +213,8 @@ class Array2x4Builder(AntennaBuilder):
         tups_ibot = build_element_wires("_ibot")
         tups_obot = build_element_wires("_obot")
 
-        phasor_lr, phasor_tb = (
-            np.exp((0 + 1j) * np.pi * getattr(self, p) / 180) if hasattr(self, p) else 1
-            for p in ("phase_lr", "phase_tb")
-        )
+        phasor_lr = self._phasor("phase_lr")
+        phasor_tb = self._phasor("phase_tb")
 
         new_tups = []
         # ph_lr is applied to the right-half (yoff > 0) columns and
@@ -280,10 +294,7 @@ class Array1x4Builder(AntennaBuilder):
         tups_itop = build_element_wires("_itop")
         tups_otop = build_element_wires("_otop")
 
-        (phasor_lr,) = (
-            np.exp((0 + 1j) * np.pi * getattr(self, p) / 180) if hasattr(self, p) else 1
-            for p in ("phase_lr",)
-        )
+        phasor_lr = self._phasor("phase_lr")
 
         new_tups = []
         # phase_lr is applied to the right half (yoff > 0); left half
@@ -354,10 +365,7 @@ class Array1x4GroupedBuilder(AntennaBuilder):
         tups_itop = build_element_wires("_itop")
         tups_otop = build_element_wires("_otop")
 
-        (phasor_lr,) = (
-            np.exp((0 + 1j) * np.pi * getattr(self, p) / 180) if hasattr(self, p) else 1
-            for p in ("phase_lr",)
-        )
+        phasor_lr = self._phasor("phase_lr")
 
         new_tups = []
         # phase_lr applied to the right half (yoff > 0). The grouped
@@ -425,10 +433,7 @@ class Array1x2Builder(AntennaBuilder):
 
         tups_top = build_element_wires("_top")
 
-        (phasor_lr,) = (
-            np.exp((0 + 1j) * np.pi * getattr(self, p) / 180) if hasattr(self, p) else 1
-            for p in ("phase_lr",)
-        )
+        phasor_lr = self._phasor("phase_lr")
 
         new_tups = []
         for yoff, ph0 in ((-self.del_y, 1), (self.del_y, phasor_lr)):

@@ -79,10 +79,6 @@ class Builder(AntennaBuilder):
         dy = math.sin(theta)
         z = self.base
 
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         # Apex near the origin, legs opening toward +x at +/- theta off the
         # bisector. A one-segment driven gap bridges the two inner ends.
         inner_p = (eps * dx, eps * dy, z)  # toward +y leg
@@ -90,7 +86,7 @@ class Builder(AntennaBuilder):
         end_p = (leg * dx, leg * dy, z)
         end_m = (leg * dx, -leg * dy, z)
 
-        arm = nsegs(leg - eps)
+        arm = self.odd_nsegs(leg - eps, quarter)
 
         tups = []
         # Driven gap across the apex between the two legs' inner ends.

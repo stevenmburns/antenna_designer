@@ -153,38 +153,6 @@ class Builder(AntennaBuilder):
         }
     )
 
-    #
-    # Need to add 19.15 cm to the 12m band
-    #
-
-    #
-    # Need to add 7.13 cm to the 10m band
-    #
-
-    #
-    # Need to add 19.15 cm to the 12m band
-    #
-
-    #
-    # Need to add 7.13 cm to the 10m band
-    #
-
-    default_params = MappingProxyType(
-        {
-            "freq": 28.47,
-            "freq_10": 28.47,
-            "freq_12": 24.97,
-            "base": 7.0,
-            "length_12": 5.8770,
-            "length_10": 5.1944,
-            "angle_12_deg": 26.5651,
-            "angle_10_deg": 26.5651,
-            "gap_angle_deg": 0.0,
-            "s": 0.15,
-            "eps": 0.015,
-        }
-    )
-
     default_params = MappingProxyType(
         {
             "freq": 28.47,
@@ -197,7 +165,10 @@ class Builder(AntennaBuilder):
             "angle_10_deg": 26.5651,
             "gap_angle_deg": 0.0,
             "s": 0.15,
-            "eps": 0.015,
+            # eps is the feed-gap half-width (drives the center-segment size).
+            # 0.01 is the value build_wires used when this knob was inert; kept
+            # here so the default geometry is unchanged now that it is live.
+            "eps": 0.01,
             # 2-column panel, one column per band (10m | 12m): rows pair the
             # band's freq / length / droop angle (deg) so the two bands read
             # side by side. Feed-gap / coupling knobs (gap_angle_deg, s, eps)
@@ -223,7 +194,7 @@ class Builder(AntennaBuilder):
     # invvee reference 5.8408
 
     def build_wires(self):
-        eps = 0.01
+        eps = self.eps
 
         def build_path(lst, ns, ex):
             return ((a, b, ns, ex) for a, b in zip(lst[:-1], lst[1:]))

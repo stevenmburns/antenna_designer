@@ -92,16 +92,17 @@ class Builder(AntennaBuilder):
         length = self.length_frac * wavelength * self.length_factor
         z = self.base
 
-        def nsegs(length):
-            n = max(3, round(self.nominal_nsegs * length / quarter))
-            return n if n % 2 == 1 else n + 1
-
         # End feed: a one-segment named gap "ant" at y=0 (the open end / voltage
         # antinode), then the half-wave radiator running out to y=+length.
         # No direct voltage source -- the tuned stub drives this port.
         return [
             ((0.0, 0.0, z), (0.0, eps, z), 1, None, "ant"),
-            ((0.0, eps, z), (0.0, length, z), nsegs(length - eps), None),
+            (
+                (0.0, eps, z),
+                (0.0, length, z),
+                self.odd_nsegs(length - eps, quarter),
+                None,
+            ),
         ]
 
     def build_network(self):
