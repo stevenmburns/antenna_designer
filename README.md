@@ -287,6 +287,38 @@ User-authored designs (in the `user.*` namespace) appear here too; filter with
 
 ## Install
 
+### From TestPyPI (prebuilt wheels — no toolchain)
+
+All three packages are published to **TestPyPI**: `antennaknobs`, its engine
+`momwire` (C++ accelerator wheels), and the optional NEC2 backend `pynec-accel`.
+TestPyPI doesn't host the usual scientific deps (numpy/scipy/fastapi/…), so point
+pip at TestPyPI for these packages and at real PyPI for everything else:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
+
+# antennaknobs + the web workbench; momwire (the engine) comes along as a dep
+pip install \
+  --index-url https://test.pypi.org/simple/ \
+  --extra-index-url https://pypi.org/simple/ \
+  "antennaknobs[web]"
+
+# optional: PyNEC cross-validation backend (GPL-2.0; Linux/Windows/macOS-arm64 wheels)
+pip install \
+  --index-url https://test.pypi.org/simple/ \
+  --extra-index-url https://pypi.org/simple/ \
+  pynec-accel
+```
+
+Then launch the workbench with `uvicorn antennaknobs.web.server:app` (see
+[Running it](#running-it)). On **macOS**, `brew install libomp` is required —
+the `momwire` and `pynec-accel` wheels link Homebrew's OpenMP runtime (and share
+it, so cross-engine use is fully multithreaded; details under [macOS](#macos)).
+
+The sections below build from source instead (a development checkout, or a
+platform without prebuilt wheels).
+
 ### Ubuntu (22.04 / 24.04)
 
 PyNEC installs as a prebuilt wheel, so no
@@ -335,14 +367,14 @@ against NEC2.
 # PyNEC`); --no-index avoids upstream PyNEC/pynec on PyPI, whose builds are
 # broken on current Python and lack the fork's BLAS/OpenMP work.
 #
-# Use >= 1.7.4.post1 (release v1.7.4-accel.5 or later). Earlier builds vendored
+# Use >= 1.7.4.post2 (release v1.7.4-accel.6 or later). Earlier builds vendored
 # their own libgomp, which clashes with momwire's system libgomp via a static-
 # TLS limit and silently knocks momwire's C++ accelerator onto its slow pure-
 # Python path whenever both backends load in one process. 1.7.4.post1 binds the
 # system libgomp instead, so it needs a system libgomp at runtime (universal on
 # glibc Linux — the GCC OpenMP runtime).
 pip install pynec-accel --no-index \
-    --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.5
+    --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.6
 ```
 
 **4. Install AntennaKNoBs**
@@ -424,60 +456,27 @@ there are no Intel-Mac wheels, so on an Intel Mac skip PyNEC and use momwire alo
 
 ```bash
 pip install pynec-accel --no-index \
-    --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.5
+    --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.6
 ```
 
-macOS has its own version of the Ubuntu libgomp/static-TLS caveat, and it needs
-**two** env vars to fully resolve. momwire's accelerator links Homebrew's
-`libomp`, while the pynec-accel wheel bundles its own copy
-(`pynec_accel.dylibs/libomp.dylib`). When *both* backends load in one process —
-any cross-engine run, including several tests — two distinct OpenMP runtimes are
-live at once, which fails in two stages:
+With **pynec-accel ≥ 1.7.4.post2** and **momwire ≥ 0.2.1**, neither wheel vendors
+its own `libomp` — both link Homebrew's by absolute path, so a process that loads
+both (any cross-engine run, including the tests) shares a *single* OpenMP runtime
+and stays fully multithreaded, with no env vars. That shared runtime is why
+`brew install libomp` is required.
 
-1. **By default it aborts.** LLVM's OpenMP detects the duplicate and kills the
-   process: `OMP: Error #15 ... libomp.dylib already initialized`, which surfaces
-   as `Fatal Python error: Aborted`. `KMP_DUPLICATE_LIB_OK=TRUE` suppresses that
-   check.
-2. **With only that set, it then deadlocks.** The two runtimes don't coordinate,
-   so momwire's multithreaded OpenMP region hangs forever on its join barrier
-   (the process sits at ~0% CPU). `OMP_NUM_THREADS=1` runs the accelerator
-   single-threaded — no worker team to join — which clears the hang.
-
-Set both when PyNEC and momwire share a process:
-
-```bash
-export KMP_DUPLICATE_LIB_OK=TRUE     # suppress the duplicate-libomp abort
-export OMP_NUM_THREADS=1             # avoid the join-barrier deadlock (serializes the accelerator)
-```
-
-`OMP_NUM_THREADS=1` gives up the accelerator's parallelism, so set it only for
-cross-engine runs — a momwire-only or PyNEC-only process loads a single OpenMP
-runtime and needs neither var. Skipping PyNEC sidesteps the whole thing.
-
-This is not test-only. The same single process loads both backends whenever you
-*use* them together: the web workbench's A/B/C compare slots pointed at PyNEC and
-momwire at once, or a CLI `compare_patterns --engines pynec momwire:...`. Set the
-two vars before launching, e.g.:
-
-```bash
-KMP_DUPLICATE_LIB_OK=TRUE OMP_NUM_THREADS=1 uvicorn antennaknobs.web.server:app
-KMP_DUPLICATE_LIB_OK=TRUE OMP_NUM_THREADS=1 python -m antennaknobs \
-    compare_patterns --builders beams.moxon beams.moxon --engines pynec momwire:bspline
-```
-
-For the web server specifically you must *export* `OMP_NUM_THREADS=1` yourself:
-`src/antennaknobs/web/server.py` sets it to the physical-core count via
-`os.environ.setdefault`, so it stays multithreaded (the deadlock case) unless your
-value is already in the environment — `setdefault` lets your export win.
+> Older macOS wheels each bundled a private `libomp`; two copies in one process
+> abort with `OMP: Error #15` (or, with `KMP_DUPLICATE_LIB_OK=TRUE`, deadlock). If
+> you're pinned to a pre-`1.7.4.post2` pynec-accel or pre-`0.2.1` momwire, the
+> stopgap is `export KMP_DUPLICATE_LIB_OK=TRUE` and `export OMP_NUM_THREADS=1`
+> before any cross-engine run — at the cost of a single-threaded accelerator.
 
 **4. Install AntennaKNoBs** and **5. Run the tests** — identical to the Ubuntu
-steps. Use the `[test]` extra for the full suite (it pulls in the web-server
-deps + `httpx2` for the TestClient); both OpenMP vars above are needed if you
-installed PyNEC, since the suite has cross-engine tests:
+steps:
 
 ```bash
 pip install -e ".[test]"
-KMP_DUPLICATE_LIB_OK=TRUE OMP_NUM_THREADS=1 pytest -vv --durations=0 -- tests/
+pytest -vv --durations=0 -- tests/
 ```
 
 (For the web workbench's frontend dev server, also `brew install node`.)
