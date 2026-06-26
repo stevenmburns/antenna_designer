@@ -235,51 +235,32 @@ class Builder(AntennaBuilder):
             return -p[0], p[1], p[2]
 
         """
-    The droop/gap angles are stored in degrees; here slope refers to the
-    ratio dz/dy = tan(radians(angle_deg)) (and gap_slope = tan of the
-    gap angle), recovered at the call sites above.
+    Each half-element of length r = length/2 runs out to the tip (x, y, z)
+    at two angles measured in radians:
 
-    r^2 = x^2 + y^2 + z^2
-    rho^2 = x^2 + y^2
-    (x^2 + y^2)*slope^2 = z^2
-    rho^2*slope^2 = z^2
+      - droop: the descent below the horizontal plane. The horizontal reach
+        is rho = r*cos(droop) and the drop is z = r*sin(droop).
+      - gap:   the in-plane spread of the two bands about the y axis, so
+        within the horizontal plane y = rho*cos(gap) and x = rho*sin(gap).
 
-    r^2 = rho^2 + rho^2 * slope^2
-    r^2 = rho^2*(1+slope^2)
-
-    rho^2 = r^2/(1+slope^2)
-
-    rho^2 = x^2 + y^2
-    y*gap_slope = x
-
-    rho^2 = x^2 + y^2
-    y^2*gap_slope^2 = x^2
-    rho^2 = y^2 + y^2*gap_slope^2
-    rho^2 = y^2*(1+gap_slope^2)
-    
-    y^2 = rho^2/(1+gap_slope^2)
-
-    x^2 = rho^2 - y^2
+    (Equivalently slope = dz/dy = tan(droop) and gap_slope = x/y = tan(gap);
+    the trig form below is the same geometry without the 1/(1+tan^2) detour.)
 """
 
-        def compute(length, slope, gap_slope):
-            r_sq = (length / 2) ** 2
-            rho_sq = r_sq / (1 + slope**2)
-            z_sq = r_sq - rho_sq
-            y_sq = rho_sq / (1 + gap_slope**2)
-            x_sq = rho_sq - y_sq
+        def compute(length, droop, gap):
+            r = length / 2
+            rho = r * math.cos(droop)
+            z = r * math.sin(droop)
+            y = rho * math.cos(gap)
+            x = rho * math.sin(gap)
+            return x, y, z
 
-            return sqrt(x_sq), sqrt(y_sq), sqrt(z_sq)
+        droop_12 = math.radians(self.angle_12_deg)
+        droop_10 = math.radians(self.angle_10_deg)
+        gap = math.radians(self.gap_angle_deg)
 
-        # The compute() helper still works in the slope ratio (dz/dy =
-        # tan of the droop angle); convert the stored angles back to
-        # slopes at the call sites. slope = tan(radians(angle_deg)).
-        slope_12 = math.tan(math.radians(self.angle_12_deg))
-        slope_10 = math.tan(math.radians(self.angle_10_deg))
-        gap_slope = math.tan(math.radians(self.gap_angle_deg))
-
-        x_12, y_12, z_12 = compute(self.length_12 - 2 * self.s, slope_12, gap_slope)
-        x_10, y_10, z_10 = compute(self.length_10 - 2 * self.s, slope_10, gap_slope)
+        x_12, y_12, z_12 = compute(self.length_12 - 2 * self.s, droop_12, gap)
+        x_10, y_10, z_10 = compute(self.length_10 - 2 * self.s, droop_10, gap)
 
         S = (0, eps, 0)
         T = ry(S)
