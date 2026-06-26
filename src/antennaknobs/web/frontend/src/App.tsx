@@ -351,12 +351,21 @@ function Knob({
 
   const span = max - min || 1;
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
-  const snap = (v: number) => {
-    if (step > 0) v = min + Math.round((v - min) / step) * step;
-    // Round to the param's precision so we emit clean values (2.46, not
-    // 2.4600000001) and don't spam the live solve with fp noise.
+  // Clamp + round to the param's precision so we emit clean values (2.46, not
+  // 2.4600000001) and don't spam the live solve with fp noise. No grid snap —
+  // used where the exact value matters (Home/End reaching min/max).
+  const roundP = (v: number) => {
     const p = precision >= 0 ? precision : 6;
     return clamp(Number(v.toFixed(p)));
+  };
+  // Snap to the nearest multiple of `step` — a clean grid anchored at 0, not at
+  // `min`. Anchoring at min offset the whole grid by min's fractional part, so
+  // nudging an off-grid value kept that offset (1.03 + 0.2 -> 1.23). Anchored at
+  // 0 it lands on a round increment (1.03 + 0.2 -> 1.2). min/max are bounds, not
+  // the grid origin; they stay reachable exactly via roundP (Home/End).
+  const snap = (v: number) => {
+    if (step > 0) v = Math.round(v / step) * step;
+    return roundP(v);
   };
 
   const frac = Math.min(1, Math.max(0, (value - min) / span));
@@ -397,7 +406,8 @@ function Knob({
       const dir = e.deltaY < 0 ? 1 : -1;
       const mult = e.shiftKey ? 10 : 1;
       let v = value + dir * step * mult;
-      if (step > 0) v = min + Math.round((v - min) / step) * step;
+      // Snap to the step grid anchored at 0 (clean multiples), matching snap().
+      if (step > 0) v = Math.round(v / step) * step;
       const p = precision >= 0 ? precision : 6;
       onChange(Math.min(max, Math.max(min, Number(v.toFixed(p)))));
     };
@@ -445,11 +455,15 @@ function Knob({
         next = value - step * 10;
         break;
       case "Home":
-        next = min;
-        break;
+        // Jump to exactly min/max — these are bounds, not grid points, so skip
+        // the step snap (roundP clamps + rounds to precision only).
+        onChange(roundP(min));
+        e.preventDefault();
+        return;
       case "End":
-        next = max;
-        break;
+        onChange(roundP(max));
+        e.preventDefault();
+        return;
       case "Enter":
         setEditing(true);
         e.preventDefault();
