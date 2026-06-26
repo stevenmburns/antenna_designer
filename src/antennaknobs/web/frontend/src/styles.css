@@ -1534,3 +1534,92 @@ canvas {
     opacity: 0.5;
   }
 }
+
+/* --- Reactive knob optimiser --- */
+/* A knob marked as a free optimisation variable. */
+.field-knob.is-opt-var .knob-cap,
+.field-knob.is-opt-var .mockdial {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.field-knob.is-opt-var .knob-label::after {
+  content: " ⟳";
+  color: var(--accent);
+}
+
+/* Compact enable + objective control next to the meas-freq band/lock. */
+.opt-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.opt-control .opt-objective {
+  font-size: var(--text-xs);
+  padding: 0 var(--space-1);
+}
+.opt-pip {
+  color: var(--accent);
+  margin-left: 2px;
+  animation: opt-blink 1s steps(2, start) infinite;
+}
+@keyframes opt-blink {
+  to {
+    opacity: 0.2;
+  }
+}
+.opt-readout {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.opt-readout-err {
+  color: var(--danger, #c0392b);
+}
+
+/* Per-knob right-click menu. */
+.knob-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.knob-menu {
+  position: fixed;
+  z-index: 41;
+  min-width: 200px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2, 6px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
+.knob-menu-title {
+  font-weight: 600;
+  color: var(--fg);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--space-2);
+}
+.knob-menu-vary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  color: var(--fg);
+}
+.knob-menu-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+}
+.knob-menu-row > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.knob-menu-row input[type="number"] {
+  width: 5em;
+  font-size: var(--text-xs);
+}
