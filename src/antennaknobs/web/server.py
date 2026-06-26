@@ -700,6 +700,50 @@ async def geometry_endpoint(req: dict):
     return out
 
 
+@app.post("/optimize")
+async def optimize_endpoint(req: dict):
+    """Tune a chosen subset of knobs to optimise an electrical objective.
+
+    The request is a normal solve request plus an `optimize` block:
+        optimize = {
+          "free": [{"name", "min", "max"}, ...],   # which knobs + their bounds
+          "objective": "swr" | "resonance" | "match_z0",
+          "max_evals": <int, optional>,
+        }
+    Returns the best params found + before/after metrics. The objective is
+    evaluated at the request's measurement frequency through the geometry's
+    impedance-only momwire_solve (cheap — no far field), so a run is dozens of
+    quick solves rather than a far-field sweep. Always uses the momwire engine
+    regardless of the request's `solver` (PyNEC would be far too slow per eval).
+    """
+    from .optimize import OBJECTIVES, optimize as _optimize
+
+    opt = req.get("optimize") or {}
+    free = opt.get("free") or []
+    if not free:
+        return {"error": "select at least one knob to vary"}
+    objective = opt.get("objective", "swr")
+    if objective not in OBJECTIVES:
+        return {"error": f"unknown objective {objective!r}"}
+
+    geometry = req.get("geometry", next(iter(EXAMPLES)))
+    ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
+    base = {k: v for k, v in req.items() if k != "optimize"}
+    try:
+        result = await run_in_threadpool(
+            _optimize,
+            base,
+            free,
+            objective,
+            solve_fn=ex.momwire_solve,
+            max_evals=opt.get("max_evals"),
+        )
+    except Exception as exc:  # noqa: BLE001 — a user design's build_wires can raise
+        return {"geometry": geometry, "error": user_designs.format_solve_error(exc)}
+    result["geometry"] = geometry
+    return result
+
+
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
