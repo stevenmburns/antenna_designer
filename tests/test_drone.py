@@ -8,6 +8,7 @@ import pytest
 from antennaknobs import Drone
 from antennaknobs.designs.loops.delta_loop import Builder as DeltaLoop
 from antennaknobs.designs.loops.delta_loop_drone import Builder as DeltaLoopDrone
+from antennaknobs.designs.loops.horizontal_loop_drone import Builder as HLoopDrone
 
 
 def test_starts_facing_world_x():
@@ -114,3 +115,34 @@ def test_delta_loop_drone_matches_coordinate_version(variant):
     drone = DeltaLoopDrone(dict(params)).build_wires()
     assert len(drone) == len(coord)
     assert _key(drone) == _key(coord)
+
+
+def test_horizontal_loop_drone_is_a_closed_planar_square():
+    b = HLoopDrone()
+    wires = b.build_wires()
+    # 5 edges: driven gap + remainder of side 1, then 3 more sides (the last
+    # via close()).
+    assert len(wires) == 5
+
+    # Flat in the z = base plane.
+    base = b.default_params["base"]
+    zs = {round(p[2], 9) for e in wires for p in (e[0], e[1])}
+    assert zs == {base}
+
+    # Exactly one driven segment, one NEC segment long, at the start vertex.
+    driven = [e for e in wires if e[3] is not None]
+    assert len(driven) == 1
+    assert driven[0][2] == 1 and driven[0][3] == 1 + 0j
+
+    # The loop closes exactly: first point == last point (the feed vertex).
+    assert wires[0][0] == pytest.approx(wires[-1][1])
+
+    # Each consecutive edge shares the previous endpoint (connected walk).
+    for prev, nxt in zip(wires, wires[1:]):
+        assert prev[1] == pytest.approx(nxt[0])
+
+    # Perimeter is four equal sides = 4 * quarter * length_factor.
+    wl = 299.792458 / b.default_params["design_freq"]
+    side = 0.25 * wl * b.default_params["length_factor"]
+    perim = sum(math.dist(e[0], e[1]) for e in wires)
+    assert perim == pytest.approx(4 * side)
