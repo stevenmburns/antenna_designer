@@ -287,7 +287,9 @@ User-authored designs (in the `user.*` namespace) appear here too; filter with
 
 ## Install
 
-On recent Ubuntu (22.04 / 24.04). PyNEC installs as a prebuilt wheel, so no
+### Ubuntu (22.04 / 24.04)
+
+PyNEC installs as a prebuilt wheel, so no
 SWIG/BLAS/autotools toolchain is needed; only the momwire C++ accelerator compiles
 from source (hence `g++`).
 
@@ -365,6 +367,120 @@ tests' TestClient.)
 > workflow at [`.github/workflows/test.yml`](.github/workflows/test.yml) — it
 > installs both engines and runs the suite on every push. If anything here
 > drifts, that file is the source of truth.
+
+### macOS
+
+Tested on Apple Silicon (arm64), macOS 14+. The momwire C++ accelerator compiles
+from source against Homebrew's OpenMP runtime (`libomp`); PyNEC installs as a
+prebuilt wheel. CI only runs Ubuntu, so the Ubuntu sequence above is the
+source of truth — the steps below are the same with macOS system packages.
+
+**1. System dependencies**
+
+```bash
+xcode-select --install              # clang/clang++ + git (skip if already installed)
+brew install python git libomp      # libomp = the OpenMP runtime the momwire accelerator links
+```
+
+**2. Clone and create a virtual environment.** Use a venv — on macOS it is
+effectively required, not just good hygiene: Homebrew's Python is marked
+externally managed (PEP 668), so `pip install` into it fails with an
+`error: externally-managed-environment`. A venv sidesteps that and keeps the
+project's dependencies off your system Python.
+
+```bash
+git clone https://github.com/stevenmburns/antennaknobs
+cd antennaknobs
+python3 -m venv .venv
+source .venv/bin/activate         # re-run this in each new shell before using the project
+pip install --upgrade pip setuptools wheel
+pip install numpy scipy pytest matplotlib icecream scikit-rf
+```
+
+**3. Install momwire (the engine)** — same as Ubuntu:
+
+```bash
+pip install pybind11
+git submodule update --init momwire
+pip install --no-build-isolation -e ./momwire
+```
+
+The build finds Homebrew's `libomp` at `/opt/homebrew/opt/libomp`, the Apple
+Silicon default. On an Intel Mac, Homebrew lives under `/usr/local`, so point the
+build there with `LIBOMP_PREFIX`:
+
+```bash
+LIBOMP_PREFIX=/usr/local/opt/libomp pip install --no-build-isolation -e ./momwire
+```
+
+If the accelerator fails to build for any reason, momwire still installs and runs
+in its slower pure-Python mode.
+
+**3b. (Optional) Install PyNEC for cross-validation**
+
+The same optional **GPL-2.0** second backend as on Linux. The fork ships prebuilt
+macOS wheels for **Apple Silicon (arm64), macOS 14+, Python 3.10–3.14** only —
+there are no Intel-Mac wheels, so on an Intel Mac skip PyNEC and use momwire alone.
+
+```bash
+pip install pynec-accel --no-index \
+    --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.5
+```
+
+macOS has its own version of the Ubuntu libgomp/static-TLS caveat, and it needs
+**two** env vars to fully resolve. momwire's accelerator links Homebrew's
+`libomp`, while the pynec-accel wheel bundles its own copy
+(`pynec_accel.dylibs/libomp.dylib`). When *both* backends load in one process —
+any cross-engine run, including several tests — two distinct OpenMP runtimes are
+live at once, which fails in two stages:
+
+1. **By default it aborts.** LLVM's OpenMP detects the duplicate and kills the
+   process: `OMP: Error #15 ... libomp.dylib already initialized`, which surfaces
+   as `Fatal Python error: Aborted`. `KMP_DUPLICATE_LIB_OK=TRUE` suppresses that
+   check.
+2. **With only that set, it then deadlocks.** The two runtimes don't coordinate,
+   so momwire's multithreaded OpenMP region hangs forever on its join barrier
+   (the process sits at ~0% CPU). `OMP_NUM_THREADS=1` runs the accelerator
+   single-threaded — no worker team to join — which clears the hang.
+
+Set both when PyNEC and momwire share a process:
+
+```bash
+export KMP_DUPLICATE_LIB_OK=TRUE     # suppress the duplicate-libomp abort
+export OMP_NUM_THREADS=1             # avoid the join-barrier deadlock (serializes the accelerator)
+```
+
+`OMP_NUM_THREADS=1` gives up the accelerator's parallelism, so set it only for
+cross-engine runs — a momwire-only or PyNEC-only process loads a single OpenMP
+runtime and needs neither var. Skipping PyNEC sidesteps the whole thing.
+
+This is not test-only. The same single process loads both backends whenever you
+*use* them together: the web workbench's A/B/C compare slots pointed at PyNEC and
+momwire at once, or a CLI `compare_patterns --engines pynec momwire:...`. Set the
+two vars before launching, e.g.:
+
+```bash
+KMP_DUPLICATE_LIB_OK=TRUE OMP_NUM_THREADS=1 uvicorn antennaknobs.web.server:app
+KMP_DUPLICATE_LIB_OK=TRUE OMP_NUM_THREADS=1 python -m antennaknobs \
+    compare_patterns --builders beams.moxon beams.moxon --engines pynec momwire:bspline
+```
+
+For the web server specifically you must *export* `OMP_NUM_THREADS=1` yourself:
+`src/antennaknobs/web/server.py` sets it to the physical-core count via
+`os.environ.setdefault`, so it stays multithreaded (the deadlock case) unless your
+value is already in the environment — `setdefault` lets your export win.
+
+**4. Install AntennaKNoBs** and **5. Run the tests** — identical to the Ubuntu
+steps. Use the `[test]` extra for the full suite (it pulls in the web-server
+deps + `httpx2` for the TestClient); both OpenMP vars above are needed if you
+installed PyNEC, since the suite has cross-engine tests:
+
+```bash
+pip install -e ".[test]"
+KMP_DUPLICATE_LIB_OK=TRUE OMP_NUM_THREADS=1 pytest -vv --durations=0 -- tests/
+```
+
+(For the web workbench's frontend dev server, also `brew install node`.)
 
 ---
 
