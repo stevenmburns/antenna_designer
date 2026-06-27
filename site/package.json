@@ -1,0 +1,21 @@
+{
+  "name": "antennaknobs-site",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Marketing landing (antennaknobs.com) + docs (antennaknobs.dev), built with Astro + Starlight.",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@astrojs/starlight": "^0.34.0",
+    "astro": "^5.6.0",
+    "sharp": "^0.33.5",
+    "typescript": "^5.7.0"
+  }
+}

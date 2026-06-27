@@ -1,0 +1,12 @@
+/* antennaknobs brand accent. Starlight derives the rest of the palette from
+   these. Tweak freely — this is just a starting point. */
+:root {
+  --sl-color-accent-low: #11243a;
+  --sl-color-accent: #2b7fff;
+  --sl-color-accent-high: #b9d6ff;
+}
+:root[data-theme="light"] {
+  --sl-color-accent-low: #c3d9ff;
+  --sl-color-accent: #1f6fe5;
+  --sl-color-accent-high: #0a2a5c;
+}

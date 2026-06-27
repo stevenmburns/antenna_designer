@@ -1,0 +1,61 @@
+---
+title: The model
+description: How antennaknobs represents an antenna — the AntennaBuilder framework, the knob system, and the build_wires() contract.
+---
+
+Everything in antennaknobs is built on one small idea: an antenna is a function
+from **parameters** (the knobs) to a **list of wires**.
+
+## `AntennaBuilder`
+
+A design subclasses `AntennaBuilder` and declares its parameters:
+
+```python
+from types import MappingProxyType
+from antennaknobs import AntennaBuilder
+
+class Builder(AntennaBuilder):
+    default_params = MappingProxyType({
+        "design_freq": 28.47,
+        "freq": 28.47,
+        "length": 5.2,
+        # ...
+    })
+
+    def build_wires(self):
+        ...
+```
+
+Parameters are read and written as plain attributes (`ant.length = 5.2`); under
+the hood that's backed by the parameter dict. Variant parameter sets (e.g. a
+design retuned for a different height or band) live alongside `default_params`,
+and a `ui_params` block carries hints for the web knobs (ranges, the default 3D
+view, and so on).
+
+## The `build_wires()` contract
+
+`build_wires()` returns a flat list of edges, each a tuple:
+
+```python
+((x0, y0, z0), (x1, y1, z1), nsegs, excitation)
+```
+
+- the two endpoints are 3D coordinates (metres),
+- `nsegs` is how many segments to mesh that wire into,
+- `excitation` is `None` for a structural wire, or a complex value for the
+  **driven** segment carrying the source.
+
+That single list is the entire interface to the solver and every renderer —
+nothing downstream cares *how* you produced it, which is what makes the
+[geometry layer so flexible](/concepts/authoring/).
+
+## House conventions
+
+- **Angles are in degrees** throughout, with a `_deg` suffix on parameter names
+  (the web UI shows a compact `°`-suffixed label and the full program name in a
+  tooltip).
+- Segment counts are derived from a wire's length relative to a reference
+  (usually a quarter-wavelength) so meshing stays consistent across designs.
+
+<!-- TODO: link to a generated API reference for AntennaBuilder once it exists,
+     and document FRAMEWORK_PARAMS / nominal_nsegs precisely. -->
