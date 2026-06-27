@@ -51,6 +51,7 @@
 | src/antennaknobs/designs/loops/diamond\_loop.py                   |       32 |        0 |    100% |           |
 | src/antennaknobs/designs/loops/diamond\_loop\_turnstile.py        |       38 |        0 |    100% |           |
 | src/antennaknobs/designs/loops/horizontal\_loop.py                |       26 |        0 |    100% |           |
+| src/antennaknobs/designs/loops/horizontal\_loop\_drone.py         |       19 |        0 |    100% |           |
 | src/antennaknobs/designs/loops/inv\_delta\_loop.py                |       31 |        0 |    100% |           |
 | src/antennaknobs/designs/loops/quad.py                            |       35 |        0 |    100% |           |
 | src/antennaknobs/designs/multiband/\_\_init\_\_.py                |        0 |        0 |    100% |           |
@@ -111,7 +112,7 @@
 | src/antennaknobs/web/pynec\_backend.py                            |       83 |       31 |     63% |20-22, 72-90, 117, 128-131, 187-192, 199-204 |
 | src/antennaknobs/web/server.py                                    |      341 |       37 |     89% |66-68, 175-176, 340-343, 400, 441, 474, 476-479, 520, 571, 606, 611-625, 636-637, 661-672, 691, 855, 858-859, 876 |
 | src/antennaknobs/web/user\_designs.py                             |       56 |        6 |     89% |58-59, 83-84, 89-90 |
-| **TOTAL**                                                         | **5380** |  **277** | **95%** |           |
+| **TOTAL**                                                         | **5399** |  **277** | **95%** |           |
 
 
 ## Setup coverage badge
