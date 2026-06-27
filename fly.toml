@@ -1,0 +1,37 @@
+# Fly.io deploy config for the antennaknobs web workbench.
+#
+# `app` must be globally unique on Fly — if "antennaknobs" is taken, run
+# `fly apps create <name>` with another name and update this line (or let
+# `fly launch` pick one). Set `primary_region` to the Fly region nearest your
+# users; list them with `fly platform regions`. See docs/deploy.md.
+
+app = "antennaknobs"
+primary_region = "sjc"   # San Jose — change to your nearest region
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # Keep one machine warm so the first knob turn has no cold-start lag
+  # (importing numpy/scipy/momwire + the first solve takes a few seconds).
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  # WebSockets ride the same HTTP service — the /ws live-solve channel needs no
+  # special config; Fly proxies the upgrade through to internal_port.
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "20s"   # let the app import + warm before first probe
+
+[[vm]]
+  # Shared CPU is fine for bursty single-user solves; 2 GB gives numpy/scipy/
+  # momwire and the solve cache headroom (1 GB is tight). Step up to a
+  # performance VM if concurrent users stretch the solve times.
+  size = "shared-cpu-1x"
+  memory = "2gb"
