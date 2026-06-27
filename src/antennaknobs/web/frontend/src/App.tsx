@@ -1414,7 +1414,10 @@ type PatternData = {
   measurement_freq_mhz: number;
 };
 
-const WS_URL = `ws://${window.location.host}/ws`;
+// Match the page's scheme: a wss:// upgrade is required on HTTPS pages (e.g. the
+// deployed site behind Fly's force_https), where browsers block insecure ws://
+// as mixed content. Plain ws:// only works on http:// (local dev).
+const WS_URL = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws`;
 
 type View = "antenna" | "azimuth" | "elevation" | "smith";
 const VIEWS: { id: View; label: string }[] = [
