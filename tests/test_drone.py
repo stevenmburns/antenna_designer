@@ -9,6 +9,9 @@ from antennaknobs import Drone
 from antennaknobs.designs.loops.delta_loop import Builder as DeltaLoop
 from antennaknobs.designs.loops.delta_loop_drone import Builder as DeltaLoopDrone
 from antennaknobs.designs.loops.delta_loop_marked import Builder as DeltaLoopMarked
+from antennaknobs.designs.loops.delta_loop_reflected import (
+    Builder as DeltaLoopReflected,
+)
 from antennaknobs.designs.loops.horizontal_loop_drone import Builder as HLoopDrone
 
 
@@ -201,3 +204,31 @@ def test_delta_loop_marked_is_a_symmetric_delta_loop():
 
     counts = Counter((round(p[1], 6), round(p[2], 6)) for p in pts)
     assert set(counts.values()) == {2}
+
+
+def _undirected(builder):
+    """{(sorted endpoint pair, is_driven)} for a design's wires, ignoring
+    edge order, direction, and segment count."""
+    out = set()
+    for p0, p1, _ns, ex in builder.build_wires():
+        a = tuple(round(c, 9) for c in p0)
+        b = tuple(round(c, 9) for c in p1)
+        out.add((tuple(sorted([a, b])), ex is not None))
+    return out
+
+
+def test_delta_loop_reflected_uses_build_path_topology():
+    ws = DeltaLoopReflected().build_wires()
+    # build_path([S, A, B, T]) -> 3 perimeter edges; build_path([T, S]) -> feed.
+    assert len(ws) == 4
+    driven = [e for e in ws if e[3] is not None]
+    assert len(driven) == 1 and driven[0][3] == 1 + 0j
+    # The feed uses the original delta_loop n_seg1 = max(3, nominal // 7).
+    assert driven[0][2] == max(3, DeltaLoopReflected().nominal_nsegs // 7)
+
+
+def test_delta_loop_reflected_agrees_with_marked():
+    # Three constructions of the same antenna: the labelled-node version and
+    # the reflection+build_path version must produce the same loop (same nodes,
+    # same undirected edges, same driven edge) -- only segmentation differs.
+    assert _undirected(DeltaLoopReflected()) == _undirected(DeltaLoopMarked())
