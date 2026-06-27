@@ -12,6 +12,7 @@ from antennaknobs.designs.loops.delta_loop_marked import Builder as DeltaLoopMar
 from antennaknobs.designs.loops.delta_loop_reflected import (
     Builder as DeltaLoopReflected,
 )
+from antennaknobs.designs.loops.delta_loop_solved import Builder as DeltaLoopSolved
 from antennaknobs.designs.loops.horizontal_loop_drone import Builder as HLoopDrone
 
 
@@ -232,3 +233,24 @@ def test_delta_loop_reflected_agrees_with_marked():
     # the reflection+build_path version must produce the same loop (same nodes,
     # same undirected edges, same driven edge) -- only segmentation differs.
     assert _undirected(DeltaLoopReflected()) == _undirected(DeltaLoopMarked())
+
+
+def test_delta_loop_solved_hits_target_perimeter():
+    # The side length is found numerically so the total wire length equals
+    # length_factor * wavelength -- no apex formula, the solver inverts the
+    # build-and-measure model.
+    wl = 299.792458 / DeltaLoopSolved.default_params["design_freq"]
+    for lf in (0.9, 1.0, 1.1):
+        ws = DeltaLoopSolved(
+            dict(DeltaLoopSolved.default_params, length_factor=lf)
+        ).build_wires()
+        total = sum(math.dist(p0, p1) for p0, p1, _ns, _ex in ws)
+        assert total == pytest.approx(lf * wl, abs=1e-6)
+
+    # Same symmetric build_path topology as the other delta loops.
+    ws = DeltaLoopSolved().build_wires()
+    assert len(ws) == 4
+    driven = [e for e in ws if e[3] is not None]
+    assert len(driven) == 1 and driven[0][3] == 1 + 0j
+    yz = {(round(p[1], 6), round(p[2], 6)) for e in ws for p in (e[0], e[1])}
+    assert {(-y, z) for (y, z) in yz} == yz
