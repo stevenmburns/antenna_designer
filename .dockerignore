@@ -1,0 +1,22 @@
+# Keep the build context small and the image clean. The frontend is rebuilt in
+# stage 1 and the engine wheels come from TestPyPI, so none of the local build
+# artifacts, the momwire submodule checkout, or the dev venv are needed.
+.git
+.venv
+**/__pycache__/
+*.pyc
+*.egg-info/
+**/node_modules/
+# Rebuilt by the frontend stage; never ship a stale local bundle.
+src/antennaknobs/web/static/
+# momwire is installed as a wheel from TestPyPI, not built from the submodule.
+momwire/
+# Docs, tests, scratch, and CI are not part of the runtime image.
+docs/
+tests/
+scratch/
+scripts/
+.github/
+site/
+*.png
+NEXT_STEPS.md
