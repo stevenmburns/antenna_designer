@@ -8,6 +8,7 @@ import pytest
 from antennaknobs import Drone
 from antennaknobs.designs.loops.delta_loop import Builder as DeltaLoop
 from antennaknobs.designs.loops.delta_loop_drone import Builder as DeltaLoopDrone
+from antennaknobs.designs.loops.delta_loop_marked import Builder as DeltaLoopMarked
 from antennaknobs.designs.loops.horizontal_loop_drone import Builder as HLoopDrone
 
 
@@ -155,3 +156,48 @@ def test_horizontal_loop_drone_feed_is_symmetric():
     # And the whole loop is invariant under that reflection (x, y) -> (y, x).
     pts = {(round(p[0], 6), round(p[1], 6)) for e in wires for p in (e[0], e[1])}
     assert {(y, x) for (x, y) in pts} == pts
+
+
+def test_mark_and_line_to_connects_to_a_pinned_node():
+    d = Drone(ref=1.0)
+    d.pay_out().mark("a")  # pin the origin
+    d.forward(2.0)  # -> (2, 0, 0)
+    d.yaw(90).forward(2.0)  # -> (2, 2, 0)
+    d.line_to("a")  # lay (2,2,0) -> (0,0,0) and move there
+    last = d.wires()[-1]
+    assert last[0] == pytest.approx((2.0, 2.0, 0.0))
+    assert last[1] == pytest.approx((0.0, 0.0, 0.0))
+    assert d.position == pytest.approx((0.0, 0.0, 0.0))
+
+
+def test_delta_loop_marked_is_a_symmetric_delta_loop():
+    ws = DeltaLoopMarked().build_wires()
+    assert len(ws) == 4
+    pts = [p for e in ws for p in (e[0], e[1])]
+
+    # Vertical loop, planar in x = 0.
+    assert {round(p[0], 9) for p in pts} == {0.0}
+
+    # Exactly one one-segment driven feed.
+    driven = [e for e in ws if e[3] is not None]
+    assert len(driven) == 1 and driven[0][2] == 1 and driven[0][3] == 1 + 0j
+
+    # Symmetric about the y = 0 plane (so the feed/pattern stay symmetric).
+    yz = {(round(p[1], 6), round(p[2], 6)) for p in pts}
+    assert {(-y, z) for (y, z) in yz} == yz
+
+    # Two equal slanted sides and a horizontal top.
+    top_z = max(p[2] for p in pts)
+    structural = [e for e in ws if e[3] is None]
+    top = [e for e in structural if e[0][2] == top_z and e[1][2] == top_z]
+    slants = [e for e in structural if e not in top]
+    assert len(top) == 1 and len(slants) == 2
+    assert math.dist(slants[0][0], slants[0][1]) == pytest.approx(
+        math.dist(slants[1][0], slants[1][1])
+    )
+
+    # Connected closed loop: every node is shared by exactly two edges.
+    from collections import Counter
+
+    counts = Counter((round(p[1], 6), round(p[2], 6)) for p in pts)
+    assert set(counts.values()) == {2}

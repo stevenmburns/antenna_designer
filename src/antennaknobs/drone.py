@@ -56,6 +56,7 @@ class Drone:
         self.ref = ref
         self._pen = None  # None = up; ("ex", value) when down
         self._origin = None  # world position where the current stroke began
+        self._nodes = {}  # labelled positions, dropped by mark()
         self.edges = []
 
     # -- state ----------------------------------------------------------
@@ -134,6 +135,27 @@ class Drone:
         if math.dist(p0, self._origin) > 1e-12:
             self._emit(p0, tuple(self._origin), nsegs)
         self.move_to(self._origin)
+        return self
+
+    # -- labelled nodes -------------------------------------------------
+    def mark(self, label):
+        """Drop a labelled pin at the current position for a later line_to()."""
+        self._nodes[label] = self.position
+        return self
+
+    def line_to(self, label, nsegs=None):
+        """Lay a wire from the current position to a previously mark()ed node
+        (with the current pen), then move there. The drone works out the
+        straight segment itself, so the caller needs no trig to connect two
+        points -- handy for the one edge of a figure whose length would
+        otherwise have to be solved for (e.g. the top of a triangle once both
+        corners have been flown to). ``close()`` is the special case of this
+        for the stroke's start node."""
+        target = self._nodes[label]
+        p0 = self.position
+        if math.dist(p0, target) > 1e-12:
+            self._emit(p0, tuple(target), nsegs)
+        self.move_to(target)
         return self
 
     # -- turns (body-relative) -----------------------------------------
