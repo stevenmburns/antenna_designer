@@ -1,0 +1,133 @@
+---
+title: Many ways to express geometry
+description: The same delta loop, built five different ways — from a coordinate formula to a 3D turtle to a numeric solve. Pick the expression that fits how you think.
+---
+
+import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
+
+The only thing the solver sees is the [edge list from
+`build_wires()`](/concepts/model/#the-build_wires-contract). *How* you produce
+that list is entirely up to you — and there is rarely one right way. To make
+that concrete, the catalog ships the **same delta loop built five different
+ways**, each rendering identical geometry. Pick the one that matches how you
+think about the shape; invent a sixth if none fit.
+
+A delta loop is a triangle fed by a short gap at the bottom:
+
+```
+        B-----------A      top corner A (the one that "needs trig")
+         \\         /
+          \\       /        two equal slanted sides
+           \\     /
+            T~~~~S          short driven feed gap at the base
+```
+
+<Tabs>
+  <TabItem label="1. Coordinates">
+    **`delta_loop`** — the direct approach. Size the triangle from a perimeter
+    `length_factor`, then solve a closed-form apex-height formula for the corner
+    coordinates and write them down.
+
+    ```python
+    h = (cos * (d - 2 * eps) + 2 * eps) / (2 * (cos + 1))
+    # ...corner coordinates follow from h, then build_path stitches them
+    ```
+
+    Honest and explicit — but that apex formula is the "scary trig" the other
+    versions exist to avoid.
+  </TabItem>
+
+  <TabItem label="2. Drone">
+    **`delta_loop_drone`** — fly the shape with a [`Drone`](#the-drone), the 3D
+    analog of turtle graphics. Pay out wire, fly a slant, turn, fly the top,
+    turn, fly the other slant, close across the feed.
+
+    ```python
+    drone.face(heading=(0, cos_t, sin_t), up=(1, 0, 0))
+    drone.pay_out().forward(side)   # right slant
+    drone.yaw(exterior_angle).forward(top)
+    drone.yaw(exterior_angle).forward(side)
+    drone.feed(1 + 0j).close()      # back across the feed gap
+    ```
+
+    No coordinates written by hand — the sin/cos lives in the drone's matrices.
+    Verified to match version 1 to machine precision.
+  </TabItem>
+
+  <TabItem label="3. Marked nodes">
+    **`delta_loop_marked`** — reparameterize by slant **angle** and **side
+    length**, with *no trig in the script at all*. Fly each slant, drop a
+    labelled pin at the right corner, then `line_to` it to lay the top — the
+    drone works out the top segment from the two corner positions it tracked.
+
+    ```python
+    drone.move_to(S).face(heading=(0, 0, 1), up=(1, 0, 0))
+    drone.yaw(-angle_deg).pay_out().forward(side)   # S -> R
+    drone.mark("R")
+    drone.cut().move_to(T).yaw(angle_deg)
+    drone.pay_out().forward(side).line_to("R")      # L -> R top
+    ```
+  </TabItem>
+
+  <TabItem label="4. Reflection">
+    **`delta_loop_reflected`** — the most hybrid version. The drone is a
+    trig-free **point finder** (fly pen-up to read off corner `A`), a `ry`
+    reflection mirrors the right half to get `B` and `T`, and `build_path`
+    stitches the four points.
+
+    ```python
+    A = (Drone(position=S)
+         .face(heading=(0, 0, 1), up=(1, 0, 0))
+         .yaw(-angle_deg).forward(side).position)   # pen up: just read A
+    B, T = ry(A), ry(S)                              # reflect across y = 0
+    build_path([S, A, B, T], n0, None) + build_path([T, S], n1, 1 + 0j)
+    ```
+  </TabItem>
+
+  <TabItem label="5. Numeric solve">
+    **`delta_loop_solved`** — same construction as #4, but parameterized by
+    `length_factor` and the side length is found **numerically**. Build the loop
+    for a trial side, *measure* its total wire length, and let `brentq` invert
+    the model to hit `length_factor * wavelength`.
+
+    ```python
+    from scipy.optimize import brentq
+    target = length_factor * wavelength
+    side = brentq(lambda s: total_wire_length(s) - target, 1e-3, 2 * wavelength)
+    ```
+
+    No formula, no algebra — the drone computes the corner, `math.dist` measures
+    the wires, and the solver does the inversion.
+  </TabItem>
+</Tabs>
+
+<Aside type="tip" title="The point">
+  All five produce the same antenna. The progression — analytic → flown →
+  labelled → reflected → solved — is a tour of *how much you can lean on the
+  framework* instead of doing geometry by hand. Designs are meant to be starting
+  points; reach for whichever style makes your next antenna clearest.
+</Aside>
+
+## The Drone
+
+The `Drone` is a pen-carrying 3D turtle. It carries a pose (position +
+orientation as a single homogeneous transform) and compiles to the same edge
+list `build_wires()` returns:
+
+| Verb | What it does |
+| --- | --- |
+| `pay_out()` / `cut()` | pen down / up (start / stop laying structural wire) |
+| `feed(excitation)` | like `pay_out`, but the wire is the driven segment |
+| `forward(dist)` / `jump(dist)` | fly along the nose, with / without laying wire |
+| `yaw` / `pitch` / `roll` | turn in the body frame (degrees) |
+| `face(heading, up)` | point the nose along `heading` (handy to start a planar figure) |
+| `mark(label)` / `line_to(label)` | pin a node, then lay a wire straight to it |
+| `close()` | fly back to where the current stroke began |
+
+Because orientation is a single rotation matrix, the Drone composes with the
+existing `Transform` machinery and has no gimbal-lock failure in the
+representation itself.
+
+{/* TODO: embed the rendered geometry of each variant (identical) side by side
+    once the site can pull thumbnails from the package, and link each tab to
+    the design's full source on the catalog page. */}

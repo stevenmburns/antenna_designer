@@ -1,0 +1,10 @@
+# Astro / Node build artifacts
+dist/
+.astro/
+node_modules/
+.DS_Store
+
+# Env / logs
+.env
+.env.production
+npm-debug.log*

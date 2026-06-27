@@ -1,0 +1,57 @@
+---
+title: antennaknobs
+description: A browser-based wire-antenna method-of-moments simulator. Turn a knob, watch the radiation pattern, SWR, and impedance move in real time.
+template: splash
+hero:
+  tagline: Turn a knob, watch the antenna. A browser-based wire-antenna MoM simulator — no install, no NEC deck to hand-write.
+  actions:
+    - text: Open the live tuner
+      link: https://antennaknobs-4b980q.fly.dev/
+      icon: external
+      variant: primary
+    - text: Quickstart
+      link: /start/quickstart/
+      icon: right-arrow
+      variant: secondary
+    - text: View on GitHub
+      link: https://github.com/stevenmburns/antennaknobs
+      icon: github
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+## The whole pitch, in one line
+
+Almost every antenna tool on the web is a static formula calculator or a
+desktop app you have to install. antennaknobs is the one you open in a browser,
+grab a knob, and watch the physics respond — the radiation pattern, SWR, and
+impedance update live as you drag.
+
+<CardGrid stagger>
+  <Card title="Multi-basis MoM" icon="seti:python">
+    Triangular, sinusoidal, and B-spline bases in one engine — basis quality
+    that otherwise costs four figures in commercial tools.
+  </Card>
+  <Card title="Fast on big arrays" icon="rocket">
+    H-matrix / ACA acceleration with GMRES, where every free NEC tool is dense
+    O(N²). Demonstrated O(N log N) on a 2142-segment Yagi.
+  </Card>
+  <Card title="Cross-checked physics" icon="approve-check">
+    A NEC-2 reference engine runs alongside the in-house solver, so you get a
+    built-in accuracy check most tools lack.
+  </Card>
+  <Card title="No platform lock-in" icon="laptop">
+    A web UI by default — works anywhere a browser does, while the competition
+    is Windows/Linux/macOS desktop-only or a GUI-less library.
+  </Card>
+</CardGrid>
+
+## Start here
+
+<CardGrid>
+  <LinkCard title="What is antennaknobs?" href="/start/welcome/" description="The tool, who it's for, and how the pieces fit." />
+  <LinkCard title="Quickstart" href="/start/quickstart/" description="pip install, then a resonant dipole in ten lines of Python." />
+  <LinkCard title="Many ways to express geometry" href="/concepts/authoring/" description="The same delta loop, built five different ways — pick the one that fits how you think." />
+  <LinkCard title="The solver & accuracy" href="/reference/solver/" description="Bases, H-matrix acceleration, and how it's validated." />
+</CardGrid>
