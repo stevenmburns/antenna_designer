@@ -78,11 +78,34 @@ until the cert validates. (The marketing `.com` landing and `.dev` docs are
 static sites built separately — see `docs/website-content-plan.md`; only the
 live app needs this Fly service.)
 
-## 4. Day-to-day
+## 4. Push-to-deploy via GitHub Actions (optional, recommended)
+
+Fly has no "connect a repo" dashboard like Render/Vercel — but
+[`.github/workflows/fly-deploy.yml`](../.github/workflows/fly-deploy.yml) gives
+the same result: every push to `main` that touches the app or its deploy config
+builds on Fly's remote builders and releases. One-time bootstrap (after the app
+exists from step 2):
+
+```bash
+# A scoped deploy token for this app:
+fly tokens create deploy -a antennaknobs   # use your app name
+```
+
+Copy the printed token and add it as a repo secret named **`FLY_API_TOKEN`**
+(GitHub → repo Settings → Secrets and variables → Actions → New repository
+secret). Until that secret exists, the workflow runs green but **skips** the
+deploy with a notice — so it never fails CI before you're ready. Once set, a
+merge to `main` deploys automatically; `workflow_dispatch` lets you trigger a
+deploy by hand from the Actions tab.
+
+The first deploy should still be the manual `fly deploy` from step 2 (it creates
+and warms the machine); the workflow handles redeploys thereafter.
+
+## 5. Day-to-day
 
 | Task | Command |
 |---|---|
-| Redeploy after a change | `fly deploy` |
+| Redeploy after a change | `fly deploy` (or just push to `main`) |
 | Tail logs | `fly logs` |
 | Open a shell in the machine | `fly ssh console` |
 | Scale memory / CPU | edit `[[vm]]` in `fly.toml`, then `fly deploy` |

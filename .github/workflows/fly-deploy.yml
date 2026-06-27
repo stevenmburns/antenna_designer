@@ -1,0 +1,51 @@
+name: Deploy to Fly.io
+
+# Push-to-deploy for the live tuner. On a push to main that touches the app or
+# its deploy config, build on Fly's remote builders and release. Fly has no
+# "connect a repo" dashboard like Render/Vercel; this workflow is the
+# equivalent. See docs/deploy.md for the one-time bootstrap (create the app +
+# add the FLY_API_TOKEN secret).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "fly.toml"
+      - "src/antennaknobs/**"
+      - "pyproject.toml"
+      - ".github/workflows/fly-deploy.yml"
+  workflow_dispatch: {}
+
+# Never run two deploys at once; cancel an in-flight one if a newer push lands.
+concurrency:
+  group: fly-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Stay green (not red) before the bootstrap is done: if the token secret
+      # is absent, skip the deploy with a notice instead of failing.
+      - name: Check for Fly token
+        id: token
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::notice::FLY_API_TOKEN not set — skipping deploy. Add it in repo Settings → Secrets to enable push-to-deploy (see docs/deploy.md)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up flyctl
+        if: steps.token.outputs.skip != 'true'
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy
+        if: steps.token.outputs.skip != 'true'
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
