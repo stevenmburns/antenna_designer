@@ -1107,6 +1107,16 @@ const BACKEND_LABEL: Record<Backend, string> = {
   pynec: "PyNEC",
 };
 
+// A design/solver combo is "inappropriate" when the solver is a poor fit: a
+// dense solver (or PyNEC) on a large array is very slow, and an accelerator
+// (array-block / H-matrix) on a single-element design is pure overhead. `rec` is
+// the server's recommended backend ("arrayblock" for grid arrays, else null).
+function comboInappropriate(b: Backend, rec: Backend | null): boolean {
+  const accel = b === "arrayblock" || b === "hmatrix";
+  if (rec === "arrayblock") return !accel; // an array wants an accelerator
+  return accel; // everything else doesn't need one
+}
+
 const BACKEND_ORDER: Backend[] = [
   "triangular",
   "sinusoidal",
@@ -1781,19 +1791,15 @@ export function App() {
   // Set once the user picks a backend by hand; after that we stop auto-seeding
   // the per-antenna recommended solver so their choice sticks.
   const backendTouchedRef = useRef(false);
-  // True when the active backend was set by ACCEPTING a per-design solver
-  // recommendation (not a hand-pick). Such an auto-choice is reverted to the
-  // slot's dense default when moving to a design that doesn't recommend it, so
-  // an accelerated solver never silently carries over (the invvee-shows-
-  // arrayblock surprise).
-  const backendFromRecRef = useRef(false);
-  // A deferred first-solve prompt: when a heavy design recommends a faster
-  // solver than the current one, hold the first solve and ASK instead of
-  // switching silently or kicking off a slow dense solve. null = nothing asked.
-  const [pendingBackendChoice, setPendingBackendChoice] = useState<{
-    recommended: Backend;
-    forGeometry: string;
-  } | null>(null);
+  // True once the user clicked "Solve anyway" for the current design+solver
+  // combo, so re-solves (knob drags) don't re-warn. Reset whenever the design or
+  // solver changes (see the reset effect below).
+  const approvedComboRef = useRef(false);
+  // Shown when the current design+solver is a poor match — a dense solver on a
+  // large array (slow), or an accelerator on a single element (overkill). The
+  // solve is withheld until the user clicks "Solve anyway" or changes the solver
+  // themselves; the app never switches solvers on its own.
+  const [solverWarning, setSolverWarning] = useState(false);
   // Set by Cancel: discard the in-flight solve's result and drop the busy UI.
   // The server's /ws loop is sequential and a running MoM solve can't be
   // interrupted, so this cancels the WAIT, not the computation.
@@ -1801,10 +1807,6 @@ export function App() {
   const [gearOpen, setGearOpen] = useState<Slot | null>(null);
   const activeConfig = slots[activeSlot];
   const backend = activeConfig.backend;
-  // Non-stale mirror of the active backend for use inside effect closures that
-  // are keyed only on `geometry`.
-  const backendRef = useRef(backend);
-  backendRef.current = backend;
   const currentOpts = activeConfig.opts;
   const nPerWire = currentOpts.nPerWire;
   const wireRadius = currentOpts.wireRadius;
@@ -1946,51 +1948,29 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentExample?.name]);
 
-  // Solver recommendation flow. Instead of silently switching the backend on
-  // selection (which surprised users and carried an array's array-block choice
-  // over to the next single-element design), a heavy design that recommends a
-  // faster solver HOLDS the first solve and asks — see the geometry preview's
-  // .then, which sets `pendingBackendChoice`. These handle the two answers:
+  // The app never switches solvers on its own. When the current design+solver
+  // combo is a poor match the solve is withheld and a warning is shown; these
+  // handle its two buttons. (To change solver, the user uses the gear menu.)
 
-  // Accept the recommended (faster) solver, then release the gate so the first
-  // solve fires on it. Marked recommendation-driven so it reverts on the next
-  // design that doesn't want it.
-  function chooseRecommendedBackend() {
-    const pc = pendingBackendChoice;
-    if (!pc) return;
-    backendFromRecRef.current = true;
-    setSlotBackend(activeSlot, pc.recommended);
-    setPendingBackendChoice(null);
-    setPreviewReady(pc.forGeometry);
+  // "Solve anyway": approve this combo so re-solves don't re-warn, then solve.
+  function solveAnyway() {
+    approvedComboRef.current = true;
+    setSolverWarning(false);
+    controlsRef.current = buildRequest();
+    requestSolve();
   }
-  // Keep the current solver and solve anyway (the user accepts a slow solve).
-  function chooseCurrentBackend() {
-    const pc = pendingBackendChoice;
-    if (!pc) return;
-    setPendingBackendChoice(null);
-    setPreviewReady(pc.forGeometry);
+  // "Cancel": dismiss the warning without solving.
+  function dismissWarning() {
+    setSolverWarning(false);
   }
-  // Cancel an in-flight solve: stop waiting and discard its result (the server
-  // keeps computing — see solveCanceledRef). If this design has a faster solver,
-  // re-offer it so Cancel leads somewhere useful instead of a dead end.
+  // Cancel an IN-FLIGHT solve: stop waiting and discard its result. The server
+  // keeps computing (its /ws loop is sequential and a running MoM solve can't be
+  // interrupted), so this cancels the wait, not the computation.
   function cancelSolve() {
     if (!inFlightRef.current) return;
     solveCanceledRef.current = true;
     pendingRef.current = null;
     syncSolving();
-    const rec = preview?.default_backend ?? null;
-    if (
-      rec &&
-      BACKEND_ORDER.includes(rec) &&
-      rec !== backendRef.current &&
-      !backendTouchedRef.current
-    ) {
-      setPreviewReady(null); // hold further solves until they choose
-      setPendingBackendChoice({
-        recommended: rec,
-        forGeometry: geometryRef.current,
-      });
-    }
   }
 
   // Schema-driven design-freq link: when the active example has any
@@ -2367,13 +2347,31 @@ export function App() {
   // completes (drops intermediate values rather than queuing them all up).
   const controlsRef = useRef<SolveRequest>(buildRequest());
 
+  // Reset the "solve anyway" approval whenever the design or solver changes, so
+  // an inappropriate combo is re-evaluated (and re-warned) rather than riding a
+  // stale approval. Defined before the solve effect so it runs first.
+  useEffect(() => {
+    approvedComboRef.current = false;
+  }, [geometry, backend, backendOptsKey]);
+
   useEffect(() => {
     // Hold the first solve after an antenna switch until that antenna's preview
-    // has landed and seeded the backend (previewReady === geometry). Param/freq
-    // tweaks on the *same* antenna keep solving freely — previewReady stays
-    // equal to geometry until the next switch resets it to null.
+    // has landed (previewReady === geometry). Param/freq tweaks on the *same*
+    // antenna keep solving freely — previewReady stays equal to geometry until
+    // the next switch resets it to null.
     if (previewReady !== geometry) return;
     controlsRef.current = buildRequest();
+    // Withhold the solve when the design/solver combo is a poor match and the
+    // user hasn't approved it — show a warning instead. The app never switches
+    // the solver itself; the user does that in the gear menu, which changes
+    // `backend` and re-runs this effect.
+    const rec =
+      preview?.default_backend ?? currentExample?.default_backend ?? null;
+    if (comboInappropriate(backend, rec) && !approvedComboRef.current) {
+      setSolverWarning(true);
+      return;
+    }
+    setSolverWarning(false);
     requestSolve();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -2396,7 +2394,7 @@ export function App() {
     setPreview(null);
     setSolveError(null);
     setPreviewReady(null); // close the solve gate until this antenna's preview lands
-    setPendingBackendChoice(null); // drop any unanswered prompt from the prior design
+    setSolverWarning(false); // drop any combo warning from the prior design
     solveCanceledRef.current = false;
     previewAbortRef.current?.abort();
     const controller = new AbortController();
@@ -2420,45 +2418,17 @@ export function App() {
           setSolveError(data.error as string);
           return;
         }
-        let held = false;
         if (data && data.wires) {
           setPreview(data as SolveResponse);
           // A deferred (user) design derives its natural view only when the
           // builder first runs — which is this preview. Snap the camera to it
-          // here, once per selection (this effect is keyed on `geometry`). For
-          // eager built-ins the value matches the provisional one already set
-          // from currentExample.default_view, so there's no visible flip.
+          // here, once per selection (this effect is keyed on `geometry`).
           const dv = (data as SolveResponse).default_view;
           if (dv) setCameraProjection(dv);
-
-          // Solver recommendation. Rather than silently switching the backend,
-          // decide between three outcomes:
-          const rec = (data as SolveResponse).default_backend ?? null;
-          const autoSet = backendFromRecRef.current && !backendTouchedRef.current;
-          let effectiveCurrent = backendRef.current;
-          // (1) A stale auto-accelerated backend this design doesn't want →
-          // revert to the slot's dense default so it never carries over.
-          if (autoSet && rec !== backendRef.current) {
-            backendFromRecRef.current = false;
-            resetSlot(activeSlot);
-            effectiveCurrent = DEFAULT_SLOTS[activeSlot].backend;
-          }
-          // (2) A faster solver is recommended and we're not on it (and the user
-          // hasn't hand-picked) → HOLD the first solve and ask.
-          if (
-            rec &&
-            BACKEND_ORDER.includes(rec) &&
-            !backendTouchedRef.current &&
-            rec !== effectiveCurrent
-          ) {
-            setPendingBackendChoice({ recommended: rec, forGeometry });
-            held = true;
-          }
-          // (3) otherwise nothing to do — the gate releases below and the first
-          // solve fires on the current backend.
         }
-        // Release the gate unless we're waiting on the user's solver choice.
-        if (!held) setPreviewReady(forGeometry);
+        // Release the gate. The solve effect then either solves or — if the
+        // design/solver combo is a poor match — withholds and warns.
+        setPreviewReady(forGeometry);
       })
       .catch(() => {
         // Aborted or offline. If this run wasn't superseded, still release the
@@ -3435,34 +3405,35 @@ export function App() {
             Cancel solve
           </button>
         )}
-        {pendingBackendChoice && (
+        {solverWarning && (
           <div
             className="solver-suggest"
-            role="dialog"
-            aria-label="Choose a solver"
+            role="alertdialog"
+            aria-label="Solver mismatch"
           >
             <span className="solver-suggest-title">
-              This design solves much faster with{" "}
-              <strong>{BACKEND_LABEL[pendingBackendChoice.recommended]}</strong>
+              {BACKEND_LABEL[backend]} is a poor match for this design
             </span>
             <span className="solver-suggest-sub">
-              The {BACKEND_LABEL[backend]} solver can be slow on a design this
-              size. Pick one to start solving.
+              {backend === "arrayblock" || backend === "hmatrix"
+                ? "This accelerator is overkill on a single-element design — a dense solver (e.g. Triangular) is faster here. "
+                : "This is a large array — a dense solver can be very slow. Array-block is far faster. "}
+              Change the solver in the gear menu, or solve anyway.
             </span>
             <div className="solver-suggest-actions">
               <button
                 type="button"
                 className="solver-suggest-primary"
-                onClick={chooseRecommendedBackend}
+                onClick={solveAnyway}
               >
-                Use {BACKEND_LABEL[pendingBackendChoice.recommended]}
+                Solve anyway
               </button>
               <button
                 type="button"
                 className="solver-suggest-secondary"
-                onClick={chooseCurrentBackend}
+                onClick={dismissWarning}
               >
-                Keep {BACKEND_LABEL[backend]}
+                Cancel
               </button>
             </div>
           </div>
