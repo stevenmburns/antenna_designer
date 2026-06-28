@@ -1,10 +1,11 @@
-name: Deploy to Fly.io
+name: Deploy tuner to Fly.io
 
-# Push-to-deploy for the live tuner. On a push to main that touches the app or
-# its deploy config, build on Fly's remote builders and release. Fly has no
-# "connect a repo" dashboard like Render/Vercel; this workflow is the
-# equivalent. See docs/deploy.md for the one-time bootstrap (create the app +
-# add the FLY_API_TOKEN secret).
+# Push-to-deploy for the live tuner (the antennaknobs Fly app). On a push to main
+# that touches the app or its deploy config, build on Fly's remote builders and
+# release. Gated on an app-scoped secret (FLY_API_TOKEN_TUNER), separate from the
+# docs site's deploy (deploy-docs.yml / FLY_API_TOKEN_DOCS) so the two never
+# cross-trigger. NOTE: if a Fly dashboard GitHub integration is also connected to
+# this app, disconnect it — otherwise both it and this workflow deploy on push.
 on:
   push:
     branches: [main]
@@ -19,7 +20,7 @@ on:
 
 # Never run two deploys at once; cancel an in-flight one if a newer push lands.
 concurrency:
-  group: fly-deploy
+  group: fly-deploy-tuner
   cancel-in-progress: true
 
 jobs:
@@ -28,15 +29,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Stay green (not red) before the bootstrap is done: if the token secret
-      # is absent, skip the deploy with a notice instead of failing.
+      # Stay green (not red) if the secret is missing: skip with a notice.
       - name: Check for Fly token
         id: token
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_TUNER }}
         run: |
           if [ -z "$FLY_API_TOKEN" ]; then
-            echo "::notice::FLY_API_TOKEN not set — skipping deploy. Add it in repo Settings → Secrets to enable push-to-deploy (see docs/deploy.md)."
+            echo "::notice::FLY_API_TOKEN_TUNER not set — skipping tuner deploy."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -48,4 +48,4 @@ jobs:
         if: steps.token.outputs.skip != 'true'
         run: flyctl deploy --remote-only
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_TUNER }}
