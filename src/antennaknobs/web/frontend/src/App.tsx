@@ -3095,6 +3095,7 @@ export function App() {
               <div className="band-row">
                 <select
                   className="band-select"
+                  aria-label="band"
                   value={active.key}
                   onChange={(e) => selectBand(e.target.value)}
                 >
@@ -3203,12 +3204,13 @@ export function App() {
             frequency-counter readout. Band select + lock sit to the LEFT of the
             readout/dial to keep the field compact. "lock to design freq"
             disables the dial. */}
-        <div className="group-label">measurement freq</div>
+        <h2 className="group-label">measurement freq</h2>
         <div className={`field vfo-field${linkMeas ? " is-locked" : ""}`}>
           <div className="vfo-aux">
             {currentBands.length > 0 && (
               <select
                 className="band-select"
+                aria-label="measurement band"
                 value={bandContaining(measFreq) ?? currentBands[0].key}
                 disabled={linkMeas}
                 onChange={(e) => selectMeasBand(e.target.value)}
@@ -3242,6 +3244,7 @@ export function App() {
               {optEnabled && (
                 <select
                   className="opt-objective"
+                  aria-label="optimise for"
                   value={optObjective}
                   onChange={(e) => setOptObjective(e.target.value as OptObjective)}
                 >
@@ -3295,7 +3298,7 @@ export function App() {
           </div>
         </div>
 
-        <div className="group-label">simulation</div>
+        <h2 className="group-label">simulation</h2>
 
         <div className="field">
           <label>
@@ -3310,6 +3313,7 @@ export function App() {
                   <button
                     role="tab"
                     aria-selected={activeSlot === s}
+                    aria-label={`Solver slot ${s}: ${BACKEND_LABEL[cfg.backend]}, N=${cfg.opts.nPerWire}`}
                     className={`backend-tab-btn ${activeSlot === s ? "active" : ""}`}
                     title={`${BACKEND_LABEL[cfg.backend]}, N=${cfg.opts.nPerWire}`}
                     onClick={() => setActiveSlot(s)}
@@ -3333,7 +3337,7 @@ export function App() {
 
         {!backendSupportsGround(backend) && groundEnabled && (
           <div className="field" title="This backend doesn't model ground; ignored until you switch to one that does.">
-            <em style={{ color: "var(--muted)", fontSize: 12 }}>
+            <em style={{ color: "var(--muted)", fontSize: "var(--text-sm)" }}>
               ground plane ignored for {BACKEND_LABEL[backend]}
             </em>
           </div>
@@ -3390,7 +3394,7 @@ export function App() {
         )}
       </aside>
 
-      <main className="stage">
+      <main className="stage" aria-label="Antenna output views">
         {/* Indeterminate progress bar: appears once a solve outlasts the dwell
             and lingers out its min-visible window (showBusy), so it never
             flashes — the dim/label (stale) clear earlier, when the result lands. */}
@@ -3826,7 +3830,7 @@ function BackendConfigModal({
           )}
 
           {backend === "pynec" && (
-            <em style={{ color: "var(--muted)", fontSize: 12 }}>
+            <em style={{ color: "var(--muted)", fontSize: "var(--text-sm)" }}>
               PyNEC has no extra solver knobs here — ground type / fast ground
               live in the main panel.
             </em>
