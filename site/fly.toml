@@ -1,0 +1,33 @@
+# Fly.io config for the antennaknobs docs site (static Astro/Starlight build,
+# served by nginx). A separate, cheap app from the live tuner.
+#
+# Deploy from THIS directory so the build context is site/:
+#   cd site
+#   fly apps create antennaknobs-docs   # first time only
+#   fly deploy
+
+app = 'antennaknobs-docs'
+primary_region = 'sjc'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  # Static files cold-start near-instantly, so scale to zero when idle — this
+  # keeps the docs app close to free, unlike the always-warm tuner.
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = 'GET'
+    path = '/'
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '5s'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'
