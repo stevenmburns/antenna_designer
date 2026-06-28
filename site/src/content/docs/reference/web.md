@@ -20,7 +20,7 @@ handshake.
 ## The hosted instance
 
 A hosted tuner is running at
-**[antennaknobs-4b980q.fly.dev](https://antennaknobs-4b980q.fly.dev/)** (a single
+**[antennaknobs.fly.dev](https://antennaknobs.fly.dev/)** (a single
 FastAPI process serving the API, the `/ws` live-solve channel, and the built
 React SPA). It's deployed as a container on Fly.io; the repo's `docs/deploy.md`
 is the runbook.
