@@ -1638,9 +1638,12 @@ canvas {
 @media (max-width: 700px) {
   .app {
     /* Controls nearly fill the viewport (capped so a sliver of the stage peeks
-       as a "swipe right" affordance); the stage is a full viewport-wide
-       rectangle. Their sum exceeds 100vw, so .app scrolls horizontally. */
-    grid-template-columns: min(340px, 86vw) 100vw;
+       as a "swipe right" affordance); the stage is a wide, monitor-aspect
+       rectangle you pan across. Their sum far exceeds 100vw, so .app scrolls
+       horizontally. --mobile-stage-w keeps the grid column and the stage's
+       min-width in sync. */
+    --mobile-stage-w: 200vw;
+    grid-template-columns: min(340px, 86vw) var(--mobile-stage-w);
     overflow-x: auto;
     overflow-y: hidden;
     scroll-snap-type: x proximity;
@@ -1652,8 +1655,11 @@ canvas {
   }
 
   .stage {
-    /* A real rectangle to pan to, the full width of the screen. */
-    min-width: 100vw;
+    /* ~2x the viewport width so the output carousel renders at roughly a
+       computer-monitor (landscape) aspect ratio, instead of the cramped,
+       near-portrait box a single viewport width produced. You pan horizontally
+       across it. */
+    min-width: var(--mobile-stage-w);
     scroll-snap-align: start;
   }
 }
