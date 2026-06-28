@@ -1663,3 +1663,75 @@ canvas {
     scroll-snap-align: start;
   }
 }
+
+/* ---- Solver-choice prompt + cancel ------------------------------------------
+   A heavy design that recommends a faster solver holds its first solve and asks
+   here, floated over the (not-yet-solved) stage; Cancel lets a slow solve be
+   abandoned (the wait, not the server-side computation). */
+.solver-suggest {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: min(420px, 86%);
+  padding: var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  box-shadow: 0 6px 24px var(--shadow);
+  text-align: center;
+}
+.solver-suggest-title {
+  font-size: var(--text-base);
+  color: var(--fg);
+}
+.solver-suggest-sub {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.solver-suggest-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+  margin-top: var(--space-2);
+}
+.solver-suggest-primary,
+.solver-suggest-secondary {
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--r-sm);
+  font-size: var(--text-sm);
+  color: var(--fg);
+  cursor: pointer;
+}
+.solver-suggest-primary {
+  background: var(--accent-active);
+  border: 1px solid var(--accent-border);
+  font-weight: 600;
+}
+.solver-suggest-secondary {
+  background: var(--inset);
+  border: 1px solid var(--border-control);
+}
+
+.solve-cancel {
+  position: absolute;
+  top: var(--space-5);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  padding: var(--space-2) var(--space-5);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  color: var(--fg);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  box-shadow: 0 2px 10px var(--shadow);
+}
+.solve-cancel:hover {
+  border-color: var(--border-hover);
+}
