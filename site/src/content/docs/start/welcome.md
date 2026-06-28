@@ -32,6 +32,6 @@ re-solve and redraw in real time.
 
 The live tuner is running here — open it, pick a design, and drag a knob:
 
-👉 **[antennaknobs-4b980q.fly.dev](https://antennaknobs-4b980q.fly.dev/)**
+👉 **[antennaknobs.fly.dev](https://antennaknobs.fly.dev/)**
 
 Then come back for the [Quickstart](/start/quickstart/) to drive it from Python.

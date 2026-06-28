@@ -6,7 +6,7 @@ description: The built-in antenna designs, by family — each one a readable Ant
 Every built-in design is an [`AntennaBuilder`](/concepts/model/) whose source is
 meant to be read and copied. Address them as `family.name` (the same names
 `python -m antennaknobs list` prints), and open any in the [live
-tuner](https://antennaknobs-4b980q.fly.dev/) to drag its knobs. Many are modelled
+tuner](https://antennaknobs.fly.dev/) to drag its knobs. Many are modelled
 after L. B. Cebik (W4RNL)'s articles.
 
 ## Dipoles

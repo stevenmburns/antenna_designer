@@ -5,7 +5,7 @@ import starlight from "@astrojs/starlight";
 // The live tuner (the FastAPI workbench) currently runs on its temporary
 // Fly hostname. Swap this for https://app.antennaknobs.dev (or the apex) once
 // DNS is wired up — it's referenced from the home hero and the Web docs.
-const TUNER_URL = "https://antennaknobs-4b980q.fly.dev/";
+const TUNER_URL = "https://antennaknobs.fly.dev/";
 
 // https://astro.build/config
 export default defineConfig({
