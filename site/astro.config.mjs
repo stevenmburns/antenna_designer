@@ -2,10 +2,10 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
-// The live simulator (the FastAPI workbench) currently runs on its temporary
-// Fly hostname. Swap this for https://app.antennaknobs.dev (or the apex) once
-// DNS is wired up — it's referenced from the home hero and the Web docs.
-const SIMULATOR_URL = "https://antennaknobs.fly.dev/";
+// The live simulator (the FastAPI workbench), served on its custom domain.
+// (The Fly app is still reachable at antennaknobs.fly.dev, but app.antennaknobs.dev
+// is the canonical public URL.) Referenced from the home hero and the Web docs.
+const SIMULATOR_URL = "https://app.antennaknobs.dev/";
 
 // https://astro.build/config
 export default defineConfig({

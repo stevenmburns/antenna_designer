@@ -32,6 +32,6 @@ re-solve and redraw in real time.
 
 The live simulator is running here — open it, pick a design, and drag a knob:
 
-👉 **[antennaknobs.fly.dev](https://antennaknobs.fly.dev/)**
+👉 **[app.antennaknobs.dev](https://app.antennaknobs.dev/)**
 
 Then come back for the [Quickstart](/start/quickstart/) to drive it from Python.
