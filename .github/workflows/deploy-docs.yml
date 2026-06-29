@@ -1,15 +1,15 @@
 name: Deploy docs site to Fly.io
 
-# Push-to-deploy for the static docs site (the antennaknobs-docs Fly app). Fires
-# on pushes to main that touch site/, building + releasing on Fly's remote
-# builders. Separate from the live-simulator deploy (fly-deploy.yml) and gated on its
-# own app-scoped secret (FLY_API_TOKEN_DOCS) so the two never cross-trigger.
+# Tag-to-deploy for the static docs site (the antennaknobs-docs Fly app).
+# Releases are cut by pushing a v* tag (see publish.yml / fly-deploy.yml): the
+# docs site is rebuilt + released from the tagged commit alongside the simulator,
+# so a release ships the whole system as one consistent versioned snapshot.
+# Merging to main does NOT deploy. Separate from the simulator deploy
+# (fly-deploy.yml) and gated on its own app-scoped secret (FLY_API_TOKEN_DOCS) so
+# the two never cross-trigger. workflow_dispatch is the manual escape hatch.
 on:
   push:
-    branches: [main]
-    paths:
-      - "site/**"
-      - ".github/workflows/deploy-docs.yml"
+    tags: ["v*"]
   workflow_dispatch: {}
 
 concurrency:

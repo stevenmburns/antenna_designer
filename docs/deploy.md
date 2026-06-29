@@ -78,36 +78,64 @@ until the cert validates. (The marketing `.com` landing and `.dev` docs are
 static sites built separately — see `docs/website-content-plan.md`; only the
 live app needs this Fly service.)
 
-## 4. Push-to-deploy via GitHub Actions (optional, recommended)
+## 4. Tag-to-deploy via GitHub Actions (the release discipline)
 
-Fly has no "connect a repo" dashboard like Render/Vercel — but
-[`.github/workflows/fly-deploy.yml`](../.github/workflows/fly-deploy.yml) gives
-the same result: every push to `main` that touches the app or its deploy config
-builds on Fly's remote builders and releases. One-time bootstrap (after the app
-exists from step 2):
+`main` is the always-green **integration** line: PRs merge into it freely and CI
+runs, but **merging does not deploy anything**. A release is a deliberate act —
+push a `v*` tag, and three workflows fire off that one tagged commit:
+
+| Workflow | App / target | Secret |
+|---|---|---|
+| [`fly-deploy.yml`](../.github/workflows/fly-deploy.yml) | simulator (`antennaknobs`) | `FLY_API_TOKEN_SIMULATOR` |
+| [`deploy-docs.yml`](../.github/workflows/deploy-docs.yml) | docs site (`antennaknobs-docs`) | `FLY_API_TOKEN_DOCS` |
+| [`publish.yml`](../.github/workflows/publish.yml) | the package → TestPyPI + GitHub Release | — (Trusted Publishing) |
+
+So the tagged version number always names exactly what's live across the package,
+the simulator, and the docs — they ship as one consistent snapshot.
+
+One-time bootstrap (after each app exists from step 2): mint an **app-scoped**
+deploy token per app and store each as the matching repo secret (GitHub → repo
+Settings → Secrets and variables → Actions):
 
 ```bash
-# A scoped deploy token for this app:
-fly tokens create deploy -a antennaknobs   # use your app name
+fly tokens create deploy -a antennaknobs        # -> FLY_API_TOKEN_SIMULATOR
+fly tokens create deploy -a antennaknobs-docs    # -> FLY_API_TOKEN_DOCS
 ```
 
-Copy the printed token and add it as a repo secret named **`FLY_API_TOKEN`**
-(GitHub → repo Settings → Secrets and variables → Actions → New repository
-secret). Until that secret exists, the workflow runs green but **skips** the
-deploy with a notice — so it never fails CI before you're ready. Once set, a
-merge to `main` deploys automatically; `workflow_dispatch` lets you trigger a
-deploy by hand from the Actions tab.
+Until a secret exists, its deploy job runs green but **skips** with a notice — so
+a release never fails CI before the token is set. The first deploy of a brand-new
+app should still be the manual `fly deploy` from step 2 (it creates and warms the
+machine); the tag workflow handles releases thereafter.
 
-The first deploy should still be the manual `fly deploy` from step 2 (it creates
-and warms the machine); the workflow handles redeploys thereafter.
+### Cutting a release
+
+```bash
+# 1. main is green and has everything you want to ship.
+git checkout main && git pull
+
+# 2. Bump the version (single source of truth) and commit it on main via a PR.
+#    Edit `version = "..."` in pyproject.toml. The tag must match this.
+
+# 3. Tag the release commit and push the tag — this is what deploys.
+git tag v0.5.0
+git push origin v0.5.0
+```
+
+Watch the three workflows in the Actions tab; when green, the simulator
+(`app.antennaknobs.dev`), docs (`antennaknobs.dev`), and the published dist are
+all at `v0.5.0`. **Rollback / hotfix:** every deploy workflow keeps a
+`workflow_dispatch` button — run it from the Actions tab against any ref (an older
+tag to roll back, or a fix branch) without cutting a new version.
 
 ## 5. Day-to-day
 
 | Task | Command |
 |---|---|
-| Redeploy after a change | `fly deploy` (or just push to `main`) |
-| Tail logs | `fly logs` |
-| Open a shell in the machine | `fly ssh console` |
+| Ship a release (sim + docs + dist) | bump `pyproject.toml`, then `git tag vX.Y.Z && git push origin vX.Y.Z` |
+| Deploy a hotfix / roll back, no tag | Actions tab → the deploy workflow → **Run workflow** on the chosen ref |
+| Manual one-off deploy from your machine | `fly deploy` (sim) / `cd site && fly deploy` (docs) |
+| Tail logs | `fly logs -a antennaknobs` |
+| Open a shell in the machine | `fly ssh console -a antennaknobs` |
 | Scale memory / CPU | edit `[[vm]]` in `fly.toml`, then `fly deploy` |
 | Add a region replica | `fly scale count 2 --region <r>` |
 
