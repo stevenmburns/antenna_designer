@@ -59,6 +59,10 @@ export default defineConfig({
           items: [
             { label: "The model", slug: "concepts/model" },
             { label: "Many ways to express geometry", slug: "concepts/authoring" },
+            {
+              label: "Writing designs with Claude Code",
+              slug: "concepts/authoring-with-claude",
+            },
           ],
         },
         {
@@ -67,6 +71,7 @@ export default defineConfig({
             { label: "Design catalog", slug: "reference/catalog" },
             { label: "The solver & accuracy", slug: "reference/solver" },
             { label: "Web workbench", slug: "reference/web" },
+            { label: "Drone & Transform API", slug: "reference/drone-transform" },
             { label: "Command line", slug: "reference/cli" },
           ],
         },
