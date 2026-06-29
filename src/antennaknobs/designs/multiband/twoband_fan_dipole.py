@@ -1,3 +1,20 @@
+"""Two-band fan (parallel) dipole — two dipoles bonded at a common feed.
+
+Unlike `fandipole` (a cone of azimuthally-separated spokes sized by
+length_factor), this is the classic PARALLEL/FAN dipole: the two bands hang in
+two near-parallel vertical planes, splitting at the feed a distance `s` out, and
+each band is tuned by its own ABSOLUTE length. Band 0 fans to +x, band 1 to -x;
+with `gap_angle_deg = 0` the two stay in their own x = ±s/√2 planes.
+
+The design doubles as a methodology study of the feed-junction spacing `s` (the
+s01..s07 variants sweep it), which is why the per-band lengths are hand-tuned
+absolutes rather than freq×factor.
+
+Per-band knobs (freq / length / droop angle) are grouped under `bands`, the
+shared multiband-design idiom (cf. fandipole, trap_fan_dipole); the feed-split
+`s`, feed-gap `eps`, and in-plane `gap_angle_deg` are shared across both bands.
+"""
+
 import logging
 import math
 from math import sqrt
@@ -8,184 +25,123 @@ from antennaknobs import AntennaBuilder
 logger = logging.getLogger(__name__)
 
 
+def _variant(freq, s, eps, *, len12, freq12, len10, freq10, base=7.0, angle=26.5651):
+    """A value-preset dict in the grouped (bands) shape.
+
+    Band 0 is the 12m element (fans to +x), band 1 the 10m element (-x), matching
+    the original A/B placement so geometry is unchanged by the regrouping.
+    """
+    return MappingProxyType(
+        {
+            "freq": freq,
+            "base": base,
+            "gap_angle_deg": 0.0,
+            "s": s,
+            "eps": eps,
+            "n_bands": 2,
+            # Plain dicts (NOT MappingProxyType): the adapter detects a band
+            # group via isinstance(x, dict), which MappingProxyType fails.
+            "bands": (
+                {"freq": freq12, "length": len12, "angle_deg": angle},
+                {"freq": freq10, "length": len10, "angle_deg": angle},
+            ),
+        }
+    )
+
+
 class Builder(AntennaBuilder):
-    s07_params = MappingProxyType(
-        {
-            "freq": 28.57,
-            "freq_10": 28.57,
-            "freq_12": 24.97,
-            "base": 7.0,
-            "length_12": 5.1102,
-            "length_10": 4.4682,
-            "angle_12_deg": 26.5651,
-            "angle_10_deg": 26.5651,
-            "gap_angle_deg": 0.0,
-            "s": 0.7,
-            "eps": 0.01,
-        }
+    # Feed-junction spacing sweep (s = 0.7 → 0.1) + an eps perturbation and the
+    # as-built "current_physical" point. The per-band lengths were re-tuned for
+    # resonance at each s.
+    s07_params = _variant(
+        28.57, 0.7, 0.01, len12=5.1102, freq12=24.97, len10=4.4682, freq10=28.57
     )
-
-    s05_params = MappingProxyType(
-        {
-            "freq": 28.57,
-            "freq_10": 28.57,
-            "freq_12": 24.97,
-            "base": 7.0,
-            "length_12": 5.2949,
-            "length_10": 4.6531,
-            "angle_12_deg": 26.5651,
-            "angle_10_deg": 26.5651,
-            "gap_angle_deg": 0.0,
-            "s": 0.5,
-            "eps": 0.01,
-        }
+    s05_params = _variant(
+        28.57, 0.5, 0.01, len12=5.2949, freq12=24.97, len10=4.6531, freq10=28.57
     )
-
-    s03_params = MappingProxyType(
-        {
-            "freq": 28.57,
-            "freq_10": 28.57,
-            "freq_12": 24.97,
-            "base": 7.0,
-            "length_12": 5.4725,
-            "length_10": 4.8370,
-            "angle_12_deg": 26.5651,
-            "angle_10_deg": 26.5651,
-            "gap_angle_deg": 0.0,
-            "s": 0.3,
-            "eps": 0.01,
-        }
+    s03_params = _variant(
+        28.57, 0.3, 0.01, len12=5.4725, freq12=24.97, len10=4.8370, freq10=28.57
     )
-
-    s025_params = MappingProxyType(
-        {
-            "freq": 24.97,
-            "freq_10": 28.57,
-            "freq_12": 24.97,
-            "base": 7.0,
-            "length_12": 5.5153,
-            "length_10": 4.8837,
-            "angle_12_deg": 26.5651,
-            "angle_10_deg": 26.5651,
-            "gap_angle_deg": 0.0,
-            "s": 0.25,
-            "eps": 0.01,
-        }
+    s025_params = _variant(
+        24.97, 0.25, 0.01, len12=5.5153, freq12=24.97, len10=4.8837, freq10=28.57
     )
-
-    s02_params = MappingProxyType(
-        {
-            "freq": 24.97,
-            "freq_10": 28.57,
-            "freq_12": 24.97,
-            "base": 7.0,
-            "length_12": 5.5571,
-            "length_10": 4.9312,
-            "angle_12_deg": 26.5651,
-            "angle_10_deg": 26.5651,
-            "gap_angle_deg": 0.0,
-            "s": 0.2,
-            "eps": 0.01,
-        }
+    s02_params = _variant(
+        24.97, 0.2, 0.01, len12=5.5571, freq12=24.97, len10=4.9312, freq10=28.57
     )
-
-    s015_params = MappingProxyType(
-        {
-            "freq": 24.97,
-            "freq_10": 28.57,
-            "freq_12": 24.97,
-            "base": 7.0,
-            "length_12": 5.5978,
-            "length_10": 4.9803,
-            "angle_12_deg": 26.5651,
-            "angle_10_deg": 26.5651,
-            "gap_angle_deg": 0.0,
-            "s": 0.15,
-            "eps": 0.01,
-        }
+    s015_params = _variant(
+        24.97, 0.15, 0.01, len12=5.5978, freq12=24.97, len10=4.9803, freq10=28.57
     )
-
-    s01_params = MappingProxyType(
-        {
-            "freq": 24.97,
-            "freq_10": 28.57,
-            "freq_12": 24.97,
-            "base": 7.0,
-            "length_12": 5.6371,
-            "length_10": 5.0331,
-            "angle_12_deg": 26.5651,
-            "angle_10_deg": 26.5651,
-            "gap_angle_deg": 0.0,
-            "s": 0.10,
-            "eps": 0.01,
-        }
+    s01_params = _variant(
+        24.97, 0.10, 0.01, len12=5.6371, freq12=24.97, len10=5.0331, freq10=28.57
     )
-
-    s01_eps001_params = MappingProxyType(
-        {
-            "freq": 24.97,
-            "freq_10": 28.57,
-            "freq_12": 24.97,
-            "base": 7.0,
-            "length_12": 5.7628,
-            "length_10": 5.0717,
-            "angle_12_deg": 26.5651,
-            "angle_10_deg": 26.5651,
-            "gap_angle_deg": 0.0,
-            "s": 0.10,
-            "eps": 0.001,
-        }
+    s01_eps001_params = _variant(
+        24.97, 0.10, 0.001, len12=5.7628, freq12=24.97, len10=5.0717, freq10=28.57
     )
-
-    current_physical_params = MappingProxyType(
-        {
-            "freq": 28.47,
-            "freq_10": 29.3,
-            "freq_12": 26.6,
-            "base": 7.0,
-            "length_12": 5.494,
-            "length_10": 5.0517,
-            "angle_12_deg": 26.5651,
-            "angle_10_deg": 26.5651,
-            "gap_angle_deg": 0.0,
-            "s": 0.15,
-            "eps": 0.015,
-        }
+    current_physical_params = _variant(
+        28.47, 0.15, 0.015, len12=5.494, freq12=26.6, len10=5.0517, freq10=29.3
     )
 
     default_params = MappingProxyType(
         {
+            # Measurement frequency the live solve evaluates Z_in at. Geometry
+            # doesn't read it — each band sizes itself from its own `length`.
+            # The band group's link_meas_freq_to_param wires each band's `freq`
+            # leaf to this when a band row is selected.
             "freq": 28.47,
-            "freq_10": 28.7,
-            "freq_12": 24.0,
             "base": 7.0,
-            "length_12": 5.877,
-            "length_10": 5.19,
-            "angle_12_deg": 26.5651,
-            "angle_10_deg": 26.5651,
+            # In-plane spread of the two bands about the y axis (deg). 0 keeps
+            # each band in its own x = ±s/√2 plane (a true parallel fan).
             "gap_angle_deg": 0.0,
+            # Feed-junction split: how far out (m) the two bands separate from
+            # the shared feed. This is the design's swept methodology knob.
             "s": 0.15,
-            # eps is the feed-gap half-width (drives the center-segment size).
-            # 0.01 is the value build_wires used when this knob was inert; kept
-            # here so the default geometry is unchanged now that it is live.
+            # Feed-gap half-width (drives the center-segment size).
             "eps": 0.01,
-            # 2-column panel, one column per band (10m | 12m): rows pair the
-            # band's freq / length / droop angle (deg) so the two bands read
-            # side by side. Feed-gap / coupling knobs (gap_angle_deg, s, eps)
-            # sit on the rows below.
+            # Pinned at 2 — the topology is two dipoles (one each side of the
+            # feed). Exposed so the `bands` group has a repeat_count to
+            # reference, satisfying the schema adapter's contract.
+            "n_bands": 2,
+            # Per-band knobs grouped: each band carries its own freq (meas-freq
+            # anchor) / absolute length / droop angle. Band 0 = 12m (+x),
+            # band 1 = 10m (-x).
+            "bands": (
+                {"freq": 24.0, "length": 5.877, "angle_deg": 26.5651},
+                {"freq": 28.7, "length": 5.19, "angle_deg": 26.5651},
+            ),
             "ui_params": MappingProxyType(
                 {
-                    "layout": {"columns": 2},
-                    "freq_10": {"layout": {"row": 1, "col": 1}},
-                    "freq_12": {"layout": {"row": 1, "col": 2}},
-                    "length_10": {"layout": {"row": 2, "col": 1}},
-                    "length_12": {"layout": {"row": 2, "col": 2}},
-                    "angle_10_deg": {"layout": {"row": 3, "col": 1}},
-                    "angle_12_deg": {"layout": {"row": 3, "col": 2}},
-                    "gap_angle_deg": {"layout": {"row": 4, "col": 1}},
-                    "s": {"layout": {"row": 4, "col": 2}},
-                    "eps": {"layout": {"row": 5, "col": 1}},
-                    "base": {"layout": {"row": 5, "col": 2}},
+                    # n_bands is the bands group's repeat_count — the frontend
+                    # reads its live value to know how many band rows to render,
+                    # so it must stay a visible param (hiding it collapses the
+                    # group to zero rows). Range 1–2 like trap_fan_dipole; the
+                    # design is really two dipoles, n_bands=1 is a single arm.
+                    "n_bands": {"min": 1, "max": 2, "step": 1},
+                    # tuple-of-dicts becomes a ParamGroupSpec; this dict tells the
+                    # adapter how to render each band row + per-leaf ranges.
+                    "bands": {
+                        "label_template": "band {i}",
+                        "repeat_count": "n_bands",
+                        "max_repeats": 2,
+                        "link_meas_freq_to_param": "freq",
+                        "freq": {
+                            "min": 13.5,
+                            "max": 30.2,
+                            "step": 0.001,
+                            "precision": 3,
+                            "unit": " MHz",
+                        },
+                        "length": {
+                            "min": 3.0,
+                            "max": 7.0,
+                            "step": 0.001,
+                            "precision": 4,
+                            "unit": " m",
+                        },
+                        "angle_deg": {"min": 0.0, "max": 60.0},
+                    },
+                    "s": {"min": 0.05, "max": 0.8, "step": 0.01, "precision": 2},
+                    "eps": {"min": 0.001, "max": 0.05, "step": 0.001, "precision": 3},
+                    "gap_angle_deg": {"min": 0.0, "max": 30.0},
                 }
             ),
         }
@@ -195,29 +151,16 @@ class Builder(AntennaBuilder):
 
     def build_wires(self):
         eps = self.eps
-
-        def build_path(lst, ns, ex):
-            return ((a, b, ns, ex) for a, b in zip(lst[:-1], lst[1:]))
+        s = self.s
+        gap = math.radians(self.gap_angle_deg)
 
         def ry(p):
             return p[0], -p[1], p[2]
 
-        def rx(p):
-            return -p[0], p[1], p[2]
-
-        """
-    Each half-element of length r = length/2 runs out to the tip (x, y, z)
-    at two angles measured in radians:
-
-      - droop: the descent below the horizontal plane. The horizontal reach
-        is rho = r*cos(droop) and the drop is z = r*sin(droop).
-      - gap:   the in-plane spread of the two bands about the y axis, so
-        within the horizontal plane y = rho*cos(gap) and x = rho*sin(gap).
-
-    (Equivalently slope = dz/dy = tan(droop) and gap_slope = x/y = tan(gap);
-    the trig form below is the same geometry without the 1/(1+tan^2) detour.)
-"""
-
+        # Each half-element of length r = length/2 runs out to the tip at two
+        # angles: droop (descent below horizontal; rho = r·cos(droop),
+        # z = r·sin(droop)) and gap (in-plane spread; y = rho·cos(gap),
+        # x = rho·sin(gap)).
         def compute(length, droop, gap):
             r = length / 2
             rho = r * math.cos(droop)
@@ -226,92 +169,63 @@ class Builder(AntennaBuilder):
             x = rho * math.sin(gap)
             return x, y, z
 
-        droop_12 = math.radians(self.angle_12_deg)
-        droop_10 = math.radians(self.angle_10_deg)
-        gap = math.radians(self.gap_angle_deg)
-
-        x_12, y_12, z_12 = compute(self.length_12 - 2 * self.s, droop_12, gap)
-        x_10, y_10, z_10 = compute(self.length_10 - 2 * self.s, droop_10, gap)
+        n_bands = int(self.n_bands)
+        active = tuple(self.bands)[:n_bands]
 
         S = (0, eps, 0)
         T = ry(S)
-
-        G = (self.s / sqrt(2.0), eps + self.s / sqrt(2.0), 0)
-        H = rx(G)
-
-        I = ry(G)
-        J = ry(H)
-
-        A = (x_12 + G[0], y_12 + G[1], -z_12)
-        B = (-x_10 + H[0], y_10 + H[1], -z_10)
-
-        C = ry(A)
-        D = ry(B)
-
         n_seg0 = self.nominal_nsegs
         n_seg1 = 1
 
-        def dist(p0, p1):
-            return math.sqrt(sum((x0 - x1) ** 2 for x0, x1 in zip(p0, p1)))
+        # Per band: a junction point G a distance `s` out (band 0 to +x, band 1
+        # to -x) and the drooping tip beyond it.
+        junctions, tips = [], []
+        for i, band in enumerate(active):
+            sign = 1 if i == 0 else -1
+            droop = math.radians(float(band["angle_deg"]))
+            x_t, y_t, z_t = compute(float(band["length"]) - 2 * s, droop, gap)
+            G = (sign * s / sqrt(2.0), eps + s / sqrt(2.0), 0)
+            tip = (sign * x_t + G[0], y_t + G[1], -z_t)
+            junctions.append(G)
+            tips.append(tip)
 
-        wire12 = dist(S, G) + dist(G, A)
-        wire10 = dist(S, H) + dist(H, B)
-
-        logger.debug(
-            "wire12: %s %s wire10: %s %s",
-            wire12,
-            self.length_12 / 2,
-            wire10,
-            self.length_10 / 2,
-        )
-
+        # Emit in the original order: +y junctions, +y arms, -y junctions,
+        # -y arms, then the feed gap — so the wire list is unchanged for the
+        # 2-band case.
         tups = []
-        tups.append((S, G, 5, None))
-        tups.append((S, H, 5, None))
-        tups.append((G, A, n_seg0, None))
-        tups.append((H, B, n_seg0, None))
-
-        tups.append((T, I, 5, None))
-        tups.append((T, J, 5, None))
-        tups.append((I, C, n_seg0, None))
-        tups.append((J, D, n_seg0, None))
-
+        for G in junctions:
+            tups.append((S, G, 5, None))
+        for G, tip in zip(junctions, tips):
+            tups.append((G, tip, n_seg0, None))
+        for G in junctions:
+            tups.append((T, ry(G), 5, None))
+        for G, tip in zip(junctions, tips):
+            tups.append((ry(G), ry(tip), n_seg0, None))
         tups.append((T, S, n_seg1, 1 + 0j))
 
-        new_tups = []
-        for xoff, yoff, zoff in [(0, 0, self.base)]:
-            new_tups.extend(
-                [
-                    (
-                        (x0 + xoff, y0 + yoff, z0 + zoff),
-                        (x1 + xoff, y1 + yoff, z1 + zoff),
-                        ns,
-                        ev,
-                    )
-                    for ((x0, y0, z0), (x1, y1, z1), ns, ev) in tups
-                ]
+        return [
+            (
+                (x0, y0, z0 + self.base),
+                (x1, y1, z1 + self.base),
+                ns,
+                ev,
             )
-
-        return new_tups
+            for ((x0, y0, z0), (x1, y1, z1), ns, ev) in tups
+        ]
 
 
 if __name__ == "__main__":
 
     def tofeet_inches(m):
         f, i = divmod(m / 0.0254, 12)
-
         ii, frac16 = divmod(i * 16, 16)
-
         frac16 = int(frac16 + 0.5)
-
         g = math.gcd(frac16, 16)
-
         return f"{m * 100:.1f} cm {f:.0f} ft {i:.3f} in ({ii:.0f} {frac16 // g}/{16 // g} in)"
 
-    params = Builder.default_params
-    print(f"Quarter wave element on 12m: {tofeet_inches(params['length_12'] / 2)}")
-    print(f"Quarter wave element on 10m: {tofeet_inches(params['length_10'] / 2)}")
-    print(f"Ratio of 12m element to single band invvee: {params['length_12'] / 5.8408}")
-    print(
-        f"Ratio of 12m element to 10m element: {params['length_12'] / params['length_10']}"
-    )
+    bands = Builder.default_params["bands"]
+    len12, len10 = bands[0]["length"], bands[1]["length"]
+    print(f"Quarter wave element on 12m: {tofeet_inches(len12 / 2)}")
+    print(f"Quarter wave element on 10m: {tofeet_inches(len10 / 2)}")
+    print(f"Ratio of 12m element to single band invvee: {len12 / 5.8408}")
+    print(f"Ratio of 12m element to 10m element: {len12 / len10}")
