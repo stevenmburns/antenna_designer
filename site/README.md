@@ -37,8 +37,9 @@ astro.config.mjs       # Starlight config + sidebar
 ## Notes
 
 - The live simulator URL is defined once as `SIMULATOR_URL` in `astro.config.mjs` and
-  referenced in the home hero / docs. **Swap it for the real domain** (e.g.
-  `https://app.antennaknobs.dev`) once DNS is wired up.
+  referenced in the home hero / docs. It points at the custom domain
+  `https://app.antennaknobs.dev`. If the simulator's public hostname ever moves,
+  change it there.
 - Pages contain `TODO` comments marking content that should be **generated from
   the package** (the catalog, API reference, benchmark plots) so docs stay in
   sync with the code rather than being hand-maintained.

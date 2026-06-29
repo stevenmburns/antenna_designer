@@ -20,7 +20,7 @@ handshake.
 ## The hosted instance
 
 A hosted simulator is running at
-**[antennaknobs.fly.dev](https://antennaknobs.fly.dev/)** (a single
+**[app.antennaknobs.dev](https://app.antennaknobs.dev/)** (a single
 FastAPI process serving the API, the `/ws` live-solve channel, and the built
 React SPA). It's deployed as a container on Fly.io; the repo's `docs/deploy.md`
 is the runbook.
