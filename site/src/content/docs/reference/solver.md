@@ -55,6 +55,51 @@ reach for them on small problems.
 - **Among dense bases, `sinusoidal` stays fastest** on small/medium single
   structures; `triangular` is the slowest dense basis.
 
+## Segments & convergence
+
+Method-of-moments discretizes each wire into **segments**, and the solve builds
+one **basis function** per segment. The **segments / wire (N)** control in the
+workbench sets the nominal count; antennaknobs scales it per wire by length, so a
+long radiator gets proportionally more segments than a short stub. The total
+basis-function count — the sum across every wire — is the **dimension of the
+impedance matrix** the solver fills and factors.
+
+That matrix is what sets both accuracy and cost:
+
+- **Too few segments** and the current distribution is under-resolved — the
+  feed-point impedance hasn't *converged* and your SWR/resonance readings are
+  off, sometimes by a lot near a sharp feature.
+- **More segments** refine the answer, but the dense solvers form an **N×N**
+  matrix: memory grows as **N²** and fill/factor cost as **N²–N³**. Past the
+  point where the impedance stops moving, the extra segments only cost time.
+
+### Finding "enough" — the convergence sweep
+
+The workbench's **convergence sweep** re-solves the current antenna across a
+range of N and plots the resulting feed-point impedance R + jX against N. Read it
+like any convergence study: the curve drops steeply at small N, then **flattens**
+("the knee"). The smallest N past the knee is your sweet spot — converged, but no
+slower than it needs to be. If the curve never settles, the geometry may have a
+feature (a tight bend, a very short feed gap) that needs finer local
+segmentation, or a different basis.
+
+A quick rule of thumb: the dense bases want **enough segments per
+half-wavelength** to resolve the sinusoidal current — a couple of dozen across a
+half-wave element is typical. The convergence sweep turns that rule into an
+answer you can see for *your* antenna.
+
+### The size cap
+
+Because the dense matrix grows as N², a runaway segment count (or a big array)
+can allocate hundreds of megabytes and stall a solve. The hosted instance
+therefore **caps the total segment count** and rejects oversized solves with a
+clear message rather than melting the shared box. The cap is engine-aware: the
+compressed **`arrayblock`** / **`hmatrix`** engines skip the dense matrix
+(ACA / H-matrix), so they're allowed a much higher count — which is exactly why
+they exist for large arrays. The cap is **off by default** and enforced only on
+the shared hosted instance — a local `pip install` is uncapped; the toggle and
+the limits are env-configurable (see `docs/deploy.md`).
+
 ## Accuracy & validation
 
 - A NEC-2 reference engine (`pynec-accel`) runs alongside momwire, so any design
