@@ -9,6 +9,13 @@ primary_region = 'sjc'
 [build]
   dockerfile = 'Dockerfile'
 
+[env]
+  # This is the shared, public instance — enforce the live-engine solve-size
+  # caps (server.py) so one oversized solve can't OOM the box. The package is
+  # unlocked by default; only this flag turns the caps on. Tune the limits with
+  # ANTENNAKNOBS_MAX_BASIS[_COMPRESSED|_PYNEC] if the VM size changes.
+  ANTENNAKNOBS_HOSTED = '1'
+
 [http_service]
   internal_port = 8000
   force_https = true

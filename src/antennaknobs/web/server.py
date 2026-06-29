@@ -370,6 +370,92 @@ def _polyline_knots(polyline: np.ndarray, npe_list: list[int]) -> np.ndarray:
 _SOLVE_CACHE: "OrderedDict[str, dict]" = OrderedDict()
 _SOLVE_CACHE_MAX = 100
 
+
+# --- Live-engine size guard (hosted only) ----------------------------------
+# A solve builds a method-of-moments system whose dimension N ≈ the total wire
+# segment count (one basis function per segment). The dense solvers — and PyNEC
+# — form an N×N complex128 matrix (memory N²·16 bytes), so an unbounded N (a
+# hand-edited request cranking "segments / wire", or a big array) can exhaust a
+# small box's RAM.
+#
+# This guard is OFF by default, so the package a user `pip install`s and runs
+# locally is unlocked — solve as big as your machine allows. It turns ON only
+# when ANTENNAKNOBS_HOSTED is set (truthy), which the shared instance does via
+# fly.toml's [env]. So the same wheel is unlocked locally and capped online.
+#
+# The caps are sized to keep a single solve's matrix under ~800 MB on the 2 GB
+# Fly box (basis = √(800·2²⁰/16) ≈ 7000 for a dense N×N). Measured on
+# arrays.bowtiearray2x4 (see scripts/measure_solve_memory.py): PyNEC's RSS
+# tracks the full dense N×N (~1 GB at basis 8000), while arrayblock's block-
+# low-rank uses ~0.6× of that — so it's allowed a proportionally higher cap.
+# Caps are about MEMORY, not solve time (PyNEC's ~N³ LU is slow long before it
+# is large; that's a responsiveness concern, deliberately not guarded here).
+# All env-overridable for self-hosting on bigger boxes.
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        v = int(os.environ.get(name, ""))
+    except ValueError:
+        return default
+    return v if v > 0 else default
+
+
+# The master switch: enforce the caps only on the shared/hosted instance.
+_HOSTED = _env_flag("ANTENNAKNOBS_HOSTED")
+
+_MAX_BASIS = _env_int("ANTENNAKNOBS_MAX_BASIS", 7000)  # dense momwire (~800 MB)
+_MAX_BASIS_COMPRESSED = _env_int("ANTENNAKNOBS_MAX_BASIS_COMPRESSED", 9000)
+_MAX_BASIS_PYNEC = _env_int("ANTENNAKNOBS_MAX_BASIS_PYNEC", 7000)
+_COMPRESSED_MODELS = frozenset({"arrayblock", "hmatrix"})
+
+
+class SolveTooLargeError(ValueError):
+    """A solve request exceeds the hosted live-engine segment-count cap."""
+
+
+def _check_solve_size(req: dict, *, use_pynec: bool) -> None:
+    """Reject a solve whose matrix would be too large for the hosted live engine.
+
+    No-op unless running hosted (ANTENNAKNOBS_HOSTED) — local instances are
+    unlocked. Best-effort: counts segments via the geometry-only ``count_basis``
+    hook (cheap — no solve). If the count can't be determined (geometry won't
+    build), return and let the normal solve path surface the real error.
+    """
+    if not _HOSTED:
+        return
+    geometry = req.get("geometry", next(iter(EXAMPLES)))
+    ex = EXAMPLES.get(geometry)
+    if ex is None or ex.count_basis is None:
+        return
+    n = ex.count_basis(req)
+    if n is None:
+        return
+    if use_pynec:
+        cap, engine, compressed = _MAX_BASIS_PYNEC, "PyNEC", False
+    elif req.get("momwire_model") in _COMPRESSED_MODELS:
+        cap = _MAX_BASIS_COMPRESSED
+        engine, compressed = str(req.get("momwire_model")), True
+    else:
+        cap, engine, compressed = _MAX_BASIS, "momwire", False
+    if n > cap:
+        # Dense momwire and PyNEC both form the full N×N matrix; point users at
+        # the compressed engines (which don't) for big arrays.
+        hint = (
+            ""
+            if compressed
+            else " — or switch to the array-block / H-matrix engine, which "
+            "handles larger arrays without a dense matrix"
+        )
+        raise SolveTooLargeError(
+            f"This solve needs ~{n} wire segments, over the live {engine} "
+            f"limit of {cap}. Reduce 'segments / wire (N)' or pick a smaller "
+            f"design{hint}."
+        )
+
+
 # Request fields that are pure metadata and never change the physics. Pop
 # them before hashing so noisy frontend additions (timestamps, request ids)
 # don't shred the hit rate. Anything else in `req` is treated as load-
@@ -407,6 +493,7 @@ def _canonical_solve_key(req: dict) -> str:
 def _solve_uncached(req: dict) -> dict:
     geometry = req.get("geometry", next(iter(EXAMPLES)))
     use_pynec = req.get("solver") == "pynec" and pynec_backend.HAVE_PYNEC
+    _check_solve_size(req, use_pynec=use_pynec)
     if use_pynec:
         out = pynec_backend.solve(req)
         _attach_derived_em_fields(out)
@@ -607,11 +694,14 @@ async def converge_endpoint(req: dict, request: Request):
             req_n = dict(req)
             req_n["n_per_wire"] = n
             try:
+                # Reject N values past the size cap (the convergence sweep is
+                # exactly where someone pushes N high); surfaced per-N below.
+                _check_solve_size(req_n, use_pynec=use_pynec)
                 z, feeds_z = await run_in_threadpool(_solve_z_only, req_n)
             except Exception as e:
                 # One-off solver failures (e.g. degenerate geometry at very
-                # small N) shouldn't abort the whole sweep — note the error
-                # for this N and keep going.
+                # small N) or a size rejection shouldn't abort the whole sweep —
+                # note the error for this N and keep going.
                 yield (
                     json.dumps(
                         {

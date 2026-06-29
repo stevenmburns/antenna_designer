@@ -150,3 +150,33 @@ instant" threshold. If it ever feels sluggish, the levers are: debounce knob
 events client-side, lean on the existing solve cache, default to the fast ground
 approximation while dragging, and keep `min_machines_running = 1` so there's no
 cold start.
+
+## Live-engine size cap (hosted only)
+
+A solve builds a method-of-moments system whose dimension N ≈ the total wire
+segment count. The dense solvers — and PyNEC — form an N×N complex matrix
+(memory N²·16 bytes), so an unbounded N — a hand-edited request cranking
+"segments / wire", or a very large array — could exhaust a small box's RAM.
+
+This guard is **off by default**, so the package people `pip install` and run
+locally is **unlocked** (solve as big as your own machine allows). It turns on
+**only** when **`ANTENNAKNOBS_HOSTED=1`** is set — which this repo's `fly.toml`
+`[env]` does for the shared instance. Same wheel, unlocked locally and capped
+online. When on, the server rejects an oversized solve *before* the matrix is
+allocated, with a clear error in the UI.
+
+The caps target a single solve's matrix staying under **~800 MB** on the 2 GB
+Fly box (`basis = √(800·2²⁰/16) ≈ 7000` for a dense N×N). They're about
+**memory, not time** (PyNEC's ~N³ LU is slow long before it's large — a
+responsiveness concern, deliberately not guarded). The numbers come from
+measuring `arrays.bowtiearray2x4` (see `scripts/measure_solve_memory.py`): PyNEC
+tracks the full dense N×N (~1 GB at basis 8000); `arrayblock`'s block-low-rank
+uses ~0.6× of that, so it gets a proportionally higher cap. Override any of them
+in `fly.toml`'s `[env]` if the VM grows:
+
+| Env var | Default | Applies to |
+|---|---|---|
+| `ANTENNAKNOBS_HOSTED` | *(unset → off)* | **master switch** — set to `1` to enforce the caps below |
+| `ANTENNAKNOBS_MAX_BASIS` | `7000` | dense momwire (triangular / sinusoidal / bspline) — full N×N |
+| `ANTENNAKNOBS_MAX_BASIS_COMPRESSED` | `9000` | `arrayblock` / `hmatrix` (block-low-rank, ~0.6× dense memory) |
+| `ANTENNAKNOBS_MAX_BASIS_PYNEC` | `7000` | PyNEC (full dense N×N, same as dense momwire) |
