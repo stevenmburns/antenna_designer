@@ -5,7 +5,7 @@ description: Install antennaknobs and solve your first antenna in a few lines of
 
 ## Install
 
-`antennaknobs` and its MIT engine `momwire` are published to PyPI with prebuilt
+`antennaknobs` and its engine `momwire` are published to PyPI with prebuilt
 wheels — a plain install needs no compiler:
 
 ```bash
@@ -16,10 +16,12 @@ pip install "antennaknobs[web]"
 ```
 
 :::note
-`momwire` (the solver) comes along as a dependency. The optional NEC-2
-cross-validation backend `pynec-accel` is **GPL-2.0** — not a dependency of
-antennaknobs — so install it on its own, never in the same command:
-`pip install pynec-accel`. antennaknobs is fully functional without it.
+`momwire` (the solver) comes along as a dependency. Optionally, add the NEC2
+solver (PyNEC) as an alternative to momwire:
+
+```bash
+pip install pynec-accel
+```
 :::
 
 ## Launch the web workbench

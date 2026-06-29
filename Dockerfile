@@ -3,8 +3,8 @@
 # Stage 1 builds the React/Vite SPA to src/antennaknobs/web/static.
 # Stage 2 is a slim Python runtime that installs the package + its C++ engine
 # wheels from PyPI and serves everything from one uvicorn process (API + the /ws
-# live-solve WebSocket + the static SPA). momwire (MIT) installs with the core;
-# pynec-accel (optional, GPL-2.0) is a separate, standalone install step.
+# live-solve WebSocket + the static SPA). The momwire engine installs with the
+# core; the optional NEC2 backend pynec-accel is a separate install step.
 #
 # See docs/deploy.md for the build/run/deploy runbook.
 
@@ -49,17 +49,16 @@ COPY src/ ./src/
 # The built SPA from stage 1.
 COPY --from=frontend /app/src/antennaknobs/web/static ./src/antennaknobs/web/static
 
-# Install momwire (the MIT C++ engine, a declared dependency) first so the
-# editable install below sees its requirement already satisfied, then the package
-# with the web extra. All from PyPI (the default index).
+# Install momwire (the C++ engine, a declared dependency) first so the editable
+# install below sees its requirement already satisfied, then the package with the
+# web extra. All from PyPI (the default index).
 RUN pip install --upgrade pip \
  && pip install "momwire>=0.2.2" \
  && pip install -e ".[web]"
 
-# Optional NEC2 cross-validation backend — pynec-accel is GPL-2.0, NOT a
-# dependency of this MIT package, and installed as its OWN standalone step (never
-# in the same pip command as the MIT packages). antennaknobs runs fully on
-# momwire alone; this only enables the PyNEC cross-check.
+# Optional NEC2 solver (PyNEC) — not a dependency of antennaknobs, installed in
+# its own step. antennaknobs runs fully on momwire alone; this adds the NEC2
+# engine as an alternative.
 RUN pip install "pynec-accel>=1.7.4.post1"
 
 EXPOSE 8000
