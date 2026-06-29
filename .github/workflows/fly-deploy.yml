@@ -1,21 +1,18 @@
 name: Deploy simulator to Fly.io
 
-# Push-to-deploy for the live simulator (the antennaknobs Fly app). On a push to main
-# that touches the app or its deploy config, build on Fly's remote builders and
-# release. Gated on an app-scoped secret (FLY_API_TOKEN_SIMULATOR), separate from the
-# docs site's deploy (deploy-docs.yml / FLY_API_TOKEN_DOCS) so the two never
-# cross-trigger. NOTE: if a Fly dashboard GitHub integration is also connected to
-# this app, disconnect it — otherwise both it and this workflow deploy on push.
+# Tag-to-deploy for the live simulator (the antennaknobs Fly app). Releases are
+# cut by pushing a v* tag (the same ritual that publishes to PyPI, see
+# publish.yml) — the tagged commit is built on Fly's remote builders and
+# released, so the version number always names what's live. Merging to main does
+# NOT deploy; main is the always-green integration line. Gated on an app-scoped
+# secret (FLY_API_TOKEN_SIMULATOR), separate from the docs site's deploy
+# (deploy-docs.yml / FLY_API_TOKEN_DOCS) so the two never cross-trigger.
+# workflow_dispatch stays as the manual hotfix / rollback escape hatch (pick any
+# ref in the Run-workflow dialog). NOTE: if a Fly dashboard GitHub integration is
+# also connected to this app, disconnect it — otherwise it deploys on push.
 on:
   push:
-    branches: [main]
-    paths:
-      - "Dockerfile"
-      - ".dockerignore"
-      - "fly.toml"
-      - "src/antennaknobs/**"
-      - "pyproject.toml"
-      - ".github/workflows/fly-deploy.yml"
+    tags: ["v*"]
   workflow_dispatch: {}
 
 # Never run two deploys at once; cancel an in-flight one if a newer push lands.
