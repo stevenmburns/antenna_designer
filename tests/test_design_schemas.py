@@ -253,7 +253,7 @@ def test_hentenna_slant_z100_overrides_default_factors():
         ("loops.inv_delta_loop", {"default", "z100", "z200"}),
         ("specialty.hentenna", {"default", "z50", "z100"}),
         ("loops.delta_loop_slanted", {"default", "slant0", "slant30"}),
-        ("arrays.delta_looparray", {"default", "dy3_dz2", "dy35_dz2", "dy45_dz2"}),
+        ("arrays.delta_looparray", {"default", "dy3", "dy35", "dy45"}),
     ],
 )
 def test_variant_family(name, expected):
