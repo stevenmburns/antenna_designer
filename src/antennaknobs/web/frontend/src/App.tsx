@@ -534,6 +534,11 @@ function Knob({
             style={fillColor ? { stroke: fillColor } : undefined}
             d={arc(Rarc, startDeg, ang)}
           />
+          {/* Focus ring drawn in SVG space so it's a true circle centered on the
+              dial (50,50) — the wrapper's box-shadow ring would be an ellipse on
+              the VFO's non-square 112×99 box. Just outside the gauge arc (Rarc).
+              Shown on keyboard focus via .vfo-focus-ring CSS. */}
+          {isVfo && <circle className="vfo-focus-ring" cx="50" cy="50" r="50.5" />}
           {isVfo ? (
             // The whole knob body spins; the band arc behind it stays put — a
             // fixed scale with a turning dial, exactly like a transceiver VFO.

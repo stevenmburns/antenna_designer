@@ -790,6 +790,21 @@ button:focus-visible,
   border-radius: 50%;
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+/* The VFO box is 112×99 (cropped), so the round box-shadow ring above renders
+   as an off-centre ellipse. Suppress it and use the in-SVG .vfo-focus-ring
+   circle instead, which is concentric with the dial. */
+.knob.is-vfo:focus-visible {
+  box-shadow: none;
+}
+.vfo-focus-ring {
+  fill: none;
+  stroke: var(--accent-soft);
+  stroke-width: 3.5;
+  opacity: 0;
+}
+.knob.is-vfo:focus-visible .vfo-focus-ring {
+  opacity: 1;
+}
 .knob svg {
   display: block;
   width: 100%;
@@ -908,8 +923,10 @@ button:focus-visible,
 }
 .vfo-dial {
   position: relative;
-  margin-left: var(--space-4); /* toggles at the left, dial just right of them */
-  margin-right: auto; /* leave the empty space on the right for the lock */
+  margin-left: auto; /* toggles at the left; push the dial toward the right */
+  /* inset == the lock's right:-16px overhang, so the lock's right edge lands on
+     the field's right edge (aligned with the frequency readout above). */
+  margin-right: var(--space-6);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1576,17 +1593,13 @@ canvas {
 }
 
 /* --- Reactive knob optimiser --- */
-/* A knob marked as a free optimisation variable. The cap is an SVG <circle>, so
-   it takes an SVG stroke (box-shadow does not apply to SVG shapes) — this also
-   keeps the variable marker off the wrapper's box-shadow focus ring, so the two
-   states no longer stack into a muddy double outline. */
+/* A knob marked as a free optimisation variable. The accent ring on the cap (an
+   SVG <circle>, so it takes an SVG stroke — box-shadow does not apply to SVG
+   shapes) is the sole marker; a trailing label glyph was dropped because it
+   could overlap neighbouring labels in the packed knob grid. */
 .field-knob.is-opt-var .knob-cap {
   stroke: var(--accent);
   stroke-width: 2;
-}
-.field-knob.is-opt-var .knob-label::after {
-  content: " ⟳";
-  color: var(--accent);
 }
 
 /* --- Live / Optimize push-button toggles ------------------------------------
