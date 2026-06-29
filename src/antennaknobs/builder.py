@@ -435,19 +435,23 @@ class Array1x2Builder(AntennaBuilder):
 
         phasor_lr = self._phasor("phase_lr")
 
+        # A 1x2 array is a single row of two elements offset to ∓del_y — the
+        # left at unit drive, the right at the phase_lr phasor. There is NO z
+        # iteration: with one row the elements keep the element builder's own z
+        # (their `base`), and there is no array z-spacing. (The 2x2/1x4/2x4
+        # builders DO iterate z; this one was originally copied from the 2x2 and
+        # carried a vestigial single-entry z-loop + `del_z` that only rigidly
+        # shifted the whole array — inert in free space — now removed.)
         new_tups = []
         for yoff, ph0 in ((-self.del_y, 1), (self.del_y, phasor_lr)):
-            for zoff, tups, ph1 in ((self.del_z, tups_top, 1),):
-                for (x0, y0, z0), (x1, y1, z1), ns, ex in tups:
-                    new_tups.extend(
-                        [
-                            (
-                                (x0, y0 + yoff, z0 + zoff),
-                                (x1, y1 + yoff, z1 + zoff),
-                                ns,
-                                ph0 * ph1 if ex is not None else ex,
-                            )
-                        ]
+            for (x0, y0, z0), (x1, y1, z1), ns, ex in tups_top:
+                new_tups.append(
+                    (
+                        (x0, y0 + yoff, z0),
+                        (x1, y1 + yoff, z1),
+                        ns,
+                        ph0 if ex is not None else ex,
                     )
+                )
 
         return new_tups
