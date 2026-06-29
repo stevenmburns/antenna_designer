@@ -1701,7 +1701,10 @@ canvas {
 .opt-menu {
   position: absolute;
   top: calc(100% + 4px);
-  right: 0;
+  /* The opt-cell sits at the left edge of the rail, so anchor the popover to the
+     LEFT and let it open rightward into the panel — anchoring right:0 ran it off
+     the left edge, where the sidebar's overflow-x:hidden clipped it. */
+  left: 0;
   z-index: 41;
   min-width: 160px;
   padding: var(--space-1);
