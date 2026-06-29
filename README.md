@@ -62,7 +62,7 @@
 | src/antennaknobs/designs/multiband/hexbeam\_5band.py              |      103 |        0 |    100% |           |
 | src/antennaknobs/designs/multiband/trap\_dipole.py                |       31 |        0 |    100% |           |
 | src/antennaknobs/designs/multiband/trap\_fan\_dipole.py           |       90 |        3 |     97% |243, 304, 310 |
-| src/antennaknobs/designs/multiband/twoband\_fan\_dipole.py        |       81 |       12 |     85% |200, 300-315 |
+| src/antennaknobs/designs/multiband/twoband\_fan\_dipole.py        |       71 |       12 |     83% |   219-231 |
 | src/antennaknobs/designs/specialty/\_\_init\_\_.py                |        0 |        0 |    100% |           |
 | src/antennaknobs/designs/specialty/bowtie.py                      |       28 |        0 |    100% |           |
 | src/antennaknobs/designs/specialty/helix.py                       |       36 |        0 |    100% |           |
@@ -116,7 +116,7 @@
 | src/antennaknobs/web/pynec\_backend.py                            |       83 |       31 |     63% |20-22, 72-90, 117, 128-131, 187-192, 199-204 |
 | src/antennaknobs/web/server.py                                    |      360 |       54 |     85% |66-68, 175-176, 340-343, 400, 441, 474, 476-479, 520, 571, 606, 611-625, 636-637, 661-672, 691, 719-744, 899, 902-903, 920 |
 | src/antennaknobs/web/user\_designs.py                             |       56 |        6 |     89% |58-59, 83-84, 89-90 |
-| **TOTAL**                                                         | **5556** |  **295** | **95%** |           |
+| **TOTAL**                                                         | **5546** |  **295** | **95%** |           |
 
 
 ## Setup coverage badge
