@@ -287,28 +287,28 @@ User-authored designs (in the `user.*` namespace) appear here too; filter with
 
 ## Install
 
-### From TestPyPI (prebuilt wheels — no toolchain)
+### From PyPI (prebuilt wheels — no toolchain)
 
-All three packages are published to **TestPyPI**: `antennaknobs`, its engine
-`momwire` (C++ accelerator wheels), and the optional NEC2 backend `pynec-accel`.
-TestPyPI doesn't host the usual scientific deps (numpy/scipy/fastapi/…), so point
-pip at TestPyPI for these packages and at real PyPI for everything else:
+`antennaknobs` and its MIT C++ engine `momwire` are published to **PyPI** with
+prebuilt wheels, so a plain install needs no compiler:
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install --upgrade pip
 
 # antennaknobs + the web workbench; momwire (the engine) comes along as a dep
-pip install \
-  --index-url https://test.pypi.org/simple/ \
-  --extra-index-url https://pypi.org/simple/ \
-  "antennaknobs[web]"
+pip install "antennaknobs[web]"
+```
 
-# optional: PyNEC cross-validation backend (GPL-2.0; Linux/Windows/macOS-arm64 wheels)
-pip install \
-  --index-url https://test.pypi.org/simple/ \
-  --extra-index-url https://pypi.org/simple/ \
-  pynec-accel
+The optional NEC2 cross-validation backend **`pynec-accel`** is **GPL-2.0** — it
+is *not* a dependency of antennaknobs and is installed as a **separate** step,
+never in the same `pip install` command as the MIT packages. antennaknobs is
+fully functional on momwire alone; install pynec-accel only to cross-check
+against NEC2:
+
+```bash
+# optional, GPL-2.0 (Linux / Windows / macOS-arm64 wheels)
+pip install pynec-accel
 ```
 
 Then launch the workbench with `uvicorn antennaknobs.web.server:app` (see
@@ -362,19 +362,16 @@ momwire is still fully functional; install it only if you want to cross-check
 against NEC2.
 
 ```bash
-# Wheel from the python-necpp fork's release (OpenBLAS + libgfortran vendored).
-# The fork is distributed as `pynec-accel` (the import name stays `import
-# PyNEC`); --no-index avoids upstream PyNEC/pynec on PyPI, whose builds are
-# broken on current Python and lack the fork's BLAS/OpenMP work.
+# The fork is published to PyPI as `pynec-accel` (a distinct name from upstream
+# PyNEC/pynec, whose builds are broken on current Python; the import name stays
+# `import PyNEC`). Its wheels vendor OpenBLAS + libgfortran.
 #
-# Use >= 1.7.4.post2 (release v1.7.4-accel.6 or later). Earlier builds vendored
-# their own libgomp, which clashes with momwire's system libgomp via a static-
-# TLS limit and silently knocks momwire's C++ accelerator onto its slow pure-
-# Python path whenever both backends load in one process. 1.7.4.post1 binds the
-# system libgomp instead, so it needs a system libgomp at runtime (universal on
-# glibc Linux — the GCC OpenMP runtime).
-pip install pynec-accel --no-index \
-    --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.6
+# Use >= 1.7.4.post2: earlier builds vendored their own libgomp, which clashes
+# with momwire's system libgomp via a static-TLS limit and silently knocks
+# momwire's C++ accelerator onto its slow pure-Python path whenever both backends
+# load in one process. post2 binds the system libgomp instead (universal on glibc
+# Linux — the GCC OpenMP runtime).
+pip install "pynec-accel>=1.7.4.post2"
 ```
 
 **4. Install AntennaKNoBs**
@@ -455,8 +452,7 @@ macOS wheels for **Apple Silicon (arm64), macOS 14+, Python 3.10–3.14** only �
 there are no Intel-Mac wheels, so on an Intel Mac skip PyNEC and use momwire alone.
 
 ```bash
-pip install pynec-accel --no-index \
-    --find-links https://github.com/stevenmburns/python-necpp/releases/expanded_assets/v1.7.4-accel.6
+pip install "pynec-accel>=1.7.4.post2"
 ```
 
 With **pynec-accel ≥ 1.7.4.post2** and **momwire ≥ 0.2.1**, neither wheel vendors
