@@ -2,7 +2,7 @@
 
 This deploys the web workbench (`antennaknobs.web.server:app` — the API, the
 `/ws` live-solve WebSocket, and the built React SPA) as a single persistent
-container on [Fly.io](https://fly.io). It uses the prebuilt TestPyPI engine
+container on [Fly.io](https://fly.io). It uses the prebuilt PyPI engine
 wheels, so the image needs **no C++ toolchain**.
 
 Files involved: [`Dockerfile`](../Dockerfile), [`.dockerignore`](../.dockerignore),
@@ -30,8 +30,9 @@ curl -fsS http://127.0.0.1:8000/healthz   # -> ok
 ```
 
 If the build fails on the engine wheels, check that `momwire` and
-`pynec-accel>=1.7.4.post1` resolve on TestPyPI for linux (the `pip install`
-step in the `Dockerfile`).
+`pynec-accel>=1.7.4.post1` resolve on PyPI for linux (the `pip install`
+steps in the `Dockerfile` — momwire with the core, pynec-accel as its own
+optional GPL-2.0 step).
 
 ## 2. First deploy
 
@@ -88,7 +89,7 @@ push a `v*` tag, and three workflows fire off that one tagged commit:
 |---|---|---|
 | [`fly-deploy.yml`](../.github/workflows/fly-deploy.yml) | simulator (`antennaknobs`) | `FLY_API_TOKEN_SIMULATOR` |
 | [`deploy-docs.yml`](../.github/workflows/deploy-docs.yml) | docs site (`antennaknobs-docs`) | `FLY_API_TOKEN_DOCS` |
-| [`publish.yml`](../.github/workflows/publish.yml) | the package → TestPyPI + GitHub Release | — (Trusted Publishing) |
+| [`publish.yml`](../.github/workflows/publish.yml) | the package → PyPI + GitHub Release | — (Trusted Publishing) |
 
 So the tagged version number always names exactly what's live across the package,
 the simulator, and the docs — they ship as one consistent snapshot.
