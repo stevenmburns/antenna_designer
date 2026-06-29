@@ -1148,3 +1148,103 @@ def test_cache_key_recurses_into_model_options():
         assert server._canonical_solve_key(mutant) != base_key, (
             f"model_options.{k} change did not alter the cache key"
         )
+
+
+# ---------------------------------------------------------------------------
+# Live-engine size guard (_check_solve_size). A solve's matrix dimension N ≈ the
+# total wire-segment count; the dense solvers (and PyNEC) form an N×N matrix, so
+# an oversized N must be rejected *before* any matrix fill. The guard is OFF by
+# default (local installs are unlocked) and only enforced when ANTENNAKNOBS_HOSTED
+# is set — which the tests below force via monkeypatch. The cap is engine-aware:
+# the compressed engines (arrayblock/hmatrix) skip the dense matrix and get a
+# higher cap.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def hosted(monkeypatch):
+    """Force the hosted size-guard on for a test (it's off by default)."""
+    monkeypatch.setattr(server, "_HOSTED", True)
+
+
+def _n_per_wire_for_basis(geom: str, target_basis: int) -> int:
+    """An n_per_wire that yields roughly ``target_basis`` segments for ``geom``
+    (basis scales ~linearly with n_per_wire), so the test is robust to the exact
+    cap values."""
+    k = REGISTRY[geom].count_basis({"geometry": geom, "n_per_wire": 100}) / 100.0
+    return max(1, round(target_basis / k))
+
+
+def test_count_basis_scales_with_segments():
+    ex = REGISTRY["dipoles.invvee"]
+    small = ex.count_basis({"geometry": "dipoles.invvee", "n_per_wire": 20})
+    big = ex.count_basis({"geometry": "dipoles.invvee", "n_per_wire": 200})
+    assert small is not None and big is not None
+    assert big > small  # more segments per wire → larger MoM system
+
+
+def test_size_guard_disabled_by_default_local_is_unlocked():
+    # With ANTENNAKNOBS_HOSTED unset (the default), even an absurd N is allowed —
+    # a local `pip install` instance is uncapped.
+    server._check_solve_size(
+        {
+            "geometry": "dipoles.invvee",
+            "n_per_wire": server._MAX_BASIS * 100,
+            "momwire_model": "triangular",
+        },
+        use_pynec=False,
+    )
+
+
+def test_check_solve_size_passes_for_normal_request(hosted):
+    # A modest segment count is well under every cap → no rejection.
+    server._check_solve_size(
+        {"geometry": "dipoles.invvee", "n_per_wire": 40, "momwire_model": "triangular"},
+        use_pynec=False,
+    )
+
+
+def test_check_solve_size_rejects_oversized_dense_but_allows_compressed(hosted):
+    geom = "dipoles.invvee"
+    # Aim the segment count between the dense and compressed caps so the dense
+    # engine rejects but the compressed one (higher cap) accepts.
+    target = (server._MAX_BASIS + server._MAX_BASIS_COMPRESSED) // 2
+    req = {
+        "geometry": geom,
+        "n_per_wire": _n_per_wire_for_basis(geom, target),
+        "momwire_model": "triangular",
+    }
+    basis = REGISTRY[geom].count_basis(req)
+    assert server._MAX_BASIS < basis <= server._MAX_BASIS_COMPRESSED, (
+        "test premise: basis must land between the dense and compressed caps"
+    )
+
+    # Dense engine rejects with a clear, actionable message.
+    with pytest.raises(server.SolveTooLargeError) as excinfo:
+        server._check_solve_size(req, use_pynec=False)
+    assert "segments / wire" in str(excinfo.value)
+
+    # The same N on a compressed engine is accepted (no dense matrix).
+    server._check_solve_size({**req, "momwire_model": "arrayblock"}, use_pynec=False)
+
+
+def test_solve_rejects_oversized_request_before_filling_matrix(hosted):
+    # The full solve() path raises the size error cheaply (geometry-only count,
+    # no expensive matrix fill).
+    with pytest.raises(server.SolveTooLargeError):
+        server.solve(
+            {
+                "geometry": "dipoles.invvee",
+                "n_per_wire": _n_per_wire_for_basis("dipoles.invvee", server._MAX_BASIS)
+                * 2,
+                "momwire_model": "triangular",
+            }
+        )
+
+
+def test_check_solve_size_unknown_geometry_does_not_falsely_reject(hosted):
+    # Unbuildable / unknown geometry → count unavailable → guard defers to the
+    # normal solve path instead of raising a spurious size error.
+    server._check_solve_size(
+        {"geometry": "does.not.exist", "n_per_wire": 999999}, use_pynec=False
+    )

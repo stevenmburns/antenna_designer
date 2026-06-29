@@ -293,6 +293,12 @@ class AntennaExample:
     # fast antenna-shape preview while the real solve runs. Optional so an
     # example without one degrades to "no preview".
     momwire_geometry: Optional[SolveFn] = None
+    # Cheap geometry-only count of the wire segments (≈ MoM basis functions /
+    # matrix dimension N) a solve request would build, used to reject solves
+    # that would allocate an N×N matrix too large/slow for the live engine. None
+    # if the geometry can't be built (the real solve surfaces that error). Takes
+    # the same req dict as momwire_solve.
+    count_basis: Optional[Callable[[dict], Optional[int]]] = None
     # Recommended default solver backend for this design (e.g. "arrayblock" for
     # grid arrays, where it's far faster than the dense default). None lets the
     # UI keep its own default. Surfaced in the /examples schema; the frontend

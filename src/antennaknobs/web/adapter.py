@@ -964,6 +964,17 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
         vp = _variant_params(cls, req.get("variant"))
         return float(vp.get("freq", 14.0))
 
+    def count_basis(req: dict):
+        """Total wire segments (≈ MoM basis functions, the N×N matrix dim) the
+        request would build. Geometry-only (cheap) — runs build_wires but no
+        solve. Returns None if the geometry can't be built; the real solve then
+        surfaces the underlying error instead of a spurious size rejection."""
+        try:
+            builder = _build_builder(cls, req)
+            return sum(int(w[2]) for w in builder.build_wires())
+        except Exception:
+            return None
+
     def momwire_solve(req: dict) -> dict:
         design_freq = float(req.get("design_freq_mhz", _design_freq_default(req)))
         meas_freq = float(req.get("measurement_freq_mhz", design_freq))
@@ -1245,6 +1256,7 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
         momwire_solve=momwire_solve,
         momwire_sweep=momwire_sweep,
         momwire_geometry=momwire_geometry,
+        count_basis=count_basis,
         default_backend=field_default_backend,
         pynec_solve=pynec_solve,
         pynec_build=pynec_build,
