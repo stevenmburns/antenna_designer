@@ -42,7 +42,10 @@ class Builder(AntennaBuilder):
             "base": 4.0,
             # Side length as a fraction of a wavelength (~half-wave per side;
             # four sides -> ~2 wl loop). ~0.55 wl is the modelled max-pattern
-            # proportion.
+            # proportion. Pinned (hidden) because the geometry depends only on
+            # the product side_frac * length_factor (see build_wires): exposing
+            # both would be two knobs for one degree of freedom. length_factor
+            # is the visible trim knob; this stays at Cebik's max-pattern value.
             "side_frac": 0.55,
             # Overall scale knob (peak gain / pattern, not a low-Z resonance,
             # is the design target -- the corner feed is high and reactive).
@@ -53,6 +56,9 @@ class Builder(AntennaBuilder):
                     # tuner in practice.
                     "target_z0": 300.0,
                     "default_view": "yz",
+                    # Degenerate with length_factor (product-only); pin it and
+                    # let length_factor be the single scale knob.
+                    "side_frac": {"hidden": True},
                     "length_factor": {
                         "min": 0.9,
                         "max": 1.1,

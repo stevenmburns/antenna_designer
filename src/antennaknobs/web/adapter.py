@@ -18,12 +18,15 @@ Reserved keys inside `ui_params`:
                      column count so per-param `layout` col positions are
                      stable (default: responsive auto-flow packing)
   <param_name>     : dict of {min, max, step, unit, label, precision,
-                              kind, sweepable, enum_options, layout}
+                              kind, sweepable, enum_options, layout, hidden}
                      — slider-bounds + metadata overrides for one param.
                      `layout` is {row, col, row_span, col_span} (1-indexed
                      CSS grid lines, all optional) to place this knob
-                     explicitly. Anything missing falls back to
-                     auto-derived defaults.
+                     explicitly. `hidden: True` suppresses the control
+                     entirely (the param stays pinned at its default value
+                     through solves) — for a knob that's degenerate with
+                     another. Anything missing falls back to auto-derived
+                     defaults.
 
 Everything else in `default_params` becomes a `ParamSpec`. Numeric
 defaults become float sliders with auto bounds (±50% around default);
@@ -371,6 +374,15 @@ def _derive_schema(default_params: dict) -> tuple:
         # request). Skipping it here too prevents the auto-derived
         # schema slider from duplicating that control.
         if key in ("freq", "design_freq"):
+            continue
+        # `hidden`: the design pins this param at its default and suppresses its
+        # control. The value still flows through every solve (it's in
+        # default_params, which _build_builder seeds from), so this is a
+        # display-only override — used to drop a knob that's degenerate with
+        # another (e.g. a `_frac` that only ever multiplies `length_factor`).
+        # Checked before the group/scalar branches so it applies to any kind.
+        override_raw = ui.get(key)
+        if isinstance(override_raw, dict) and override_raw.get("hidden"):
             continue
         # Repeating-group default: tuple/list of dicts → ParamGroupSpec.
         # The ui_params override (if any) carries the group-level
