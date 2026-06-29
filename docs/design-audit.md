@@ -1,6 +1,6 @@
 # SPA design audit — AntennaKNoBs web workbench
 
-Audit of the React/Vite single-page tuner (`src/antennaknobs/web/frontend/`):
+Audit of the React/Vite single-page app (`src/antennaknobs/web/frontend/`):
 `App.tsx` (~5.5k lines) + `styles.css` (~1.7k lines). Scope is **visual design,
 UX, and accessibility** of the rendered chrome — not the canvas plot maths.
 

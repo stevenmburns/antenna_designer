@@ -1,4 +1,4 @@
-"""Coupled multi-band hexbeam_5band tuner.
+"""Coupled multi-band hexbeam_5band tuning script.
 
 Unlike scripts/tune_hexbeam_5band_band.py — which slices `bands` down
 to a single entry and tunes in isolation — this script keeps all five

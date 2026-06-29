@@ -1,4 +1,4 @@
-# Multi-stage build for the antennaknobs web workbench (the live tuner).
+# Multi-stage build for the antennaknobs web workbench (the live simulator).
 #
 # Stage 1 builds the React/Vite SPA to src/antennaknobs/web/static.
 # Stage 2 is a slim Python runtime that installs the package + its C++ engine

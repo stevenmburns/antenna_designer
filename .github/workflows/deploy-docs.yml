@@ -2,7 +2,7 @@ name: Deploy docs site to Fly.io
 
 # Push-to-deploy for the static docs site (the antennaknobs-docs Fly app). Fires
 # on pushes to main that touch site/, building + releasing on Fly's remote
-# builders. Separate from the live-tuner deploy (fly-deploy.yml) and gated on its
+# builders. Separate from the live-simulator deploy (fly-deploy.yml) and gated on its
 # own app-scoped secret (FLY_API_TOKEN_DOCS) so the two never cross-trigger.
 on:
   push:

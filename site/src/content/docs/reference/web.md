@@ -1,6 +1,6 @@
 ---
 title: Web workbench
-description: The browser-based tuner — running it, and how it's served.
+description: The browser-based simulator — running it, and how it's served.
 ---
 
 The web workbench is the live, no-install face of antennaknobs: a panel of knobs
@@ -19,7 +19,7 @@ handshake.
 
 ## The hosted instance
 
-A hosted tuner is running at
+A hosted simulator is running at
 **[antennaknobs.fly.dev](https://antennaknobs.fly.dev/)** (a single
 FastAPI process serving the API, the `/ws` live-solve channel, and the built
 React SPA). It's deployed as a container on Fly.io; the repo's `docs/deploy.md`
