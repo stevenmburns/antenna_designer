@@ -1596,6 +1596,9 @@ export function App() {
   // "vary" + extents + step live in each knob's right-click menu (knobOpt).
   const [optEnabled, setOptEnabled] = useState(false);
   const [optObjective, setOptObjective] = useState<OptObjective>("resonance");
+  // The objective ("optimise for") picker lives in a small gear popover next to
+  // the Optimize button, mirroring the solver-slot gear.
+  const [optMenuOpen, setOptMenuOpen] = useState(false);
   const [knobOpt, setKnobOpt] = useState<Record<string, Record<string, KnobOpt>>>({});
   // Open knob context menu: which param + anchor position.
   const [knobMenu, setKnobMenu] = useState<{ name: string; x: number; y: number } | null>(
@@ -3225,12 +3228,13 @@ export function App() {
           })()}
 
         {/* Measurement freq = the rig's tuning control: a weighted VFO dial +
-            frequency-counter readout. Band select + lock sit to the LEFT of the
-            readout/dial to keep the field compact. "lock to design freq"
-            disables the dial. */}
+            frequency-counter readout. Top line: band select + the LCD. Below:
+            the Live/Optimize toggles stacked at the left of the dial, with the
+            lock pinned to the dial's lower-right corner ("lock to design freq"
+            disables the dial). */}
         <h2 className="group-label">measurement freq</h2>
         <div className={`field vfo-field${linkMeas ? " is-locked" : ""}`}>
-          <div className="vfo-aux">
+          <div className="vfo-top">
             {currentBands.length > 0 && (
               <select
                 className="band-select"
@@ -3246,16 +3250,6 @@ export function App() {
                 ))}
               </select>
             )}
-            <label className="link-toggle" title="lock to design freq">
-              <input
-                type="checkbox"
-                checked={linkMeas}
-                onChange={(e) => toggleLink(e.target.checked)}
-              />
-              lock
-            </label>
-          </div>
-          <div className="vfo-main">
             <div className="freq-lcd" title={`${measFreq.toFixed(3)} MHz`}>
               <span className="lcd-digits">
                 <span className="lcd-ghost">
@@ -3265,80 +3259,133 @@ export function App() {
               </span>
               <span className="lcd-unit">MHz</span>
             </div>
-            <Knob
-              variant="vfo"
-              value={measFreq}
-              min={
-                currentExample?.meas_freq_range_mhz
-                  ? currentExample.meas_freq_range_mhz[0]
-                  : Math.max(0.5, measBandAnchor * 0.8)
-              }
-              max={
-                currentExample?.meas_freq_range_mhz
-                  ? currentExample.meas_freq_range_mhz[1]
-                  : Math.min(60, measBandAnchor * 1.25)
-              }
-              step={0.005}
-              precision={3}
-              unit=" MHz"
-              label="measurement frequency"
-              onChange={setMeasFreq}
-              disabled={linkMeas}
-            />
           </div>
-        </div>
 
-        {/* Live / Optimize: two matching push-button toggles (depressed = on).
-            Live gates auto-solving on knob turns; Optimize gates the reactive
-            tuner. The objective select + last-SWR readout follow Optimize. */}
-        <div className="sim-controls">
-          <button
-            type="button"
-            className={`toggle-btn${autoSim ? " is-on" : ""}`}
-            aria-pressed={autoSim}
-            onClick={() => setAutoSim((v) => !v)}
-            title={
-              autoSim
-                ? "Live: knob changes re-solve automatically. Click to pause and edit without solving."
-                : "Paused: edit the design freely; the engine is held. Click to resume and solve."
-            }
-          >
-            <span className="toggle-led" aria-hidden="true" />
-            {autoSim ? "Live" : "Paused"}
-          </button>
-          <button
-            type="button"
-            className={`toggle-btn${optEnabled ? " is-on" : ""}`}
-            aria-pressed={optEnabled}
-            onClick={() => setOptEnabled((v) => !v)}
-            title="Reactive optimiser: vary the knobs you mark (right-click a knob) to hit the objective whenever a fixed knob changes."
-          >
-            <span className="toggle-led" aria-hidden="true" />
-            Optimize
-            {optRunning ? <span className="opt-pip">●</span> : null}
-          </button>
-          {optEnabled && (
-            <select
-              className="opt-objective"
-              aria-label="optimise for"
-              value={optObjective}
-              onChange={(e) => setOptObjective(e.target.value as OptObjective)}
-            >
-              {OPT_OBJECTIVES.map((k) => (
-                <option key={k} value={k}>
-                  {OPT_OBJECTIVE_LABELS[k]}
-                </option>
-              ))}
-            </select>
-          )}
-          {optEnabled && optResult && (
-            <span className="opt-readout" title="SWR after optimisation">
-              SWR {optResult.metrics_after.swr.toFixed(2)}
-            </span>
-          )}
-          {optEnabled && optError && (
-            <span className="opt-readout opt-readout-err">{optError}</span>
-          )}
+          <div className="vfo-body">
+            {/* Live / Optimize: two matching push-button toggles (depressed =
+                on), stacked at the left of the dial. Live gates auto-solving on
+                knob turns; Optimize gates the reactive tuner. The objective
+                ("optimise for") picker is the gear next to Optimize. */}
+            <div className="sim-controls">
+              <button
+                type="button"
+                className={`toggle-btn${autoSim ? " is-on" : ""}`}
+                aria-pressed={autoSim}
+                onClick={() => setAutoSim((v) => !v)}
+                title={
+                  autoSim
+                    ? "Live: knob changes re-solve automatically. Click to pause and edit without solving."
+                    : "Paused: edit the design freely; the engine is held. Click to resume and solve."
+                }
+              >
+                <span className="toggle-led" aria-hidden="true" />
+                {autoSim ? "Live" : "Paused"}
+              </button>
+              <div className="opt-cell">
+                <button
+                  type="button"
+                  className={`toggle-btn opt-toggle${optEnabled ? " is-on" : ""}`}
+                  aria-pressed={optEnabled}
+                  onClick={() => setOptEnabled((v) => !v)}
+                  title="Reactive optimiser: vary the knobs you mark (right-click a knob) to hit the objective whenever a fixed knob changes."
+                >
+                  <span className="toggle-led" aria-hidden="true" />
+                  Optimize
+                  {optRunning ? <span className="opt-pip">●</span> : null}
+                </button>
+                <button
+                  type="button"
+                  className="opt-gear-btn"
+                  aria-label="Optimisation method"
+                  aria-haspopup="menu"
+                  aria-expanded={optMenuOpen}
+                  title={`Optimise for: ${OPT_OBJECTIVE_LABELS[optObjective]}`}
+                  onClick={() => setOptMenuOpen((o) => !o)}
+                >
+                  ⚙
+                </button>
+                {optMenuOpen && (
+                  <>
+                    <div
+                      className="gear-menu-backdrop"
+                      onClick={() => setOptMenuOpen(false)}
+                    />
+                    <div className="opt-menu" role="menu">
+                      <div className="opt-menu-title">Optimise for</div>
+                      {OPT_OBJECTIVES.map((k) => (
+                        <button
+                          key={k}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={optObjective === k}
+                          className={`gear-menu-item${optObjective === k ? " is-active" : ""}`}
+                          onClick={() => {
+                            setOptObjective(k);
+                            setOptMenuOpen(false);
+                          }}
+                        >
+                          {OPT_OBJECTIVE_LABELS[k]}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              {optEnabled && optResult && (
+                <span className="opt-readout" title="SWR after optimisation">
+                  SWR {optResult.metrics_after.swr.toFixed(2)}
+                </span>
+              )}
+              {optEnabled && optError && (
+                <span
+                  className="opt-readout opt-readout-err"
+                  title={optError}
+                >
+                  {optError}
+                </span>
+              )}
+            </div>
+
+            <div className="vfo-dial">
+              <Knob
+                variant="vfo"
+                value={measFreq}
+                min={
+                  currentExample?.meas_freq_range_mhz
+                    ? currentExample.meas_freq_range_mhz[0]
+                    : Math.max(0.5, measBandAnchor * 0.8)
+                }
+                max={
+                  currentExample?.meas_freq_range_mhz
+                    ? currentExample.meas_freq_range_mhz[1]
+                    : Math.min(60, measBandAnchor * 1.25)
+                }
+                step={0.005}
+                precision={3}
+                unit=" MHz"
+                label="measurement frequency"
+                onChange={setMeasFreq}
+                disabled={linkMeas}
+              />
+              <button
+                type="button"
+                className="vfo-lock"
+                aria-pressed={linkMeas}
+                aria-label="Lock measurement frequency to the design frequency"
+                title={
+                  linkMeas
+                    ? "Locked to the design frequency — the dial is fixed. Click to unlock and tune freely."
+                    : "Lock the measurement frequency to the design frequency."
+                }
+                onClick={() => toggleLink(!linkMeas)}
+              >
+                <svg className="lock-glyph" viewBox="0 0 16 16" aria-hidden="true">
+                  <rect x="3.5" y="7.2" width="9" height="6.3" rx="1.3" />
+                  <path className="shackle" d="M5.3 7.2V5a2.7 2.7 0 0 1 5.4 0v2.2" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
 
         <h2 className="group-label">simulation</h2>

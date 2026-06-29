@@ -880,25 +880,72 @@ button:focus-visible,
 }
 
 /* measurement-freq VFO field: caption, LCD counter, dial, band select, lock */
-/* compact layout: band select + lock on the left, LCD + dial on the right */
+/* stacked layout: top line = band select + LCD; body = the Live/Optimize
+   toggles at the left of the weighted dial, with the lock pinned to the dial's
+   lower-right corner. */
 .vfo-field {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-5);
-}
-.vfo-aux {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-4);
 }
-.vfo-main {
+.vfo-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.vfo-top .band-select {
+  flex: 0 0 auto;
+  max-width: 120px;
+}
+.vfo-top .freq-lcd {
+  margin-left: auto; /* push the readout to the right edge */
+}
+.vfo-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+.vfo-dial {
+  position: relative;
+  margin-left: var(--space-4); /* toggles at the left, dial just right of them */
+  margin-right: auto; /* leave the empty space on the right for the lock */
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-3);
+}
+/* the lock: a bare icon (no button chrome) tucked at the dial's lower-right,
+   in the empty space beside the gauge so it stays clear of the arc. */
+.vfo-lock {
+  position: absolute;
+  right: -16px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.vfo-lock:hover {
+  color: var(--fg);
+}
+.vfo-lock[aria-pressed="true"] {
+  color: var(--accent);
+}
+.lock-glyph {
+  width: 12px;
+  height: 12px;
+}
+.lock-glyph rect {
+  fill: currentColor;
+}
+.lock-glyph .shackle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
 }
 /* light bench-counter LCD: dark numerals over faint "off" segments */
 .freq-lcd {
@@ -937,14 +984,6 @@ button:focus-visible,
 }
 .vfo-field.is-locked .lcd-live {
   color: var(--muted);
-}
-.vfo-aux .band-select {
-  max-width: 130px;
-}
-/* the lock toggle sits in the left aux column; "lock" label + full tooltip */
-.vfo-aux .link-toggle {
-  font-size: var(--text-xs);
-  white-space: nowrap;
 }
 .knob-edit {
   width: 54px;
@@ -1556,17 +1595,18 @@ canvas {
    knob turns; Optimize gates the reactive tuner. Both share this look. */
 .sim-controls {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column; /* Live on top of Optimize, at the left of the dial */
+  align-items: stretch;
   gap: var(--space-3);
+  flex: 0 0 auto;
 }
 .toggle-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-3);
-  min-width: 84px;
-  padding: var(--space-4) var(--space-6);
+  gap: var(--space-2);
+  min-width: 58px;
+  padding: var(--space-2) var(--space-4);
   background: var(--inset);
   color: var(--muted);
   border: 1px solid var(--border-control);
@@ -1614,9 +1654,61 @@ canvas {
   background: var(--accent);
   box-shadow: 0 0 4px var(--accent);
 }
-.sim-controls .opt-objective {
+/* Optimize + its objective gear share a cell, attached like the solver-slot
+   tab+gear. The gear opens a small popover to pick what to optimise for. */
+.opt-cell {
+  position: relative;
+  display: flex;
+}
+.opt-cell .opt-toggle {
+  flex: 1;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+.opt-gear-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-3);
+  background: var(--inset);
+  color: var(--muted);
+  border: 1px solid var(--border-control);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.opt-gear-btn:hover {
+  color: var(--accent);
+  border-color: var(--border-hover);
+}
+.opt-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 41;
+  min-width: 160px;
+  padding: var(--space-1);
+  background: var(--panel);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-md);
+  box-shadow: 0 6px 20px var(--shadow-strong);
+}
+.opt-menu-title {
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
-  padding: 0 var(--space-1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  padding: var(--space-2) var(--space-3) var(--space-1);
+}
+.opt-menu .gear-menu-item.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
 }
 .opt-pip {
   color: var(--accent);
@@ -1735,9 +1827,12 @@ canvas {
     width: 40px;
     height: 40px;
   }
-  .band-select,
-  .opt-objective {
+  .band-select {
     min-height: 40px;
+  }
+  .vfo-lock,
+  .opt-gear-btn {
+    min-width: 36px;
   }
 }
 
