@@ -1550,14 +1550,71 @@ canvas {
   color: var(--accent);
 }
 
-/* Compact enable + objective control next to the meas-freq band/lock. */
-.opt-control {
+/* --- Live / Optimize push-button toggles ------------------------------------
+   A row of bench-style push buttons under the VFO. Depressed (inset shadow +
+   accent fill + lit LED) = engaged; raised = off. Live gates auto-solving on
+   knob turns; Optimize gates the reactive tuner. Both share this look. */
+.sim-controls {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
   flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
 }
-.opt-control .opt-objective {
+.toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-width: 84px;
+  padding: var(--space-4) var(--space-6);
+  background: var(--inset);
+  color: var(--muted);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 0 var(--shadow); /* a hair of raise when off */
+}
+.toggle-btn:hover {
+  color: var(--fg);
+  border-color: var(--border-hover);
+}
+.toggle-btn.is-on {
+  background: var(--accent-active);
+  color: var(--accent);
+  border-color: var(--accent-border);
+  box-shadow: inset 0 2px 4px var(--shadow); /* pressed in */
+}
+.toggle-btn:active {
+  transform: translateY(1px);
+}
+/* keyboard focus ring, layered over the raised/pressed shadow so the state
+   still reads while focused (the .is-on rule alone would otherwise win the
+   box-shadow cascade and hide the ring). */
+.toggle-btn:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 1px 0 var(--shadow), 0 0 0 3px var(--accent-soft);
+}
+.toggle-btn.is-on:focus-visible {
+  box-shadow: inset 0 2px 4px var(--shadow), 0 0 0 3px var(--accent-soft);
+}
+/* indicator LED: dim/hollow when off, lit accent (with a glow) when on */
+.toggle-led {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--track);
+  box-shadow: inset 0 0 0 1px var(--border-control);
+}
+.toggle-btn.is-on .toggle-led {
+  background: var(--accent);
+  box-shadow: 0 0 4px var(--accent);
+}
+.sim-controls .opt-objective {
   font-size: var(--text-xs);
   padding: 0 var(--space-1);
 }
