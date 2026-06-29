@@ -22,6 +22,7 @@ import pytest
 import antennaknobs.web.examples  # noqa: F401 — primes the adapter
 from antennaknobs.web.adapter import (
     _auto_paramspec,
+    _build_builder,
     _make_example,
     _nice_step,
     _precision_for_step,
@@ -64,9 +65,17 @@ def test_schema_excludes_freq_and_design_freq_sliders(name):
 def test_schema_covers_every_non_freq_default_param(name):
     cls = _builder_cls(name)
     dp = dict(cls.default_params)
+    ui = dp.get("ui_params") or {}
     slider_names = {s.name for s in REGISTRY[name].param_schema}
     for key, val in dp.items():
         if key in ("ui_params", "freq", "design_freq"):
+            continue
+        ov = ui.get(key)
+        if isinstance(ov, dict) and ov.get("hidden"):
+            # Explicitly suppressed via `ui_params[key] = {"hidden": True}`:
+            # a pinned/degenerate param (e.g. bisquare.side_frac, which only
+            # ever multiplies length_factor). No slider by design; it stays at
+            # its default through solves.
             continue
         if isinstance(val, complex):
             # Complex defaults intentionally have no UI; settable via
@@ -453,3 +462,44 @@ def test_grid_level_layout_from_ui_params():
     by_name = {s.name: s for s in ex.param_schema}
     assert by_name["a"].layout == {"row": 1, "col": 1}
     assert by_name["b"].layout is None
+
+
+def test_hidden_param_suppressed_but_pinned_through_solves():
+    """`ui_params[key] = {"hidden": True}` drops the slider but keeps the value.
+
+    bisquare.side_frac only ever multiplies length_factor (one DOF, two knobs),
+    so it's hidden. The schema must omit it while length_factor stays, and a
+    solve request that doesn't mention side_frac (the frontend can't, having no
+    control) must still build with side_frac at its default.
+    """
+    names = {s.name for s in REGISTRY["loops.bisquare"].param_schema}
+    assert "side_frac" not in names
+    assert "length_factor" in names  # the visible trim knob remains
+
+    cls = _builder_cls("loops.bisquare")
+    b = _build_builder(cls, {"length_factor": 1.1})
+    assert b.side_frac == cls.default_params["side_frac"]  # pinned at default
+    assert b.length_factor == 1.1
+
+
+def test_hidden_override_is_generic():
+    """The `hidden` override works for any scalar param, not just bisquare."""
+    from types import MappingProxyType
+
+    from antennaknobs import AntennaBuilder
+
+    class _HiddenBuilder(AntennaBuilder):
+        default_params = MappingProxyType(
+            {
+                "shown": 1.0,
+                "secret": 2.0,
+                "ui_params": MappingProxyType({"secret": {"hidden": True}}),
+            }
+        )
+
+        def build_wires(self):
+            return [((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), 3, None, None)]
+
+    ex = _make_example("hidden_demo", _HiddenBuilder, defer_hints=True)
+    names = {s.name for s in ex.param_schema}
+    assert names == {"shown"}  # `secret` suppressed, others untouched
