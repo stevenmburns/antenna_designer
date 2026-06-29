@@ -289,7 +289,7 @@ User-authored designs (in the `user.*` namespace) appear here too; filter with
 
 ### From PyPI (prebuilt wheels — no toolchain)
 
-`antennaknobs` and its MIT C++ engine `momwire` are published to **PyPI** with
+`antennaknobs` and its C++ engine `momwire` are published to **PyPI** with
 prebuilt wheels, so a plain install needs no compiler:
 
 ```bash
@@ -300,14 +300,10 @@ pip install --upgrade pip
 pip install "antennaknobs[web]"
 ```
 
-The optional NEC2 cross-validation backend **`pynec-accel`** is **GPL-2.0** — it
-is *not* a dependency of antennaknobs and is installed as a **separate** step,
-never in the same `pip install` command as the MIT packages. antennaknobs is
-fully functional on momwire alone; install pynec-accel only to cross-check
-against NEC2:
+Optionally, add the **NEC2 solver** (PyNEC) as an alternative to momwire:
 
 ```bash
-# optional, GPL-2.0 (Linux / Windows / macOS-arm64 wheels)
+# optional NEC2 solver (Linux / Windows / macOS-arm64 wheels)
 pip install pynec-accel
 ```
 
