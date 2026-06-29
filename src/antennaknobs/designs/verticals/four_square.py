@@ -85,6 +85,9 @@ class Builder(AntennaBuilder):
                     "target_z0": 50.0,
                     # Footprint lies in the x-y plane -> xy view shows the box.
                     "default_view": "xy",
+                    # Degenerate with length_factor (elem = elem_frac * wl *
+                    # length_factor); pin it and keep length_factor as the knob.
+                    "elem_frac": {"hidden": True},
                     "length_factor": {
                         "min": 0.8,
                         "max": 1.2,

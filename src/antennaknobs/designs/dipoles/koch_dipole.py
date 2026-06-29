@@ -74,10 +74,9 @@ class Builder(AntennaBuilder):
                     # Miniaturised dipole -> reduced radiation resistance.
                     "target_z0": 50.0,
                     "default_view": "yz",
-                    "span_frac": {
-                        "min": 0.30,
-                        "max": 0.50,
-                    },
+                    # Degenerate with length_factor (span = span_frac * wl *
+                    # length_factor); pin it and keep length_factor as the knob.
+                    "span_frac": {"hidden": True},
                     "length_factor": {
                         "min": 0.85,
                         "max": 1.15,

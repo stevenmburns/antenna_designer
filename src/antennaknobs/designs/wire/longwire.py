@@ -59,6 +59,9 @@ class Builder(AntennaBuilder):
                     # Wire runs along y in the plane x=0; the yz view shows it
                     # face-on (length along y, height along z).
                     "default_view": "yz",
+                    # Degenerate with length_factor (length = length_frac * wl *
+                    # length_factor); pin it and keep length_factor as the knob.
+                    "length_frac": {"hidden": True},
                     "length_factor": {
                         "min": 0.9,
                         "max": 1.1,

@@ -65,6 +65,10 @@ class Builder(AntennaBuilder):
                 {
                     "target_z0": 50.0,
                     "default_view": "yz",
+                    # Degenerate with length_frac (length = length_frac * wl *
+                    # length_factor); pin length_factor and keep length_frac, the
+                    # curated knob.
+                    "length_factor": {"hidden": True},
                     "length_frac": {
                         "min": 0.40,
                         "max": 0.55,
