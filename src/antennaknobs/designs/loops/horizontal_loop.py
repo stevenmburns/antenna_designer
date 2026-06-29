@@ -61,6 +61,9 @@ class Builder(AntennaBuilder):
                     # The loop lies flat in z = base; its x and y spans are the
                     # two largest, so the xy view shows the loop face-on.
                     "default_view": "xy",
+                    # Degenerate with length_factor (side = side_frac * wl *
+                    # length_factor); pin it and keep length_factor as the knob.
+                    "side_frac": {"hidden": True},
                     "length_factor": {
                         "min": 0.9,
                         "max": 1.1,
