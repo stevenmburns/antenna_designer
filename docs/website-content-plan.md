@@ -31,8 +31,8 @@ so there is one canonical URL per topic. `.com` links *into* `.dev` for depth.
 ## antennaknobs.com — the front door
 
 ```
-/                     Hero: live tuner embed + one-line pitch + two CTAs
-/gallery              Design catalog as cards → "open in the tuner"
+/                     Hero: live simulator embed + one-line pitch + two CTAs
+/gallery              Design catalog as cards → "open in the simulator"
 /why                  Why antennaknobs (vs 4nec2 / EZNEC / PyNEC) — honest table
 /learn                On-ramp: "design your first antenna in 5 minutes"
 /about                Project, license (open source), credits, links to .dev
@@ -40,7 +40,7 @@ so there is one canonical URL per topic. `.com` links *into* `.dev` for depth.
 
 ### `/` — Home
 
-- **Above the fold:** an embedded live tuner instance (or, if cold-start is too
+- **Above the fold:** an embedded live simulator instance (or, if cold-start is too
   heavy, a looping screen capture) showing a dipole/Yagi with a knob being
   dragged and the polar pattern + SWR responding. Caption: *"This is the whole
   tool. No install."*
@@ -55,7 +55,7 @@ so there is one canonical URL per topic. `.com` links *into* `.dev` for depth.
 ### `/gallery` — Design catalog
 
 - Card grid; each card = geometry thumbnail + name + one-line use ("40m full-wave
-  loop", "2-element 10m Yagi") + **Open in the tuner** button (deep-links the
+  loop", "2-element 10m Yagi") + **Open in the simulator** button (deep-links the
   hosted app with that design preloaded).
 - Filter by band / type (dipole, Yagi, loop, vertical, bowtie, multiband).
 - Each card's "details" links to the design's page on `.dev` (source + knobs).
@@ -87,7 +87,7 @@ so there is one canonical URL per topic. `.com` links *into* `.dev` for depth.
 Hosts **both** the live app and the canonical docs.
 
 ```
-/app                  The hosted interactive tuner (the real product)
+/app                  The hosted interactive simulator (the real product)
 /docs/                Documentation root
   /docs/quickstart      pip install → first design in Python in 10 lines
   /docs/concepts        The model: AntennaBuilder, params/knobs, build_wires
@@ -101,7 +101,7 @@ Hosts **both** the live app and the canonical docs.
 /changelog            Release notes
 ```
 
-### `/app` — The hosted tuner
+### `/app` — The hosted simulator
 
 The live FastAPI + React app. Deep-linkable per design (so `.com/gallery` cards
 and `/docs/catalog` can point at it). This *is* the product; docs orbit it.
@@ -165,7 +165,7 @@ release notes.
 
 ## Build order (suggested)
 
-1. **`.dev/app` live + deep-linkable** — without the live tuner nothing else
+1. **`.dev/app` live + deep-linkable** — without the live simulator nothing else
    lands. Everything points here.
 2. **`.com/` home** wrapping that app in the pitch + CTAs.
 3. **`/docs/authoring` (five-ways)** + **`/docs/catalog`** — the highest-leverage

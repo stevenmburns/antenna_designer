@@ -2,10 +2,10 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
-// The live tuner (the FastAPI workbench) currently runs on its temporary
+// The live simulator (the FastAPI workbench) currently runs on its temporary
 // Fly hostname. Swap this for https://app.antennaknobs.dev (or the apex) once
 // DNS is wired up — it's referenced from the home hero and the Web docs.
-const TUNER_URL = "https://antennaknobs.fly.dev/";
+const SIMULATOR_URL = "https://antennaknobs.fly.dev/";
 
 // https://astro.build/config
 export default defineConfig({
@@ -28,7 +28,7 @@ export default defineConfig({
           items: [
             { label: "What is antennaknobs?", slug: "start/welcome" },
             { label: "Quickstart", slug: "start/quickstart" },
-            { label: "Open the live tuner", link: TUNER_URL, attrs: { target: "_blank" } },
+            { label: "Open the live simulator", link: SIMULATOR_URL, attrs: { target: "_blank" } },
           ],
         },
         {

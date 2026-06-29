@@ -1,4 +1,4 @@
-# Deploy runbook — the live tuner on Fly.io
+# Deploy runbook — the live simulator on Fly.io
 
 This deploys the web workbench (`antennaknobs.web.server:app` — the API, the
 `/ws` live-solve WebSocket, and the built React SPA) as a single persistent
@@ -25,7 +25,7 @@ Confirm the container serves the app before touching Fly:
 ```bash
 docker build -t antennaknobs-web .
 docker run --rm -p 8000:8000 antennaknobs-web
-# open http://127.0.0.1:8000 — the tuner should load and knobs should solve
+# open http://127.0.0.1:8000 — the simulator should load and knobs should solve
 curl -fsS http://127.0.0.1:8000/healthz   # -> ok
 ```
 
@@ -58,7 +58,7 @@ fly open                            # opens https://<app>.fly.dev
 fly logs                            # tail if anything misbehaves
 ```
 
-At this point the live tuner is reachable at `https://<app>.fly.dev`. **Test it
+At this point the live simulator is reachable at `https://<app>.fly.dev`. **Test it
 remotely from your own machine and confirm dragging a knob feels responsive
 before adding the custom domains** — this is the moment to measure the real
 round-trip.

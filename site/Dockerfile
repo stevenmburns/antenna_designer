@@ -1,5 +1,5 @@
 # Build the static Astro/Starlight docs site, then serve it with nginx.
-# A separate, cheap Fly app from the live tuner: static files, scale-to-zero.
+# A separate, cheap Fly app from the live simulator: static files, scale-to-zero.
 # Deploy from this directory: `cd site && fly deploy` (see fly.toml).
 
 # ---- build ----

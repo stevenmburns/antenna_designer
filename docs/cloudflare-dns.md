@@ -7,7 +7,7 @@ There are two Fly apps:
 
 | App | What | Public hostname |
 | --- | --- | --- |
-| `antennaknobs` | the live tuner (FastAPI) | `antennaknobs.fly.dev` |
+| `antennaknobs` | the live simulator (FastAPI) | `antennaknobs.fly.dev` |
 | `antennaknobs-docs` | the docs site (static, nginx) | `antennaknobs-docs.fly.dev` |
 
 ## 0. Prerequisites
@@ -24,7 +24,7 @@ Fly IPs rarely change, but always confirm before editing DNS:
 
 ```bash
 flyctl ips list -a antennaknobs-docs   # docs site
-flyctl ips list -a antennaknobs        # tuner
+flyctl ips list -a antennaknobs        # simulator
 ```
 
 As of last setup:
@@ -42,7 +42,7 @@ Tell Fly which hostnames it should serve, so it provisions a TLS cert:
 flyctl certs add antennaknobs.dev -a antennaknobs-docs
 # optional extras:
 flyctl certs add www.antennaknobs.dev -a antennaknobs-docs
-flyctl certs add app.antennaknobs.dev -a antennaknobs       # tuner on a subdomain
+flyctl certs add app.antennaknobs.dev -a antennaknobs       # simulator on a subdomain
 ```
 
 `flyctl certs show <hostname> -a <app>` prints the exact records Fly recommends.
@@ -123,8 +123,8 @@ should return `200`.
 
 ## 5. After DNS is live
 
-- Update the docs' tuner link if you move the tuner onto a custom domain: it's
-  the `TUNER_URL` constant in `site/astro.config.mjs` (plus the literal links in
+- Update the docs' simulator link if you move the simulator onto a custom domain: it's
+  the `SIMULATOR_URL` constant in `site/astro.config.mjs` (plus the literal links in
   the home/welcome/web/catalog pages). A push to `main` redeploys the docs via
   the `deploy-docs.yml` Action.
 

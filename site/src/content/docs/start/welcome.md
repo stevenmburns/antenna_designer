@@ -30,7 +30,7 @@ re-solve and redraw in real time.
 
 ## Try it now
 
-The live tuner is running here — open it, pick a design, and drag a knob:
+The live simulator is running here — open it, pick a design, and drag a knob:
 
 👉 **[antennaknobs.fly.dev](https://antennaknobs.fly.dev/)**
 
