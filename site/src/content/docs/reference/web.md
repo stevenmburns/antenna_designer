@@ -1,6 +1,6 @@
 ---
 title: Web workbench
-description: The browser-based simulator — running it, and how it's served.
+description: The browser-based simulator — driving the knobs, optimizing, switching solvers, and how it's served.
 ---
 
 The web workbench is the live, no-install face of antennaknobs: a panel of knobs
@@ -25,12 +25,95 @@ FastAPI process serving the API, the `/ws` live-solve channel, and the built
 React SPA). It's deployed as a container on Fly.io; the repo's `docs/deploy.md`
 is the runbook.
 
+## Driving a knob
+
+Each parameter in a design is a knob (the big one is the measurement-frequency
+VFO dial; the rest are smaller). Three ways to change one:
+
+- **Drag** — press on the knob and move the mouse **vertically** (up to
+  increase, down to decrease). Horizontal motion is ignored, so a natural hand
+  motion won't fight you.
+- **Arrow keys** — focus a knob (click or tab to it) and press **↑ / ↓** to step
+  it by one increment — the precise way to nudge a value.
+- **Right-click menu** — right-click a knob for its settings:
+  - **Turn step** — how much one drag-notch / arrow press moves the value.
+  - **Display range** — the min/max the knob sweeps between.
+  - **Optimize this knob** + **Optimize range** — mark it as a free variable for
+    the optimizer and bound its search (see [Optimizing](#optimizing) below).
+
+Every turn re-solves and redraws live (when **Live** is on — see below).
+
+## Live & paused solving
+
+A **Live** toggle sits next to the frequency dial. It looks **depressed when on**
+and raised when off:
+
+- **On** — every knob turn triggers a solve; the plots track your hand.
+- **Paused** — knob turns just move the values; nothing solves until you turn
+  Live back on. Useful when you want to set several knobs before paying for a
+  solve, or when a heavy design makes continuous solving sluggish.
+
+## Optimizing
+
+Next to Live is an **Optimize** toggle (same depressed-when-on look), with a
+**gear menu** beside it for the objective. The optimizer continuously tunes the
+knobs you've marked to hit a target:
+
+1. **Pick an objective** in the gear menu:
+   - **Resonance** — drive the feed-point reactance to zero (X → 0).
+   - **SWR** — minimize SWR against the design's reference impedance (Z₀, 50 Ω
+     by default).
+2. **Mark the knobs to vary** — right-click each knob you'll let the optimizer
+   move, check **Optimize this knob**, and set its **Optimize range** (the search
+   bounds). A marked knob is visually flagged.
+3. **Turn on Optimize.** While Live is also on, the optimizer runs reactively: any
+   time you change a *fixed* knob, it re-tunes the *marked* knobs (a short
+   debounce, then a few dozen solves) and writes the best values back, so the
+   antenna stays on target as you explore.
+
+Under the hood it's a derivative-free **Nelder–Mead** search (each evaluation is
+a full MoM solve), bounded by your Optimize ranges, and it always runs on the
+fast **momwire** engine — never PyNEC, which is too slow for an interactive loop.
+It's a tuning aid, not a global optimizer: give it sensible ranges and a couple
+of free knobs, not a dozen.
+
+## Choosing a solver & segment count
+
+A **solver selector** offers a few preset slots so you can flip between engines
+without re-entering options — e.g. a fast dense basis, an accelerated array
+engine, and the PyNEC reference. The available engines are the momwire bases
+(**triangular**, **sinusoidal**, **bspline**), the accelerators (**hmatrix**,
+**arrayblock**), and the optional **PyNEC** backend — see
+[The solver & accuracy](/reference/solver/) for what each is good at.
+
+The solver's gear menu also exposes **segments / wire (N)** — how finely each
+wire is discretized. More segments = more accurate (up to convergence) but a
+larger, slower solve. See
+[Segments & convergence](/reference/solver/#segments--convergence) for what N
+means and how to find "enough."
+
+:::caution[The live instance limits very large solves]
+A solve builds a matrix whose size grows with the total segment count, so the
+hosted instance **rejects** solves that would be too large for the shared box
+(you'll see a message in the error banner telling you to reduce N or pick a
+smaller design — or switch to the array-block / H-matrix engine for big arrays).
+This applies **only** to the shared hosted instance: a local install is
+**unlocked** (solve as big as your own machine allows). See `docs/deploy.md`.
+:::
+
+## Convergence sweep
+
+To check that your chosen N is **converged** — i.e. adding more segments no
+longer moves the impedance — run a **convergence sweep**. It re-solves the
+current antenna across a range of N values and plots the resulting feed-point
+impedance, so you can see where the curve flattens out. Details and how to read
+it: [Segments & convergence](/reference/solver/#segments--convergence).
+
 ## How a knob turn works
 
 A knob change sends one message over the `/ws` WebSocket; the server re-solves in
 a worker thread and sends the result back. Perceived latency is dominated by the
 **solve time** (free-space dipole-class solves are tens of milliseconds), not the
-network — so a regional server feels responsive for live tuning.
-
-<!-- TODO: document the FastAPI routes (/sweep, /pattern, /converge, /export_nec,
-     /geometry, /examples, /ws) and the ParamSpec / _auto_paramspec knob model. -->
+network — so a regional server feels responsive for live tuning. Repeated solves
+of the same request hit a server-side cache, so flicking a knob back to a prior
+value is instant.
