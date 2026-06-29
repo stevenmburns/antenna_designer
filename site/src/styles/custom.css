@@ -1,12 +1,72 @@
-/* antennaknobs brand accent. Starlight derives the rest of the palette from
-   these. Tweak freely — this is just a starting point. */
+/* Brand parity with the live app's "Blueprint" theme.
+ *
+ * The app (src/antennaknobs/web/frontend/src/styles.css) is driven by a single
+ * :root token set. This file maps that palette onto Starlight's theming
+ * variables (the --sl-* gray ramp + accent + fonts), so the docs share the
+ * app's instrument-panel look. Values are lifted from the app's light and dark
+ * token blocks. Fonts (IBM Plex Sans / Mono) are loaded via the `head` config
+ * in astro.config.mjs.
+ *
+ * Starlight derives most semantic colors (text, bg, hairlines, code) from the
+ * gray ramp + white/black + accent below; overriding those endpoints retints
+ * the whole site coherently. */
+
 :root {
-  --sl-color-accent-low: #11243a;
-  --sl-color-accent: #2b7fff;
-  --sl-color-accent-high: #b9d6ff;
+  /* Match the app's typography. */
+  --sl-font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --sl-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+/* ---- Dark theme (Starlight's default) — app [data-theme="dark"] palette ---- */
+:root,
+:root[data-theme="dark"] {
+  /* accent — the app's signal cyan (--accent #76d0ff) */
+  --sl-color-accent-low: #15323f;
+  --sl-color-accent: #2f7d9e;
+  --sl-color-accent-high: #9fdcff;
+
+  /* gray ramp: white = headings → black = page bg, lifted from the app's
+     dark surfaces (--bg/--panel/--stage) and ink (--fg/--muted/--border). */
+  --sl-color-white: #eef1f6; /* headings */
+  --sl-color-gray-1: #e6e9ef; /* --fg */
+  --sl-color-gray-2: #c4ccd8; /* body text */
+  --sl-color-gray-3: #9aa3b2; /* --muted */
+  --sl-color-gray-4: #5d6675;
+  --sl-color-gray-5: #343c4a; /* --border-control */
+  --sl-color-gray-6: #232932; /* nav / sidebar surface */
+  --sl-color-gray-7: #181b22; /* --panel */
+  --sl-color-black: #0f1115; /* --bg (page) */
+}
+
+/* ---- Light theme — app :root (light) palette ---- */
 :root[data-theme="light"] {
-  --sl-color-accent-low: #c3d9ff;
-  --sl-color-accent: #1f6fe5;
-  --sl-color-accent-high: #0a2a5c;
+  /* accent — the app's blueprint blue (--accent #2f5fb0) */
+  --sl-color-accent-low: #c9dbf5;
+  --sl-color-accent: #2f5fb0;
+  --sl-color-accent-high: #163a72;
+
+  /* gray ramp inverted for light: white = strong text → black = page bg. */
+  --sl-color-white: #0e1b2e; /* headings / strong text */
+  --sl-color-gray-1: #152439; /* --fg */
+  --sl-color-gray-2: #2c3a50; /* body text */
+  --sl-color-gray-3: #5d6e85; /* --muted */
+  --sl-color-gray-4: #8294ab;
+  --sl-color-gray-5: #c6d2e0; /* --border */
+  --sl-color-gray-6: #e0e8f1; /* nav / sidebar surface */
+  --sl-color-gray-7: #eef3f9; /* --readout-bg */
+  --sl-color-black: #e9eff6; /* --inset → soft blueprint page tint */
+}
+
+/* Hero byline — the "by KK7KNB" callsign attribution under the AntennaKNoBs
+   title, mirroring the app's brand block (App.tsx `.brand .byline`). Splash
+   homepage only (the hero <h1 data-page-title>). */
+.hero h1[data-page-title]::after {
+  content: "by KK7KNB";
+  display: block;
+  margin-top: 0.55rem;
+  font-family: var(--sl-font-mono);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--sl-color-gray-3);
 }

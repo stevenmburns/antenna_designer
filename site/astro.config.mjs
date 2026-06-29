@@ -12,7 +12,7 @@ export default defineConfig({
   site: "https://antennaknobs.dev",
   integrations: [
     starlight({
-      title: "antennaknobs",
+      title: "AntennaKNoBs",
       tagline: "Turn a knob, watch the antenna.",
       social: [
         {
@@ -22,6 +22,29 @@ export default defineConfig({
         },
       ],
       customCss: ["./src/styles/custom.css"],
+      // Load IBM Plex Sans / Mono (the app's typefaces) — same source as the
+      // app's index.html. custom.css points --sl-font / --sl-font-mono at them.
+      head: [
+        {
+          tag: "link",
+          attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "preconnect",
+            href: "https://fonts.gstatic.com",
+            crossorigin: true,
+          },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap",
+          },
+        },
+      ],
       sidebar: [
         {
           label: "Start here",
