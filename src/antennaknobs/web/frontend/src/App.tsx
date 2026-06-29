@@ -1585,6 +1585,13 @@ export function App() {
   const [variantByGeom, setVariantByGeom] = useState<Record<string, string>>({});
 
   // --- Reactive knob optimiser (POST /optimize) ---
+  // Live simulation: when on, knob/freq changes auto-solve (and the optimiser
+  // runs). When off ("Paused"), edits update the geometry but the engine is held
+  // — the user keeps changing the design, then clicks Live to resume and solve.
+  // This replaces the old fire-and-forget "Cancel" on the solver-mismatch prompt,
+  // which left the plots blank with no obvious way back. Defaults on.
+  const [autoSim, setAutoSim] = useState(true);
+
   // Master enable + objective live in the compact control by meas-freq; per-knob
   // "vary" + extents + step live in each knob's right-click menu (knobOpt).
   const [optEnabled, setOptEnabled] = useState(false);
@@ -1959,9 +1966,14 @@ export function App() {
     controlsRef.current = buildRequest();
     requestSolve();
   }
-  // "Cancel": dismiss the warning without solving.
-  function dismissWarning() {
+  // "Pause simulation": stop auto-solving so the user can keep editing the design
+  // without the engine running, instead of the old "Cancel" that just hid the
+  // prompt and left the plots blank with no way forward. Approves this solver too,
+  // so clicking Live to resume continues the simulation rather than re-warning.
+  function pauseSimulation() {
+    approvedComboRef.current = true;
     setSolverWarning(false);
+    setAutoSim(false);
   }
   // Cancel an IN-FLIGHT solve: stop waiting and discard its result. The server
   // keeps computing (its /ws loop is sequential and a running MoM solve can't be
@@ -2173,7 +2185,10 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!optFixedSig) return;
+    // Paused (Live off) holds the optimiser too — it drives engine solves, so it
+    // must respect the same gate as the main solve. Resuming re-runs this effect
+    // (autoSim is a dep) and re-tunes.
+    if (!optFixedSig || !autoSim) return;
     const t = setTimeout(() => {
       runOptimize();
     }, 400);
@@ -2181,7 +2196,7 @@ export function App() {
     // runOptimize captured here reflects the state at this signature; re-running
     // only when the signature changes is intentional.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [optFixedSig]);
+  }, [optFixedSig, autoSim]);
 
   // The effective per-knob optimiser settings: the stored entry, or seeded from
   // the schema (extents = slider bounds, step = schema step, not varying).
@@ -2361,6 +2376,14 @@ export function App() {
     // the next switch resets it to null.
     if (previewReady !== geometry) return;
     controlsRef.current = buildRequest();
+    // Paused: keep controlsRef fresh (so resuming sends the latest design) but
+    // don't solve, and suppress the combo warning — nothing is running to warn
+    // about. Toggling Live back on re-runs this effect (autoSim is a dep) and
+    // solves the current state.
+    if (!autoSim) {
+      setSolverWarning(false);
+      return;
+    }
     // Withhold the solve when the design/solver combo is a poor match and the
     // user hasn't approved it — show a warning instead. The app never switches
     // the solver itself; the user does that in the gear menu, which changes
@@ -2375,6 +2398,7 @@ export function App() {
     requestSolve();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    autoSim,
     geometry, previewReady, backend, backendOptsKey,
     currentValuesKey,
     designFreq, measFreq,
@@ -3230,40 +3254,6 @@ export function App() {
               />
               lock
             </label>
-            {/* Reactive optimiser: enable + objective. Mark knobs to vary via
-                their right-click menu; turning a fixed knob re-tunes. */}
-            <div className="opt-control" title="reactive optimisation">
-              <label className="link-toggle">
-                <input
-                  type="checkbox"
-                  checked={optEnabled}
-                  onChange={(e) => setOptEnabled(e.target.checked)}
-                />
-                opt{optRunning ? <span className="opt-pip">●</span> : null}
-              </label>
-              {optEnabled && (
-                <select
-                  className="opt-objective"
-                  aria-label="optimise for"
-                  value={optObjective}
-                  onChange={(e) => setOptObjective(e.target.value as OptObjective)}
-                >
-                  {OPT_OBJECTIVES.map((k) => (
-                    <option key={k} value={k}>
-                      {OPT_OBJECTIVE_LABELS[k]}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {optEnabled && optResult && (
-                <span className="opt-readout" title="SWR after optimisation">
-                  SWR {optResult.metrics_after.swr.toFixed(2)}
-                </span>
-              )}
-              {optEnabled && optError && (
-                <span className="opt-readout opt-readout-err">{optError}</span>
-              )}
-            </div>
           </div>
           <div className="vfo-main">
             <div className="freq-lcd" title={`${measFreq.toFixed(3)} MHz`}>
@@ -3296,6 +3286,59 @@ export function App() {
               disabled={linkMeas}
             />
           </div>
+        </div>
+
+        {/* Live / Optimize: two matching push-button toggles (depressed = on).
+            Live gates auto-solving on knob turns; Optimize gates the reactive
+            tuner. The objective select + last-SWR readout follow Optimize. */}
+        <div className="sim-controls">
+          <button
+            type="button"
+            className={`toggle-btn${autoSim ? " is-on" : ""}`}
+            aria-pressed={autoSim}
+            onClick={() => setAutoSim((v) => !v)}
+            title={
+              autoSim
+                ? "Live: knob changes re-solve automatically. Click to pause and edit without solving."
+                : "Paused: edit the design freely; the engine is held. Click to resume and solve."
+            }
+          >
+            <span className="toggle-led" aria-hidden="true" />
+            {autoSim ? "Live" : "Paused"}
+          </button>
+          <button
+            type="button"
+            className={`toggle-btn${optEnabled ? " is-on" : ""}`}
+            aria-pressed={optEnabled}
+            onClick={() => setOptEnabled((v) => !v)}
+            title="Reactive optimiser: vary the knobs you mark (right-click a knob) to hit the objective whenever a fixed knob changes."
+          >
+            <span className="toggle-led" aria-hidden="true" />
+            Optimize
+            {optRunning ? <span className="opt-pip">●</span> : null}
+          </button>
+          {optEnabled && (
+            <select
+              className="opt-objective"
+              aria-label="optimise for"
+              value={optObjective}
+              onChange={(e) => setOptObjective(e.target.value as OptObjective)}
+            >
+              {OPT_OBJECTIVES.map((k) => (
+                <option key={k} value={k}>
+                  {OPT_OBJECTIVE_LABELS[k]}
+                </option>
+              ))}
+            </select>
+          )}
+          {optEnabled && optResult && (
+            <span className="opt-readout" title="SWR after optimisation">
+              SWR {optResult.metrics_after.swr.toFixed(2)}
+            </span>
+          )}
+          {optEnabled && optError && (
+            <span className="opt-readout opt-readout-err">{optError}</span>
+          )}
         </div>
 
         <h2 className="group-label">simulation</h2>
@@ -3422,7 +3465,8 @@ export function App() {
               {backend === "arrayblock" || backend === "hmatrix"
                 ? "This accelerator is overkill on a single-element design — a dense solver (e.g. Triangular) is faster here. "
                 : "This is a large array — a dense solver can be very slow. Array-block is far faster. "}
-              Change the solver in the gear menu, or solve anyway.
+              Change the solver in the gear menu, solve anyway, or pause to keep
+              editing.
             </span>
             <div className="solver-suggest-actions">
               <button
@@ -3435,9 +3479,10 @@ export function App() {
               <button
                 type="button"
                 className="solver-suggest-secondary"
-                onClick={dismissWarning}
+                onClick={pauseSimulation}
+                title="Stop auto-solving so you can keep editing; click Live to resume."
               >
-                Cancel
+                Pause simulation
               </button>
             </div>
           </div>
