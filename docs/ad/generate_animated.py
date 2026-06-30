@@ -210,7 +210,7 @@ fp[0].save(
     OUT_GIF,
     save_all=True,
     append_images=fp[1:],
-    duration=130,
+    duration=500,
     loop=0,
     optimize=True,
     disposal=1,
