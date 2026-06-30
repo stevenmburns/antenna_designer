@@ -24,12 +24,19 @@ import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
 
 ## The whole pitch, in one line
 
-Almost every antenna tool on the web is a static formula calculator or a
-desktop app you have to install. antennaknobs is the one you open in a browser,
-grab a knob, and watch the physics respond — the radiation pattern, SWR, and
-impedance update live as you drag.
+antennaknobs describes an antenna **as Python code** — a small parametric
+*builder*, its geometry computed from named knobs — then lets you explore it two
+ways: drive it from a script (sweep, optimize, compare, export a NEC deck), or
+open it in a browser and **turn the knobs live**, watching the radiation
+pattern, SWR, and impedance respond as you drag. Most antenna tools are a static
+formula calculator or a desktop app you have to install; this is neither.
 
 <CardGrid stagger>
+  <Card title="Antennas as Python code" icon="pencil">
+    Describe an antenna once as a small parametric builder — geometry computed
+    from named knobs — then sweep, optimize, compare, or open it in the browser.
+    Most tools make you hand-place every coordinate.
+  </Card>
   <Card title="Multi-basis MoM" icon="seti:python">
     Triangular, sinusoidal, and B-spline bases in one engine — basis quality
     that otherwise costs four figures in commercial tools.

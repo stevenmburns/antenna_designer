@@ -20,7 +20,7 @@ pip install "antennaknobs[web]"
 solver (PyNEC) as an alternative to momwire:
 
 ```bash
-pip install pynec-accel
+pip install "pynec-accel>=1.7.4.post2"
 ```
 :::
 

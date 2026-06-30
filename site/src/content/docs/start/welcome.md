@@ -35,3 +35,10 @@ The live simulator is running here — open it, pick a design, and drag a knob:
 👉 **[app.antennaknobs.dev](https://app.antennaknobs.dev/)**
 
 Then come back for the [Quickstart](/start/quickstart/) to drive it from Python.
+
+:::note[Built with Claude Code]
+Most of antennaknobs — the framework, the design catalog, the web workbench, and
+these docs — was written with [Claude Code](https://claude.com/claude-code),
+Anthropic's agentic coding tool, working from KK7KNB's direction and
+antenna-engineering judgment.
+:::

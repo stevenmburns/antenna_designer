@@ -43,16 +43,19 @@ Useful `pattern` flags: `--fn out.png` (write to a file instead of the screen),
 The `--engine` flag selects the solver:
 
 ```bash
---engine pynec                   # the NEC-2 reference backend (default)
---engine momwire                 # momwire, default (triangular) basis
+--engine momwire                 # momwire (default), default (triangular) basis
 --engine momwire:triangular      # piecewise-linear (tent) basis
 --engine momwire:sinusoidal      # NEC-2-style three-term basis
 --engine momwire:bspline         # B-spline Galerkin basis
+--engine momwire:hmatrix         # B-spline + hierarchical-matrix (ACA) acceleration
+--engine momwire:arrayblock      # element-aware block solver for arrays
+--engine pynec                   # the NEC-2 reference backend (needs pynec-accel)
 ```
 
-See [The solver & accuracy](/reference/solver/) for which engine to reach for —
-including the accelerated `hmatrix` and `arrayblock` solvers for large
-single-wire structures and arrays.
+`momwire` is the default so a plain install works without the optional
+`pynec-accel` package. See [The solver & accuracy](/reference/solver/) for which
+engine to reach for — including when the accelerated `hmatrix` / `arrayblock`
+solvers pay off.
 
 ## Comparing engines
 
