@@ -1612,6 +1612,10 @@ export function App() {
   const [optRunning, setOptRunning] = useState(false);
   const [optResult, setOptResult] = useState<OptimizeResult | null>(null);
   const [optError, setOptError] = useState<string | null>(null);
+  // When a user change to a knob marked for optimization auto-pauses the
+  // optimizer, this holds that knob's name for a brief "paused, you're
+  // changing X by hand" cue (cleared on re-enable / after a few seconds).
+  const [optPausedBy, setOptPausedBy] = useState<string | null>(null);
   const optAbortRef = useRef<AbortController | null>(null);
   // Per-knob settings persist per geometry (knobOpt is keyed by geometry); just
   // close any open menu / clear the last result / abort any in-flight run when
@@ -1791,6 +1795,29 @@ export function App() {
     if (!inst) return;
     const freqValue = inst[group.link_meas_freq_to_param];
     if (typeof freqValue === "number") setMeasFreq(freqValue);
+  }
+
+  // A user-originated knob change (drag / arrow key) — the optimizer's own
+  // write-back calls setParamAtPath directly and never routes through here, so
+  // this is exactly the "the human moved it" path. If the knob the user grabbed
+  // is one marked for optimization, hand them manual control: abort any
+  // in-flight optimize (so its write-back can't clobber this change) and switch
+  // Optimize off. Re-enabling resumes from the current values. (Fixed-knob
+  // changes fall through untouched, so the reactive optimizer still re-solves
+  // toward the objective on those.)
+  function handleUserParamChange(
+    path: (string | number)[],
+    value: number | string | boolean,
+  ) {
+    if (optEnabled && path.length === 1 && typeof path[0] === "string") {
+      const ko = (knobOpt[geometry] ?? {})[path[0]];
+      if (ko?.vary) {
+        optAbortRef.current?.abort();
+        setOptEnabled(false);
+        setOptPausedBy(path[0]);
+      }
+    }
+    setParamAtPath(path, value);
   }
   // Fan_dipole was hand-rolled here pre-PR — fanNBands / fanBandIds /
   // fanBandFreqs / fanHalfdriverFactors / fanSlope / fanConeRadius
@@ -2205,6 +2232,14 @@ export function App() {
     // only when the signature changes is intentional.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [optFixedSig, autoSim]);
+
+  // The "paused — changing X by hand" cue is a brief flash: clear it a few
+  // seconds after it appears so it doesn't linger while Optimize stays off.
+  useEffect(() => {
+    if (!optPausedBy) return;
+    const t = setTimeout(() => setOptPausedBy(null), 5000);
+    return () => clearTimeout(t);
+  }, [optPausedBy]);
 
   // The effective per-knob optimiser settings: the stored entry, or seeded from
   // the schema (extents = slider bounds, step = schema step, not varying).
@@ -3084,7 +3119,7 @@ export function App() {
             <ParamForm
               schema={currentExample.param_schema}
               values={currentValues}
-              onChange={setParamAtPath}
+              onChange={handleUserParamChange}
               // hexbeam_5band's daisy_chain mode emits NEC TL cards;
               // momwire engines reject any non-empty build_tls() so the
               // toggle has no effect there. Grey it out when the active
@@ -3291,8 +3326,11 @@ export function App() {
                   type="button"
                   className={`toggle-btn opt-toggle${optEnabled ? " is-on" : ""}`}
                   aria-pressed={optEnabled}
-                  onClick={() => setOptEnabled((v) => !v)}
-                  title="Reactive optimiser: vary the knobs you mark (right-click a knob) to hit the objective whenever a fixed knob changes."
+                  onClick={() => {
+                    setOptEnabled((v) => !v);
+                    setOptPausedBy(null);
+                  }}
+                  title="Reactive optimiser: vary the knobs you mark (right-click a knob) to hit the objective whenever a fixed knob changes. Changing a marked knob by hand pauses it — turn it back on to resume."
                 >
                   <span className="toggle-led" aria-hidden="true" />
                   Optimize
@@ -3347,6 +3385,14 @@ export function App() {
                   title={optError}
                 >
                   {optError}
+                </span>
+              )}
+              {!optEnabled && optPausedBy && (
+                <span
+                  className="opt-readout opt-paused"
+                  title="You changed a knob marked for optimization, so Optimize paused. Turn it back on to resume."
+                >
+                  Paused — changing {optPausedBy} by hand
                 </span>
               )}
             </div>

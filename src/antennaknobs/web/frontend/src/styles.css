@@ -1744,6 +1744,12 @@ canvas {
 .opt-readout-err {
   color: var(--danger, #c0392b);
 }
+/* Auto-pause cue: the optimizer stepped aside because the user grabbed a
+   marked knob. Use the "hot" accent so it reads as a deliberate, momentary
+   state change rather than an error. */
+.opt-paused {
+  color: var(--hot);
+}
 
 /* Per-knob right-click menu. */
 .knob-menu-backdrop {
