@@ -24,6 +24,9 @@ second backend and solve the same design both ways to trust the answer.
 
 ## The live web workbench
 
+It's live at **[app.antennaknobs.dev](https://app.antennaknobs.dev/)** — open
+it, pick a design, and drag a knob (no install).
+
 The workbench is the fastest way to feel a design. Pick an antenna, and its
 parameters appear as a panel of sliders — the *knobs*. Drag one and every view
 updates live over a WebSocket: the solver re-runs and the browser redraws.
@@ -95,7 +98,7 @@ point — agreement between independent engines is your confidence check.
 | | **PyNEC** | **momwire** |
 |---|---|---|
 | What | Python binding to the compiled C++ **NEC2** engine | In-house **method-of-moments** engines, pure-Python core with optional C++ accelerators |
-| Basis | NEC2 thin-wire (pulse/sinusoidal) | Multiple families: triangular (tent), sinusoidal, B-spline, H-matrix, array-block |
+| Basis | NEC2 thin-wire (pulse/sinusoidal) | Three bases — triangular (tent), sinusoidal, B-spline — plus H-matrix and array-block accelerators built on them |
 | Speed | Very fast single-frequency solves | Fast; C++ accelerators (pybind11) for assembly/quadrature, pure-Python fallback |
 | Ground | Sommerfeld–Norton finite ground (default) | PEC image method; free space by default |
 | Install | Prebuilt wheel from the `python-necpp` fork release (OpenBLAS vendored) | C++ accelerator built from the `momwire` submodule |
@@ -104,13 +107,13 @@ point — agreement between independent engines is your confidence check.
 **Selecting an engine** (CLI):
 
 ```bash
---engine pynec                 # NEC2 via PyNEC
---engine momwire                 # momwire, default triangular basis
+--engine momwire                 # momwire (default), default triangular basis
 --engine momwire:triangular      # piecewise-linear (tent) basis  — the momwire default
 --engine momwire:sinusoidal      # NEC2-style three-term basis (cross-validator)
 --engine momwire:bspline         # degree-1/2 B-spline Galerkin basis
 --engine momwire:hmatrix         # B-spline + hierarchical-matrix (ACA) acceleration
 --engine momwire:arrayblock      # element-aware block solver for arrays
+--engine pynec                   # NEC2 via PyNEC (needs the optional pynec-accel)
 ```
 
 In Python, instantiate an engine directly:
@@ -142,6 +145,10 @@ builds its wires from them. Because the geometry is *computed* from parameters
 in ordinary Python, you specify physical coordinates a minimal number of times —
 the rest follow by reflection and relative position. (Most antenna tools make
 you type six absolute coordinates per wire.)
+
+For path-shaped geometry (loops, vees, rhombics) you can describe the *walk*
+instead of the coordinates, with the `Drone` 3D-turtle — see the
+[Drone & Transform reference](https://antennaknobs.dev/reference/drone-transform/).
 
 Here is the built-in Moxon beam (`beams.moxon`), abbreviated. Four parameters
 describe the rectangle; helper functions negate coordinates (`rx`, `ry`) and
@@ -281,7 +288,11 @@ Roughly 70 built-in designs across nine families — run
 | `specialty` | hentenna, bowtie, helix, hourglass |
 
 User-authored designs (in the `user.*` namespace) appear here too; filter with
-`list --builtin-only` / `list --user-only`.
+`list --builtin-only` / `list --user-only`. Drop a Python file in
+`~/.antennaknobs/designs/` and it shows up in the workbench — see
+[Writing designs with Claude Code](https://antennaknobs.dev/concepts/authoring-with-claude/)
+for the contract and how to have Claude Code write one from a plain-language
+description.
 
 ---
 
@@ -304,7 +315,7 @@ Optionally, add the **NEC2 solver** (PyNEC) as an alternative to momwire:
 
 ```bash
 # optional NEC2 solver (Linux / Windows / macOS-arm64 wheels)
-pip install pynec-accel
+pip install "pynec-accel>=1.7.4.post2"
 ```
 
 Then launch the workbench with `uvicorn antennaknobs.web.server:app` (see
@@ -474,6 +485,13 @@ pytest -vv --durations=0 -- tests/
 (For the web workbench's frontend dev server, also `brew install node`.)
 
 ---
+
+## Acknowledgments
+
+Most of this codebase — the `AntennaBuilder` framework, the design catalog, the
+momwire engine bindings, the web workbench, and these docs — was written with
+**[Claude Code](https://claude.com/claude-code)**, Anthropic's agentic coding
+tool, working from KK7KNB's direction and antenna-engineering judgment.
 
 ## License
 
