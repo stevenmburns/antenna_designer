@@ -1,6 +1,6 @@
 ---
 title: Many ways to express geometry
-description: The same delta loop, built five different ways — from a coordinate formula to a 3D turtle to a numeric solve. Pick the expression that fits how you think.
+description: The same delta loop, built six different ways — from a coordinate formula to a 3D turtle to a numeric solve to a plane intersection. Pick the expression that fits how you think.
 ---
 
 import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
@@ -8,9 +8,9 @@ import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 The only thing the solver sees is the [edge list from
 `build_wires()`](/concepts/model/#the-build_wires-contract). *How* you produce
 that list is entirely up to you — and there is rarely one right way. To make
-that concrete, the catalog ships the **same delta loop built five different
+that concrete, the catalog ships the **same delta loop built six different
 ways**, each rendering identical geometry. Pick the one that matches how you
-think about the shape; invent a sixth if none fit.
+think about the shape; invent a seventh if none fit.
 
 A delta loop is a triangle fed by a short gap at the bottom:
 
@@ -99,13 +99,33 @@ A delta loop is a triangle fed by a short gap at the bottom:
     No formula, no algebra — the drone computes the corner, `math.dist` measures
     the wires, and the solver does the inversion.
   </TabItem>
+
+  <TabItem label="6. Fly to a plane">
+    **`delta_loop_plane`** — build it *top-down* and let a plane intersection
+    find the feed. Start at the top centre, fly right to the corner, turn down
+    onto the slant, and `forward_to_plane` flies until the slant crosses the
+    feed plane `y = eps` (the plane `eps` from the centre line). Neither the
+    slant length nor the feed height is computed — both fall out of where the
+    slant meets the plane. Then it borrows #3 and #4 wholesale: named pins plus
+    a `ry` reflection close the loop.
+
+    ```python
+    R = drone.forward(half_top).position             # top corner (pen up)
+    drone.yaw(-(90 + angle_deg))                      # turn down the slant
+    S = drone.forward_to_plane((0, 1, 0, eps)).position  # land on the feed plane
+    L, T = ry(R), ry(S)                              # reflect across y = 0
+    ```
+
+    Because the build is anchored at the top, the feed height is *emergent* —
+    it lands wherever the slant reaches the plane.
+  </TabItem>
 </Tabs>
 
 <Aside type="tip" title="The point">
-  All five produce the same antenna. The progression — analytic → flown →
-  labelled → reflected → solved — is a tour of *how much you can lean on the
-  framework* instead of doing geometry by hand. Designs are meant to be starting
-  points; reach for whichever style makes your next antenna clearest.
+  All six produce the same shape. The progression — analytic → flown → labelled
+  → reflected → solved → flown-to-a-plane — is a tour of *how much you can lean
+  on the framework* instead of doing geometry by hand. Designs are meant to be
+  starting points; reach for whichever style makes your next antenna clearest.
 </Aside>
 
 ## The Drone
@@ -119,6 +139,7 @@ list `build_wires()` returns:
 | `pay_out()` / `cut()` | pen down / up (start / stop laying structural wire) |
 | `feed(excitation)` | like `pay_out`, but the wire is the driven segment |
 | `forward(dist)` / `jump(dist)` | fly along the nose, with / without laying wire |
+| `forward_to_plane(plane)` | fly along the nose until the path meets `plane=(nx, ny, nz, d)` (distance solved, not given) |
 | `yaw` / `pitch` / `roll` | turn in the body frame (degrees) |
 | `face(heading, up)` | point the nose along `heading` (handy to start a planar figure) |
 | `mark(label)` / `line_to(label)` | pin a node, then lay a wire straight to it |

@@ -60,6 +60,7 @@ returns `self`, so calls chain.
 | Method | Effect |
 | --- | --- |
 | `forward(dist, nsegs=None)` | Fly `dist` (m) along the nose; lays an edge if the pen is down. `nsegs` overrides the auto count. |
+| `forward_to_plane(plane, nsegs=None)` | Fly along the nose **until the path meets `plane`** — a `forward()` whose distance is solved for, not given. Lays an edge if the pen is down. `plane` is a 4-tuple `(nx, ny, nz, d)`: the direction `(nx, ny, nz)` is the plane normal (normalized internally) and `d` is the signed distance from the origin along that unit normal, so the plane is `n̂·x == d` and `d` is a true distance regardless of the normal's length (`(0,0,1,5)` and `(0,0,2,5)` both mean `z = 5`). Raises if the normal is zero, the nose is parallel to the plane, or the plane is behind the nose; a no-op when already on it. |
 | `jump(dist)` | Fly `dist` along the nose **without** wire (pen ignored). |
 | `move_to(position)` | Relocate to `position`, keeping orientation; lays no wire. |
 | `close(nsegs=None)` | Fly straight back to where the current pen-down stroke began, laying the closing edge (a loop's last side, or its feed gap). No-op if the pen is up or already home. |
@@ -125,8 +126,11 @@ return drone.wires()
 
 Other idiomatic examples in the catalog: `horizontal_loop_drone.py` (a planar
 square via four `yaw(90).forward(side)` legs), `delta_loop_marked.py`
-(`mark`/`line_to` to bridge the top edge), and `delta_loop_reflected.py` (the
-drone as a pure **point finder** — fly pen-up and read `.position`).
+(`mark`/`line_to` to bridge the top edge), `delta_loop_reflected.py` (the
+drone as a pure **point finder** — fly pen-up and read `.position`), and
+`delta_loop_plane.py` (start at the top centre and `forward_to_plane` down a
+slant onto the feed plane `y = eps`, so the slant length and feed height fall
+out of the intersection rather than being computed).
 
 ## `Transform`
 
