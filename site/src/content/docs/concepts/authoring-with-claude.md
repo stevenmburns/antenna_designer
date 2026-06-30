@@ -88,13 +88,14 @@ class Builder(AntennaBuilder):
         ]
 ```
 
-:::tip[The `design_freq` rule — avoid the "40 m trap"]
+:::tip[The `design_freq` rule — resonate across bands]
 To put an antenna on a band *and keep it tunable there*, size every dimension as
 a fraction of `wavelength = 299.792458 / self.design_freq` (times a
-`length_factor` near 1.0). That scales the geometry **and** makes the band
-selector and the measurement-freq slider follow `design_freq`. Skip it and the
-geometry is fixed metres while the meas slider stays parked near 14 MHz — so a
-fixed-metre 40 m antenna can't actually be tuned on 40 m.
+`length_factor` near 1.0). That scales the geometry with the band selector, so
+one design resonates anywhere you point it. Skip it — freeze the dimensions in
+metres — and changing the band no longer resizes the antenna: the meas-freq
+slider still reaches any band you select, but a fixed-metre wire only *resonates*
+on the one band its dimensions happen to suit.
 :::
 
 For path-shaped geometry (loops, vees, rhombics), `build_wires` can fly a
