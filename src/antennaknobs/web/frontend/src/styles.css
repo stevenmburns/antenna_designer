@@ -1818,14 +1818,20 @@ canvas {
        (max-height: 500px) and (pointer: coarse) {
   .app {
     /* Controls nearly fill the viewport (capped so a sliver of the stage peeks
-       as a "swipe right" affordance); the stage is a wide, monitor-aspect
-       rectangle you pan across. Their sum far exceeds 100vw, so .app scrolls
-       horizontally. --mobile-stage-w keeps the grid column and the stage's
-       min-width in sync. */
-    --mobile-stage-w: 200vw;
+       as a "swipe right" affordance); the stage is a fixed monitor-sized canvas
+       you pan across in BOTH axes. We floor it at 1920x1080 CSS px so the output
+       always renders at a full desktop-monitor size regardless of the phone's
+       own dimensions — in portrait the old 200vw width was < 1920, and in
+       landscape the viewport-height stage (~400px tall) starved the vertical
+       thumbstrip (3 thumbs scaled to the stage height) down to tiny thumbnails.
+       The canvas exceeds the viewport on both axes, so .app scrolls both ways;
+       --mobile-stage-w/-h keep the grid track and the stage min-size in sync. */
+    --mobile-stage-w: max(200vw, 1920px);
+    --mobile-stage-h: max(100%, 1080px);
     grid-template-columns: min(340px, 86vw) var(--mobile-stage-w);
+    grid-template-rows: var(--mobile-stage-h);
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: auto;
     scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
   }
@@ -1835,11 +1841,11 @@ canvas {
   }
 
   .stage {
-    /* ~2x the viewport width so the output carousel renders at roughly a
-       computer-monitor (landscape) aspect ratio, instead of the cramped,
-       near-portrait box a single viewport width produced. You pan horizontally
-       across it. */
+    /* A fixed >=1920x1080 monitor canvas: wide enough for the output carousel's
+       landscape aspect, and tall enough that the vertical thumbstrip renders
+       its 3 thumbnails at full size. You pan across it in both directions. */
     min-width: var(--mobile-stage-w);
+    min-height: var(--mobile-stage-h);
     scroll-snap-align: start;
   }
 }
