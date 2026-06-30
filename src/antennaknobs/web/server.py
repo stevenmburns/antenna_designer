@@ -766,6 +766,27 @@ async def export_nec_endpoint(req: dict):
     )
 
 
+@app.post("/params_source")
+async def params_source_endpoint(req: dict):
+    """Serialise the current knob values to a paste-ready Python params block.
+
+    Reuses the same variant + live-knob overlay as the solve path, so the
+    emitted ``default_params`` (or ``<variant>_params``) block matches the
+    antenna on screen. Knob-values-only by default; pass ``include_ui: true``
+    for a wholesale block and ``wrap: "mappingproxy"`` to match catalog style.
+    Returns ``{"available": False}`` for a design that can't be serialised.
+    """
+    geometry = req.get("geometry", next(iter(EXAMPLES)))
+    ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
+    if ex.params_source is None:
+        return {"available": False}
+    try:
+        source = await run_in_threadpool(ex.params_source, req)
+    except Exception as exc:  # noqa: BLE001 — a user design's params can be odd
+        return {"geometry": geometry, "error": user_designs.format_solve_error(exc)}
+    return {"geometry": geometry, "available": True, "source": source}
+
+
 @app.post("/geometry")
 async def geometry_endpoint(req: dict):
     """Fast geometry-only snapshot of the selected antenna: wire positions +

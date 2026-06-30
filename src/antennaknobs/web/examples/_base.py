@@ -310,6 +310,11 @@ class AntennaExample:
     # request (params/variant/freq/ground). None when the design has no
     # faithful native-NEC representation (TL/DiffTL/virtual-driver networks).
     nec_export: Optional[Callable[[dict], str]] = None
+    # Serialise the request's current knob values back to a paste-ready
+    # Python `default_params = {...}` (or named-variant) block, so the UI can
+    # offer a "Copy Python" action that drops straight into a design file.
+    # None when the design can't be serialised.
+    params_source: Optional[Callable[[dict], str]] = None
     # When set, pattern() calls this to excite the NEC context (e.g.
     # multi-source drive for bowtie's 1×2 array). When None, pattern()
     # uses the default single-feed excitation reading b["feed_seg"] /

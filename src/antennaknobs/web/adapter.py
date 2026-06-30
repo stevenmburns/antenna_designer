@@ -1191,6 +1191,39 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
             ]
         return out
 
+    def params_source(req: dict) -> str:
+        # Overlay the request's live knob values onto the chosen variant's
+        # params (which still carry ui_params and the design's real nesting —
+        # bands tuples etc.), then serialise. Knob-values-only by default
+        # (include_ui), matching the manual "copy the printed values" workflow
+        # this replaces; pass include_ui=true to emit a wholesale block.
+        from antennaknobs.serialize import _precision_map
+        from antennaknobs.serialize import params_source as _emit
+
+        variant = req.get("variant")
+        base = dict(_variant_params(cls, variant))  # retains ui_params
+        ui = base.get("ui_params")
+        nested = req.get("params") or {}
+        for k in list(base.keys()):
+            if k == "ui_params":
+                continue
+            if k in req:
+                base[k] = _rehydrate_param(base[k], req[k])
+            elif k in nested:
+                base[k] = _rehydrate_param(base[k], nested[k])
+        name = (
+            f"{variant}_params"
+            if variant and variant != "default"
+            else "default_params"
+        )
+        return _emit(
+            base,
+            name=name,
+            precision=_precision_map(ui),
+            include_ui=bool(req.get("include_ui", False)),
+            wrap="mappingproxy" if req.get("wrap") == "mappingproxy" else "dict",
+        )
+
     def nec_export(req: dict) -> str:
         # Same builder construction as pynec_solve, then serialise to a NEC2
         # card deck. Ground/freq mirror what the live solve uses so the
@@ -1262,6 +1295,7 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
         pynec_build=pynec_build,
         pynec_pattern_excite=pynec_pattern_excite,
         nec_export=nec_export,
+        params_source=params_source,
         multi_feed=field_multi_feed,
         param_schema=param_schema,
         bands=bands,
