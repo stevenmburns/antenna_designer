@@ -1520,7 +1520,7 @@ const OPT_OBJECTIVE_LABELS: Record<OptObjective, string> = {
   match_z0: "Match Z₀",
 };
 // The two objectives offered in the compact control next to meas-freq.
-const OPT_OBJECTIVES: OptObjective[] = ["resonance", "swr"];
+const OPT_OBJECTIVES: OptObjective[] = ["swr", "resonance"];
 
 // Per-knob optimisation settings (per geometry, per param name). `vary` marks
 // the knob as a free variable the optimiser may change; opt extents bound the
@@ -1600,7 +1600,7 @@ export function App() {
   // Master enable + objective live in the compact control by meas-freq; per-knob
   // "vary" + extents + step live in each knob's right-click menu (knobOpt).
   const [optEnabled, setOptEnabled] = useState(false);
-  const [optObjective, setOptObjective] = useState<OptObjective>("resonance");
+  const [optObjective, setOptObjective] = useState<OptObjective>("swr");
   // The objective ("optimise for") picker lives in a small gear popover next to
   // the Optimize button, mirroring the solver-slot gear.
   const [optMenuOpen, setOptMenuOpen] = useState(false);
