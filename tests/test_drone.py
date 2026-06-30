@@ -12,6 +12,7 @@ from antennaknobs.designs.loops.delta_loop_marked import Builder as DeltaLoopMar
 from antennaknobs.designs.loops.delta_loop_reflected import (
     Builder as DeltaLoopReflected,
 )
+from antennaknobs.designs.loops.delta_loop_plane import Builder as DeltaLoopPlane
 from antennaknobs.designs.loops.delta_loop_solved import Builder as DeltaLoopSolved
 from antennaknobs.designs.loops.horizontal_loop_drone import Builder as HLoopDrone
 
@@ -266,6 +267,52 @@ def test_delta_loop_marked_is_a_symmetric_delta_loop():
 
     counts = Counter((round(p[1], 6), round(p[2], 6)) for p in pts)
     assert set(counts.values()) == {2}
+
+
+def test_delta_loop_plane_is_a_closed_symmetric_delta_loop():
+    eps = 0.05
+    b = DeltaLoopPlane()
+    ws = b.build_wires()
+
+    # Same four-edge topology as the sibling delta loops: three structural
+    # perimeter edges (two slants + the top) and one driven feed gap.
+    assert len(ws) == 4
+    driven = [e for e in ws if e[3] is not None]
+    assert len(driven) == 1 and driven[0][3] == 1 + 0j
+
+    # Vertical loop, planar in x = 0.
+    assert {round(p[0], 9) for e in ws for p in (e[0], e[1])} == {0.0}
+
+    # The top edge sits at the `top` param height.
+    top_z = max(p[2] for e in ws for p in (e[0], e[1]))
+    assert top_z == pytest.approx(b.default_params["top"])
+
+    # forward_to_plane landed the feed on the plane y = eps (eps from centre):
+    # the two driven-gap ends straddle the centre line at +/- eps.
+    (fy0, fy1) = (driven[0][0][1], driven[0][1][1])
+    assert sorted([round(fy0, 9), round(fy1, 9)]) == [-eps, eps]
+
+    # Symmetric about the y = 0 plane (so feed/pattern stay symmetric).
+    yz = {(round(p[1], 6), round(p[2], 6)) for e in ws for p in (e[0], e[1])}
+    assert {(-y, z) for (y, z) in yz} == yz
+
+    # Connected closed loop: every node shared by exactly two edges.
+    from collections import Counter
+
+    counts = Counter((round(p[1], 6), round(p[2], 6)) for e in ws for p in (e[0], e[1]))
+    assert set(counts.values()) == {2}
+
+
+def test_delta_loop_plane_size_tracks_length_factor():
+    # length_factor scales the "go right" distance, so the top widens with it.
+    def top_width(lf):
+        ws = DeltaLoopPlane(
+            dict(DeltaLoopPlane.default_params, length_factor=lf)
+        ).build_wires()
+        ys = [p[1] for e in ws for p in (e[0], e[1])]
+        return max(ys) - min(ys)
+
+    assert top_width(1.1) > top_width(1.0) > top_width(0.9)
 
 
 def _undirected(builder):
