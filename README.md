@@ -1,6 +1,6 @@
 # AntennaKNoBs &nbsp;·&nbsp; *by KK7KNB*
 
-### Script your antenna. Tune it in real time by turning knobs.
+### Script your antenna. Explore it in real time by turning knobs.
 
 AntennaKNoBs is a Python package for **parametric, programmatic antenna design**.
 You describe an antenna once as a small Python *builder* — its geometry expressed
@@ -28,14 +28,14 @@ It's live at **[app.antennaknobs.dev](https://app.antennaknobs.dev/)** — open
 it, pick a design, and drag a knob (no install).
 
 The workbench is the fastest way to feel a design. Pick an antenna, and its
-parameters appear as a panel of sliders — the *knobs*. Drag one and every view
+parameters appear as a panel of *knobs*. Drag one and every view
 updates live over a WebSocket: the solver re-runs and the browser redraws.
 
 <!-- TODO: add a screenshot/gif of the web workbench here (web-workbench.png) -->
 
 What you get:
 
-- **A panel of knobs.** Every builder parameter becomes a slider (or dropdown,
+- **A panel of knobs.** Every builder parameter becomes a knob (or dropdown,
   or checkbox) with sensible min/max/step. Drag and the design re-solves.
 - **3D wire geometry** with current visualization, viewable from three
   orthogonal projections (top / front / side).
@@ -46,7 +46,7 @@ What you get:
   compare side by side — e.g. momwire triangular vs. B-spline vs. PyNEC on the
   same antenna, at once.
 
-Live tuning stays responsive because rapid slider drags are coalesced into one
+Live updates stay responsive because rapid knob drags are coalesced into one
 solve per round-trip, so the solver is never buried under stale requests.
 
 ### Running it
