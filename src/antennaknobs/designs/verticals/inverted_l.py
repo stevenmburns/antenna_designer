@@ -85,7 +85,7 @@ class Builder(AntennaBuilder):
             (
                 (0.0, 0.0, z + eps),
                 (0.0, 0.0, z + vert),
-                self.odd_nsegs(vert, quarter),
+                self.segs_for(vert, quarter),
                 None,
             )
         )
@@ -93,7 +93,7 @@ class Builder(AntennaBuilder):
             (
                 (0.0, 0.0, z + vert),
                 (0.0, horiz, z + vert),
-                self.odd_nsegs(horiz, quarter),
+                self.segs_for(horiz, quarter),
                 None,
             )
         )

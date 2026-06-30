@@ -62,16 +62,23 @@ class AntennaBuilder:
         a dummy stub wire, branches refer to ports by name, etc."""
         return None
 
-    def odd_nsegs(self, length, ref):
+    def segs_for(self, length, ref):
         """Mesh segment count for a wire of the given `length`.
 
         Scales `self.nominal_nsegs` (the segment count for a reference-length
         wire) by `length / ref`, so longer wires get proportionally more
         segments and the segment length stays roughly constant. `ref` is
-        usually a quarter-wavelength. Floored at 3 and forced odd so a
-        center-fed element has a true center segment for the feed/excitation."""
-        n = max(3, round(self.nominal_nsegs * length / ref))
-        return n if n % 2 == 1 else n + 1
+        usually a quarter-wavelength; the count is floored at 3.
+
+        Parity is intentionally NOT forced here. Each solver wants a particular
+        segment parity so the feed lands on (or symmetrically across) the
+        center — sinusoidal, B-spline degree-2 and PyNEC want odd; triangular
+        and B-spline degree-1 want even — and every engine coerces each count
+        to its own parity at solve time (`SimulationEngine.coerce_n_seg`).
+        Returning the natural count and letting the solver round is why this is
+        `segs_for`, not the old `odd_nsegs`: baking in odd here would just make
+        a triangular solve bump the count up by one."""
+        return max(3, round(self.nominal_nsegs * length / ref))
 
     def _phasor(self, name):
         """Unit phasor exp(j·phase) for a degrees-valued phase param (e.g.

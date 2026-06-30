@@ -126,7 +126,7 @@ class Builder(AntennaBuilder):
             C0 = (xk, -eps, z)
             C1 = (xk, eps, z)
             R = (xk, h, z)
-            arm = self.odd_nsegs(h - eps, quarter)
+            arm = self.segs_for(h - eps, quarter)
             # left arm, named centre gap (a feeder port), right arm
             tups.append((L, C0, arm, None, None))
             tups.append((C0, C1, 1, None, f"d{k}"))

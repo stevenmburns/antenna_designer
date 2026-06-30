@@ -93,10 +93,10 @@ class Builder(AntennaBuilder):
 
         tups = []
         # Left half (end -> -eps), passive.
-        tups.append((left_end, gap_m, self.odd_nsegs(half - eps, quarter), None))
+        tups.append((left_end, gap_m, self.segs_for(half - eps, quarter), None))
         # Driven feed gap across the centre.
         tups.append((gap_m, gap_p, 1, 1 + 0j))
         # Right half (+eps -> end), passive.
-        tups.append((gap_p, right_end, self.odd_nsegs(half - eps, quarter), None))
+        tups.append((gap_p, right_end, self.segs_for(half - eps, quarter), None))
 
         return tups

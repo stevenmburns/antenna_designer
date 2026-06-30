@@ -87,7 +87,7 @@ class Builder(AntennaBuilder):
         w = L * math.sin(tilt)
         z = self.base
 
-        leg = self.odd_nsegs(L, quarter)
+        leg = self.segs_for(L, quarter)
         FU = (0.0, eps, z)  # feed apex, upper terminal
         FL = (0.0, -eps, z)  # feed apex, lower terminal
         SU = (d, w, z)  # upper side apex

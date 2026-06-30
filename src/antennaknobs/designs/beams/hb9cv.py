@@ -96,7 +96,7 @@ class Builder(AntennaBuilder):
             C0 = (x, -eps, z)
             C1 = (x, eps, z)
             R = (x, h, z)
-            arm = self.odd_nsegs(h - eps, quarter)
+            arm = self.segs_for(h - eps, quarter)
             return [
                 (L, C0, arm, None, None),
                 (C0, C1, 1, None, name),

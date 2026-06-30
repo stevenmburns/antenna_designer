@@ -104,7 +104,7 @@ class Builder(AntennaBuilder):
             (
                 (0.0, eps, z),
                 (0.0, length, z),
-                self.odd_nsegs(length - eps, quarter),
+                self.segs_for(length - eps, quarter),
                 None,
             ),
         ]

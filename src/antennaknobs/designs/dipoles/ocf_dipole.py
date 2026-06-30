@@ -84,10 +84,10 @@ class Builder(AntennaBuilder):
 
         tups = []
         tups.append(
-            (L, F0, self.odd_nsegs(left_arm, quarter), None)
+            (L, F0, self.segs_for(left_arm, quarter), None)
         )  # short arm (to -y end)
         tups.append((F0, F1, 1, 1 + 0j))  # off-centre feed
         tups.append(
-            (F1, R, self.odd_nsegs(right_arm, quarter), None)
+            (F1, R, self.segs_for(right_arm, quarter), None)
         )  # long arm (to +y end)
         return tups

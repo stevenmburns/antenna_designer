@@ -100,7 +100,7 @@ class Builder(AntennaBuilder):
         C0 = (0.0, -eps, z)
         C1 = (0.0, eps, z)
         R = (0.0, half, z)
-        arm = self.odd_nsegs(half - eps, quarter)
+        arm = self.segs_for(half - eps, quarter)
         # Centre-fed doublet; the named centre gap "feed" is the antenna-side
         # port the matched line connects to (no direct voltage source here).
         return [

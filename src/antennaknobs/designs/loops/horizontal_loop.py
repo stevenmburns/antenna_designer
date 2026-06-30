@@ -100,12 +100,12 @@ class Builder(AntennaBuilder):
         tups = []
         # Side A->D split into: A->gap-start (passive), gap (driven, 1 seg),
         # gap-end->D (passive). The remaining three sides close the loop.
-        tups.append((A, F0, self.odd_nsegs(h - feed / 2.0, quarter), None))
+        tups.append((A, F0, self.segs_for(h - feed / 2.0, quarter), None))
         tups.append((F0, F1, 1, 1 + 0j))  # one-segment driven gap
-        tups.append((F1, D, self.odd_nsegs(h - feed / 2.0, quarter), None))
-        tups.append((D, C, self.odd_nsegs(side, quarter), None))  # top side
-        tups.append((C, B, self.odd_nsegs(side, quarter), None))  # right side
+        tups.append((F1, D, self.segs_for(h - feed / 2.0, quarter), None))
+        tups.append((D, C, self.segs_for(side, quarter), None))  # top side
+        tups.append((C, B, self.segs_for(side, quarter), None))  # right side
         tups.append(
-            (B, A, self.odd_nsegs(side, quarter), None)
+            (B, A, self.segs_for(side, quarter), None)
         )  # bottom side, closes the loop
         return tups
