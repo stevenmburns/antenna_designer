@@ -322,19 +322,20 @@ def cli(arguments=None):
                 "--engines",
                 type=str,
                 nargs="+",
-                default=["pynec"],
+                default=["momwire"],
                 help="One or more simulation backends. Each spec is "
-                '"pynec" or "momwire[:triangular|sinusoidal|bspline]". '
+                '"momwire[:triangular|sinusoidal|bspline]" or "pynec". '
                 "Cross-products with --builders.",
             )
         else:
             p.add_argument(
                 "--engine",
                 type=str,
-                default="pynec",
-                help="Simulation backend: pynec | momwire | "
-                "momwire:triangular | momwire:sinusoidal | momwire:bspline "
-                "(default: pynec).",
+                default="momwire",
+                help="Simulation backend: momwire | "
+                "momwire:triangular | momwire:sinusoidal | momwire:bspline | "
+                "pynec (default: momwire). pynec needs the optional pynec-accel "
+                "package; momwire is always available.",
             )
         p.add_argument(
             "--ground",
