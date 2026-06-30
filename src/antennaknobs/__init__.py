@@ -19,6 +19,8 @@ __all__ = [
     "optimize",
     "pattern",
     "pattern3d",
+    "params_source",
+    "builder_params_source",
     "cli",
 ]
 
@@ -35,6 +37,7 @@ from .sim import Antenna
 from .opt import optimize
 from .sweep import sweep, sweep_freq, sweep_gain, sweep_patterns, resolve_range, gen_xs
 from .far_field import compare_patterns, plot_patterns, pattern, pattern3d
+from .serialize import params_source, builder_params_source
 from .cli import cli
 
 # Re-enable Builder debug prints (now `logger.debug` calls under
