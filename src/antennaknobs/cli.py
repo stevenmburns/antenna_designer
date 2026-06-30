@@ -11,6 +11,7 @@ from . import (
     optimize,
 )
 from .engines import PyNECEngine, MomwireEngine
+from .serialize import builder_params_source
 from .user_designs import USER_NS, iter_design_files, resolve_user_design
 
 from momwire import (
@@ -205,6 +206,19 @@ def get_builder(nm):
 
 def get_builders(nms):
     return (get_builder(nm) for nm in nms)
+
+
+def emit_params_name(builder_spec):
+    """Variable name for a serialised param block emitted from ``builder_spec``.
+
+    A ``name:variant`` spec emits ``<variant>_params`` (so the block drops
+    straight back beside the variant it came from); a bare name or ``:default``
+    emits ``default_params``.
+    """
+    _, _, variant = builder_spec.partition(":")
+    if variant and variant != "default":
+        return f"{variant}_params"
+    return "default_params"
 
 
 def parse_ground(s):
@@ -502,8 +516,57 @@ def cli(arguments=None):
             resonance=args.resonance,
             engine=engine,
         )
-        print(opt_builder)
+        print()
+        print("# Optimized knobs — paste over the design's params block:")
+        print(
+            builder_params_source(
+                opt_builder,
+                name=emit_params_name(args.builder),
+                default_precision=6,
+            )
+        )
         compare_patterns([engine(builder()), engine(opt_builder)], fn=args.fn)
+
+    p.set_defaults(func=f)
+
+    p = subparsers.add_parser(
+        "params", help="Print a design's knob values as paste-ready Python"
+    )
+    p.add_argument(
+        "--builder",
+        type=str,
+        default="dipoles.invvee:dipole",
+        help="Antenna builder (name or name:variant) to dump.",
+    )
+    p.add_argument(
+        "--name",
+        type=str,
+        default=None,
+        help="Variable name for the emitted block "
+        "(default: <variant>_params, or default_params).",
+    )
+    p.add_argument(
+        "--no-ui",
+        dest="no_ui",
+        default=False,
+        action="store_true",
+        help="Omit the ui_params block (knob values only).",
+    )
+    p.add_argument(
+        "--wrap",
+        choices=["dict", "mappingproxy"],
+        default="dict",
+        help="Wrap the block in MappingProxyType to match the catalog style.",
+    )
+
+    def f(args):
+        builder = get_builder(args.builder)
+        name = args.name or emit_params_name(args.builder)
+        print(
+            builder_params_source(
+                builder(), name=name, include_ui=not args.no_ui, wrap=args.wrap
+            )
+        )
 
     p.set_defaults(func=f)
 
