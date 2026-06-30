@@ -91,6 +91,63 @@ def test_healthz_returns_ok(client: TestClient):
 
 
 # ---------------------------------------------------------------------------
+# /params_source — "Copy Python" export of the live knob values
+# ---------------------------------------------------------------------------
+
+
+def _eval_params_block(src: str):
+    from types import MappingProxyType
+
+    ns: dict = {"MappingProxyType": MappingProxyType}
+    exec(src, ns)
+    return ns["default_params"]
+
+
+def test_params_source_reflects_live_knob_values(client: TestClient):
+    r = client.post(
+        "/params_source",
+        json={
+            "geometry": "broadband.g5rv",
+            "variant": "default",
+            "z0_match": 512.5,
+            "match_len_frac": 0.41,
+        },
+    )
+    assert r.status_code == 200
+    payload = r.json()
+    assert payload["available"] is True
+    block = _eval_params_block(payload["source"])
+    # The overlaid slider values must come back out, not the design defaults.
+    assert block["z0_match"] == 512.5
+    assert block["match_len_frac"] == 0.41
+    # Knob-values-only by default — no ui_params noise.
+    assert "ui_params" not in block
+
+
+def test_params_source_include_ui_and_mappingproxy(client: TestClient):
+    r = client.post(
+        "/params_source",
+        json={
+            "geometry": "broadband.g5rv",
+            "include_ui": True,
+            "wrap": "mappingproxy",
+        },
+    )
+    payload = r.json()
+    assert payload["source"].startswith("default_params = MappingProxyType({")
+    block = _eval_params_block(payload["source"])
+    assert "ui_params" in block
+
+
+def test_params_source_names_block_after_variant(client: TestClient):
+    payload = client.post(
+        "/params_source",
+        json={"geometry": "specialty.hentenna", "variant": "z100"},
+    ).json()
+    assert payload["source"].startswith("z100_params = {")
+
+
+# ---------------------------------------------------------------------------
 # /examples — schema serialization, used by the frontend on mount
 # ---------------------------------------------------------------------------
 

@@ -1565,6 +1565,8 @@ export function App() {
   // Tools (gear) dropdown in the header. Tucked away because it holds
   // occasional actions like the NEC deck export, not per-solve controls.
   const [gearMenuOpen, setGearMenuOpen] = useState(false);
+  // Transient "Copied ✓" confirmation on the Copy-params menu item.
+  const [copiedParams, setCopiedParams] = useState(false);
 
   // Schema-driven parameter controls. Each registered example bundles
   // its parameter schema in web/examples/<name>.py; the backend serves
@@ -2318,6 +2320,38 @@ export function App() {
     }
   }
 
+  // Copy the current knob values as a paste-ready Python `default_params`
+  // (or `<variant>_params`) block. Replaces the old workflow of hand-copying
+  // the values printed on screen back into a design file. The backend reuses
+  // the same variant + live-knob overlay as the solve, so what you copy is
+  // exactly the antenna on screen.
+  async function copyParams() {
+    try {
+      const resp = await fetch("/params_source", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildRequest()),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.available === false || data.error) {
+        window.alert(data.error ?? "Copy params is unavailable for this design.");
+        return;
+      }
+      const src: string = data.source;
+      try {
+        await navigator.clipboard.writeText(src);
+        setCopiedParams(true);
+        window.setTimeout(() => setCopiedParams(false), 1500);
+      } catch {
+        // Clipboard API blocked (e.g. insecure context) — fall back to a
+        // prompt the user can copy from by hand.
+        window.prompt("Copy these params:", src);
+      }
+    } catch (e) {
+      window.alert(`Copy params failed: ${e}`);
+    }
+  }
+
   const currentBands: BandSpec[] = currentExample?.bands ?? [];
 
   // Anchor for the measurement-freq slider window: the snap-freq of the band
@@ -3030,6 +3064,15 @@ export function App() {
                     onClick={() => setGearMenuOpen(false)}
                   />
                   <div className="gear-menu" role="menu">
+                    <button
+                      type="button"
+                      className="gear-menu-item"
+                      role="menuitem"
+                      onClick={copyParams}
+                      title="Copy the current knob values as a paste-ready Python default_params block"
+                    >
+                      {copiedParams ? "Copied ✓" : "Copy params (Python)"}
+                    </button>
                     <button
                       type="button"
                       className="gear-menu-item"
