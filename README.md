@@ -7,7 +7,7 @@
 | src/antennaknobs/\_\_init\_\_.py                                  |       14 |        2 |     86% |     52-53 |
 | src/antennaknobs/\_\_main\_\_.py                                  |        0 |        0 |    100% |           |
 | src/antennaknobs/builder.py                                       |      228 |        1 |     99% |        80 |
-| src/antennaknobs/cli.py                                           |      301 |       26 |     91% |154, 173, 207, 221-229, 428, 597-611 |
+| src/antennaknobs/cli.py                                           |      301 |       26 |     91% |154, 173, 207, 221-229, 429, 598-612 |
 | src/antennaknobs/core.py                                          |        6 |        0 |    100% |           |
 | src/antennaknobs/designs/\_\_init\_\_.py                          |        0 |        0 |    100% |           |
 | src/antennaknobs/designs/arrays/\_\_init\_\_.py                   |        0 |        0 |    100% |           |
