@@ -95,15 +95,15 @@ class Builder(AntennaBuilder):
             BR = (x, half, z0)
             TR = (x, half, z1)
             TL = (x, -half, z1)
-            ns = self.odd_nsegs(side, quarter)
+            ns = self.segs_for(side, quarter)
             wires = []
             if fed:
                 # bottom wire: BL -> (-eps) -> [feed] -> (+eps) -> BR
                 C0 = (x, -eps, z0)
                 C1 = (x, eps, z0)
-                wires.append((BL, C0, self.odd_nsegs(half - eps, quarter), None))
+                wires.append((BL, C0, self.segs_for(half - eps, quarter), None))
                 wires.append((C0, C1, 1, 1 + 0j))
-                wires.append((C1, BR, self.odd_nsegs(half - eps, quarter), None))
+                wires.append((C1, BR, self.segs_for(half - eps, quarter), None))
             else:
                 wires.append((BL, BR, ns, None))
             # remaining three sides (passive for both loops)

@@ -90,8 +90,8 @@ class Builder(AntennaBuilder):
             # slopes up by `tilt`; the fold spacing (x) stays horizontal.
             return (x, y * math.cos(tilt), y * math.sin(tilt) + self.base)
 
-        arm = self.odd_nsegs(half - eps, quarter)
-        short = self.odd_nsegs(s, quarter)
+        arm = self.segs_for(half - eps, quarter)
+        short = self.segs_for(s, quarter)
 
         # near wire (feed) at x=0; far wire (termination) at x=s
         nL, nR = P(0.0, -half), P(0.0, half)

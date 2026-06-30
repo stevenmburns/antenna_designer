@@ -108,12 +108,12 @@ class Builder(AntennaBuilder):
             (
                 (0.0, -span, z_top),
                 (0.0, 0.0, z_top),
-                self.odd_nsegs(span, quarter),
+                self.segs_for(span, quarter),
                 None,
             )
         )
         tups.append(
-            ((0.0, 0.0, z_top), (0.0, span, z_top), self.odd_nsegs(span, quarter), None)
+            ((0.0, 0.0, z_top), (0.0, span, z_top), self.segs_for(span, quarter), None)
         )
 
         # Outer verticals (passive, open at the bottom).
@@ -121,7 +121,7 @@ class Builder(AntennaBuilder):
             (
                 (0.0, -span, z_top),
                 (0.0, -span, z_bot),
-                self.odd_nsegs(vert, quarter),
+                self.segs_for(vert, quarter),
                 None,
             )
         )
@@ -129,7 +129,7 @@ class Builder(AntennaBuilder):
             (
                 (0.0, span, z_top),
                 (0.0, span, z_bot),
-                self.odd_nsegs(vert, quarter),
+                self.segs_for(vert, quarter),
                 None,
             )
         )
@@ -143,7 +143,7 @@ class Builder(AntennaBuilder):
             (
                 (0.0, 0.0, z_top),
                 (0.0, 0.0, zf + feed),
-                self.odd_nsegs(z_top - (zf + feed), quarter),
+                self.segs_for(z_top - (zf + feed), quarter),
                 None,
             )
         )
@@ -152,7 +152,7 @@ class Builder(AntennaBuilder):
             (
                 (0.0, 0.0, zf),
                 (0.0, 0.0, z_bot),
-                self.odd_nsegs(zf - z_bot, quarter),
+                self.segs_for(zf - z_bot, quarter),
                 None,
             )
         )

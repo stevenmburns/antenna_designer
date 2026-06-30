@@ -86,9 +86,9 @@ class Builder(AntennaBuilder):
             C0 = (x, -eps, z)
             C1 = (x, eps, z)
             return [
-                (L, C0, self.odd_nsegs(half - eps, quarter), None),
+                (L, C0, self.segs_for(half - eps, quarter), None),
                 (C0, C1, 1, voltage),
-                (C1, R, self.odd_nsegs(half - eps, quarter), None),
+                (C1, R, self.segs_for(half - eps, quarter), None),
             ]
 
         tups = []

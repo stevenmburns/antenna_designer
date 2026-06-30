@@ -86,7 +86,7 @@ class Builder(AntennaBuilder):
         end_p = (leg * dx, leg * dy, z)
         end_m = (leg * dx, -leg * dy, z)
 
-        arm = self.odd_nsegs(leg - eps, quarter)
+        arm = self.segs_for(leg - eps, quarter)
 
         tups = []
         # Driven gap across the apex between the two legs' inner ends.

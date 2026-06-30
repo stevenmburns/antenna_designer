@@ -87,13 +87,13 @@ class Builder(AntennaBuilder):
 
         # Leg A: short -> tap node -> stub top, then the radiator continues up.
         tups.append(
-            ((0.0, 0.0, z_short), (0.0, 0.0, z_tap), self.odd_nsegs(tap, quarter), None)
+            ((0.0, 0.0, z_short), (0.0, 0.0, z_tap), self.segs_for(tap, quarter), None)
         )
         tups.append(
             (
                 (0.0, 0.0, z_tap),
                 (0.0, 0.0, z_stub_top),
-                self.odd_nsegs(stub - tap, quarter),
+                self.segs_for(stub - tap, quarter),
                 None,
             )
         )
@@ -101,20 +101,20 @@ class Builder(AntennaBuilder):
             (
                 (0.0, 0.0, z_stub_top),
                 (0.0, 0.0, z_rad_top),
-                self.odd_nsegs(radiator, quarter),
+                self.segs_for(radiator, quarter),
                 None,
             )
         )
 
         # Leg B: short -> tap node -> stub top (open).
         tups.append(
-            ((gap, 0.0, z_short), (gap, 0.0, z_tap), self.odd_nsegs(tap, quarter), None)
+            ((gap, 0.0, z_short), (gap, 0.0, z_tap), self.segs_for(tap, quarter), None)
         )
         tups.append(
             (
                 (gap, 0.0, z_tap),
                 (gap, 0.0, z_stub_top),
-                self.odd_nsegs(stub - tap, quarter),
+                self.segs_for(stub - tap, quarter),
                 None,
             )
         )

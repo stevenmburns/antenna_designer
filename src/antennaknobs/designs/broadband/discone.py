@@ -105,7 +105,7 @@ class Builder(AntennaBuilder):
                 (
                     (0.0, 0.0, z_disc),
                     (disc_r * c, disc_r * s, z_disc),
-                    self.odd_nsegs(disc_r, quarter),
+                    self.segs_for(disc_r, quarter),
                     None,
                 )
             )
@@ -114,7 +114,7 @@ class Builder(AntennaBuilder):
                 (
                     (0.0, 0.0, z_apex),
                     (cone_r * c, cone_r * s, z_cone_base),
-                    self.odd_nsegs(cone, quarter),
+                    self.segs_for(cone, quarter),
                     None,
                 )
             )

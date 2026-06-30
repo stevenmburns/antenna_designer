@@ -122,9 +122,9 @@ class Builder(AntennaBuilder):
             C0 = (x, y, zc - eps)
             C1 = (x, y, zc + eps)
             return [
-                (B, C0, self.odd_nsegs(half - eps, quarter), None),
+                (B, C0, self.segs_for(half - eps, quarter), None),
                 (C0, C1, 1, voltage),
-                (C1, T, self.odd_nsegs(half - eps, quarter), None),
+                (C1, T, self.segs_for(half - eps, quarter), None),
             ]
 
         side = complex(self.side_mag) * (-1j)

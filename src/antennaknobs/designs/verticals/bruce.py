@@ -136,7 +136,7 @@ class Builder(AntennaBuilder):
                     (
                         (0.0, ya, za),
                         (0.0, ya, zf),
-                        self.odd_nsegs(zf - za, quarter),
+                        self.segs_for(zf - za, quarter),
                         None,
                     )
                 )
@@ -145,13 +145,13 @@ class Builder(AntennaBuilder):
                     (
                         (0.0, ya, zf + 2 * eps),
                         (0.0, yb, zb),
-                        self.odd_nsegs(zb - (zf + 2 * eps), quarter),
+                        self.segs_for(zb - (zf + 2 * eps), quarter),
                         None,
                     )
                 )
             else:
                 tups.append(
-                    ((0.0, ya, za), (0.0, yb, zb), self.odd_nsegs(seg, quarter), None)
+                    ((0.0, ya, za), (0.0, yb, zb), self.segs_for(seg, quarter), None)
                 )
 
         return tups
