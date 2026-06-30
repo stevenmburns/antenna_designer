@@ -96,6 +96,67 @@ def test_face_rejects_parallel_up():
         Drone().face(heading=(1.0, 0.0, 0.0), up=(2.0, 0.0, 0.0))
 
 
+def test_forward_to_plane_extends_to_axis_aligned_plane():
+    # Nose along +x at the origin; fly to the plane x = 3.
+    d = Drone(ref=1.0).pay_out()
+    d.forward_to_plane((1.0, 0.0, 0.0, 3.0))
+    p0, p1, _ns, ex = d.wires()[0]
+    assert p0 == pytest.approx((0.0, 0.0, 0.0))
+    assert p1 == pytest.approx((3.0, 0.0, 0.0))
+    assert ex is None
+    assert d.position == pytest.approx((3.0, 0.0, 0.0))
+
+
+def test_forward_to_plane_solves_the_oblique_distance():
+    # Heading +x toward a plane tilted 45 deg (normal (1,1,0)) at distance
+    # d = sqrt(2): n_hat . x = 1 => x = 2 on the x axis. The leg length is the
+    # solved 2.0, not d.
+    d = Drone(ref=1.0).pay_out()
+    d.forward_to_plane((1.0, 1.0, 0.0, math.sqrt(2.0)))
+    assert d.position == pytest.approx((2.0, 0.0, 0.0))
+    assert math.dist(*d.wires()[0][:2]) == pytest.approx(2.0)
+
+
+def test_forward_to_plane_d_is_a_true_distance_not_scaled_by_normal():
+    # (0,0,2,5) and (0,0,1,5) name the SAME plane z = 5 (d is the distance
+    # along the unit normal, independent of the passed normal's length).
+    for normal_z in (1.0, 2.0):
+        d = Drone(ref=1.0).face(heading=(0.0, 0.0, 1.0), up=(1.0, 0.0, 0.0))
+        d.pay_out().forward_to_plane((0.0, 0.0, normal_z, 5.0))
+        assert d.position == pytest.approx((0.0, 0.0, 5.0))
+
+
+def test_forward_to_plane_respects_the_pen():
+    # Pen up: move to the plane but lay no wire.
+    d = Drone(ref=1.0).forward_to_plane((1.0, 0.0, 0.0, 4.0))
+    assert d.wires() == []
+    assert d.position == pytest.approx((4.0, 0.0, 0.0))
+
+
+def test_forward_to_plane_already_on_plane_is_a_no_op():
+    d = Drone(position=(3.0, 0.0, 0.0), ref=1.0).pay_out()
+    d.forward_to_plane((1.0, 0.0, 0.0, 3.0))
+    assert d.wires() == []  # no zero-length edge
+    assert d.position == pytest.approx((3.0, 0.0, 0.0))
+
+
+def test_forward_to_plane_rejects_parallel_nose():
+    # Nose +x, plane normal +z: never intersects.
+    with pytest.raises(ValueError):
+        Drone().pay_out().forward_to_plane((0.0, 0.0, 1.0, 5.0))
+
+
+def test_forward_to_plane_rejects_plane_behind_nose():
+    # Nose +x at origin; plane x = -3 is behind: cannot extend forward to it.
+    with pytest.raises(ValueError):
+        Drone().pay_out().forward_to_plane((1.0, 0.0, 0.0, -3.0))
+
+
+def test_forward_to_plane_rejects_zero_normal():
+    with pytest.raises(ValueError):
+        Drone().pay_out().forward_to_plane((0.0, 0.0, 0.0, 1.0))
+
+
 def _key(edges):
     """Edges as an order- and direction-independent multiset (the drone may
     traverse a segment either way)."""

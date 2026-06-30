@@ -118,6 +118,45 @@ class Drone:
         self.pose = self.pose.postmult(Transform.translate(dist, 0, 0))
         return self
 
+    def forward_to_plane(self, plane, nsegs=None):
+        """Fly along the nose until the path meets ``plane``, laying an edge if
+        the pen is down -- ``forward`` whose distance is solved for rather than
+        given. Handy for trimming a leg to a boundary (a ground plane, a
+        bounding box face, a reflector screen) without precomputing its length.
+
+        ``plane`` is a 4-tuple ``(nx, ny, nz, d)``: the direction
+        ``(nx, ny, nz)`` is the plane normal (normalized internally, so it need
+        not be a unit vector) and ``d`` is the signed distance from the origin
+        along that unit normal. The plane is the set of points ``x`` with
+        ``n_hat . x == d``; e.g. ``(0, 0, 1, 5)`` is the horizontal plane
+        ``z = 5`` and ``(0, 0, 2, 5)`` is the same plane (``d`` is a true
+        distance, not scaled by the normal's length).
+
+        Raises ``ValueError`` if the normal is zero, if the nose is parallel to
+        the plane (no intersection), or if the plane lies behind the nose (you
+        cannot extend *forward* to reach it). If the drone already sits on the
+        plane this is a no-op (no zero-length edge)."""
+        n = np.array(plane[:3], dtype=float)
+        nn = np.linalg.norm(n)
+        if nn < 1e-12:
+            raise ValueError("plane normal must be non-zero")
+        n /= nn
+        d = float(plane[3])
+
+        p0 = np.array(self.position, dtype=float)
+        # heading is the unit world image of local +x, so the solved parameter
+        # t is directly a forward distance along the nose.
+        h = np.array(self.heading, dtype=float)
+        denom = float(np.dot(n, h))
+        if abs(denom) < 1e-12:
+            raise ValueError("nose is parallel to the plane; it never intersects")
+        t = (d - float(np.dot(n, p0))) / denom
+        if t < -1e-12:
+            raise ValueError("plane lies behind the nose; cannot extend forward to it")
+        if t > 1e-12:
+            self.forward(t, nsegs)
+        return self
+
     def move_to(self, position):
         """Relocate to ``position`` keeping orientation; lays no wire."""
         A = self.pose.A.copy()
