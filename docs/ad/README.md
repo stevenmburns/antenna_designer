@@ -5,8 +5,8 @@ Marketing assets for a [QRZ.com](https://www.qrz.com/page/advertising.html)
 
 | File | What | Size |
 | --- | --- | --- |
-| `antennaknobs_728x90.png` | Static banner | ~13 KB |
-| `antennaknobs_728x90.gif` | Animated banner (dial drives a live antenna pattern) | ~34 KB |
+| `antennaknobs_728x90.gif` | Animated banner (3 knob-driven panels) | ~34 KB |
+| `antennaknobs_728x90.png` | A frozen hero frame of the GIF (static fallback) | ~15 KB |
 
 ## QRZ top-slot spec (verify current values with sales@qrz.com)
 
@@ -15,28 +15,38 @@ Marketing assets for a [QRZ.com](https://www.qrz.com/page/advertising.html)
 - **Rate (as read from QRZ's page, June 2026):** top slot **$200 / month**
   ($540 / 3 mo, $2040 / yr); 10% off for 3+ units, 15% for 1 yr+. Confirm before buying.
 
-## The animation is real
+## What it shows
 
-The GIF's morphing pattern is **not faked** — each frame is a genuine azimuth
-cut of the catalog `beams.moxon` design, computed by this repo's `momwire`
-engine (`MomwireEngine.far_field`) as the dial sweeps the Moxon's `t0_factor`.
-The beam swings from a clean forward lobe (deep rear null) into a figure-8 and
-back: the literal point of AntennaKNoBs — turn a knob, the antenna responds.
+Three panels, left to right, all driven by the dial and all computed live by this
+repo's `momwire` engine from the catalog `beams.moxon` design:
 
-## Messaging (intentional)
+1. **A labelled dial** ("spacing") with a live readout below it — the Moxon's
+   element spacing in wavelengths, ticking as the knob turns.
+2. **The Moxon geometry** — its real top view (driven element + feed gap,
+   reflector, bent tips) from `build_wires()`, reshaping as the spacing changes.
+3. **The radiation pattern** — an azimuth cut from `far_field()`.
 
-- **Links to `antennaknobs.dev`** (the main site), so visitors land on the
-  installable, open-source tool — not straight into the throwaway web demo.
-- Says **"open source"** in the subline (no "free trial" framing that would
-  imply a future paywall).
+The dial sweeps `aspect_ratio` (element spacing): as it widens, the boom deepens
+and the back lobe collapses into a clean forward beam — the actual Moxon
+spacing/front-to-back tradeoff. Turn a knob, the antenna responds: the point of
+AntennaKNoBs, drawn by AntennaKNoBs.
+
+## Messaging (deliberate)
+
+- **No URL** — the banner is clickable, so the address is omitted (it just looked
+  cramped). The ad links to **antennaknobs.dev**, the main site, so visitors land
+  on the installable open-source tool rather than the throwaway web demo.
+- Says **"open source"** in the subline (no "free trial" framing that would imply
+  a future paywall).
 - Avoids the word **"tune"** — turning a design parameter is not antenna tuning.
 - Headline **"Your antennas, as code."**; KK7KNB credit for QRZ cred.
 
 ## Typography
 
 IBM Plex Sans + IBM Plex Mono — the same family the web app loads — with the
-`antennaknobs.dev` URL set in Plex Mono to echo the app's monospace readouts.
-The fonts are **not committed** (OFL 1.1, ~1 MB); fetch them first:
+**numeric readout in Plex Mono**, matching the app's value displays. (Plex Mono
+ships without a λ glyph, so the unit is drawn in Plex Sans.) The fonts are **not
+committed** (OFL 1.1, ~1 MB); fetch them first:
 
 ```bash
 docs/ad/fetch_fonts.sh        # downloads IBM Plex into docs/ad/fonts/ (gitignored)
@@ -47,11 +57,10 @@ docs/ad/fetch_fonts.sh        # downloads IBM Plex into docs/ad/fonts/ (gitignor
 ```bash
 pip install -e ".[web]"        # needs antennaknobs (for the momwire patterns) + Pillow
 docs/ad/fetch_fonts.sh
-python docs/ad/generate_static.py
-python docs/ad/generate_animated.py
+python docs/ad/generate_animated.py   # writes BOTH the .gif and the hero-frame .png
 ```
 
-Both are rendered at 3× and downscaled (LANCZOS) for antialiasing. The GIF is
-delta-frame encoded (only the dial+pattern region is stored per frame), which
-is what keeps it under the 48 KB limit. Override the font location with the
-`AD_FONTS` env var if your TTFs live elsewhere.
+Rendered at 3× and downscaled (LANCZOS) for antialiasing; the GIF is delta-frame
+encoded (only the changing left panels are stored per frame), which keeps it
+under the 48 KB limit. The PNG is the widest-spacing frame (clean forward beam).
+Override the font location with the `AD_FONTS` env var if your TTFs live elsewhere.
