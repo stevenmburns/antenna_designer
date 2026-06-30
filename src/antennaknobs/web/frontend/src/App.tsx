@@ -1975,6 +1975,12 @@ export function App() {
   // NEC's rp_card pattern, fetched on a debounce so we don't fire one per
   // slider tick. Overlaid on the cuts as a comparison line.
   const [pattern, setPattern] = useState<PatternData | null>(null);
+  // Pinned far-field overlays for cross-antenna pattern comparison, plus the
+  // live antenna's metrics for the side-by-side table. A monotonic counter
+  // gives each pin a stable React key.
+  const [pinnedPatterns, setPinnedPatterns] = useState<PinnedPattern[]>([]);
+  const [liveMetrics, setLiveMetrics] = useState<PatternMetrics | null>(null);
+  const pinSeq = useRef(0);
   const [view, setView] = useState<View>("antenna");
   const [cameraProjection, setCameraProjection] = useState<Projection>("xy");
   // When the user switches antennas, reset the camera to that example's
@@ -2438,6 +2444,67 @@ export function App() {
   // The latest control values, used to send a new request when the prior one
   // completes (drops intermediate values rather than queuing them all up).
   const controlsRef = useRef<SolveRequest>(buildRequest());
+
+  // --- Pattern compare (pin / ghost overlay) --------------------------------
+  // Fetch the scalar far-field metrics for a request (peak gain, takeoff, F/B,
+  // beamwidths). Returns null when the design can't be evaluated or on error.
+  async function fetchMetrics(req: SolveRequest): Promise<PatternMetrics | null> {
+    try {
+      const resp = await fetch("/pattern_metrics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req),
+      });
+      const data = await resp.json();
+      return data.available ? (data.metrics as PatternMetrics) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Pin the current pattern: snapshot the solve response (for the ghost trace)
+  // and fetch its metrics (for the table). The snapshot is frozen — it won't
+  // change as the live knobs move, which is the whole point of comparing.
+  function pinCurrentPattern() {
+    if (!result) return;
+    const id = `pin-${pinSeq.current++}`;
+    const label = `${currentExample?.label ?? geometry} @ ${measFreq.toFixed(2)} MHz`;
+    setPinnedPatterns((ps) => [...ps, { id, label, result, metrics: null }]);
+    const req = controlsRef.current;
+    fetchMetrics(req).then((m) =>
+      setPinnedPatterns((ps) =>
+        ps.map((p) => (p.id === id ? { ...p, metrics: m } : p)),
+      ),
+    );
+  }
+
+  function removePin(id: string) {
+    setPinnedPatterns((ps) => ps.filter((p) => p.id !== id));
+  }
+
+  // Keep the live antenna's metrics fresh for the table, but only while a
+  // comparison is actually on screen (≥1 pin and a pattern view) — the metrics
+  // need a full far-field solve, so don't pay for it otherwise. Debounced so it
+  // doesn't fire on every knob tick.
+  const pinCount = pinnedPatterns.length;
+  const comparing = pinCount > 0 && (view === "azimuth" || view === "elevation");
+  useEffect(() => {
+    if (!comparing || !result) {
+      setLiveMetrics(null);
+      return;
+    }
+    let cancelled = false;
+    const h = window.setTimeout(() => {
+      fetchMetrics(controlsRef.current).then((m) => {
+        if (!cancelled) setLiveMetrics(m);
+      });
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(h);
+    };
+    // result identity changes per solve; that's the cue to refresh.
+  }, [comparing, result]);
 
   // Reset the "solve anyway" approval whenever the design or solver changes, so
   // an inappropriate combo is re-evaluated (and re-warned) rather than riding a
@@ -3659,6 +3726,7 @@ export function App() {
                   sweep={sweep}
                   converge={converge}
                   pattern={pattern}
+                  pinnedPatterns={[]}
                   measFreqMhz={measFreq}
                   sweepRunning={sweepRunning}
                   convergeRunning={convergeRunning}
@@ -3809,6 +3877,37 @@ export function App() {
               <span className="cut-overlay-value">{elevAzDeg}°</span>
             </div>
           )}
+          {(view === "azimuth" || view === "elevation") && (
+            <div className="compare-overlay">
+              <button
+                type="button"
+                className="pin-btn"
+                onClick={pinCurrentPattern}
+                disabled={!result}
+                title="Pin the current pattern as a ghost overlay, to compare another antenna or tuning against it"
+              >
+                📌 Pin pattern
+              </button>
+              {pinnedPatterns.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    className="pin-clear"
+                    onClick={() => setPinnedPatterns([])}
+                    title="Remove all pinned patterns"
+                  >
+                    clear
+                  </button>
+                  <PatternCompareTable
+                    live={liveMetrics}
+                    liveLabel={`${currentExample?.label ?? geometry} @ ${measFreq.toFixed(2)} MHz`}
+                    pinned={pinnedPatterns}
+                    onRemove={removePin}
+                  />
+                </>
+              )}
+            </div>
+          )}
           <ViewPanel
             view={view}
             size={chartSize}
@@ -3818,6 +3917,7 @@ export function App() {
             sweep={sweep}
             converge={converge}
             pattern={pattern}
+            pinnedPatterns={pinnedPatterns}
             measFreqMhz={measFreq}
             sweepRunning={sweepRunning}
             convergeRunning={convergeRunning}
@@ -4262,6 +4362,7 @@ function ViewPanel({
   sweep,
   converge,
   pattern,
+  pinnedPatterns,
   measFreqMhz,
   sweepRunning,
   convergeRunning,
@@ -4282,6 +4383,7 @@ function ViewPanel({
   sweep: SweepData | null;
   converge: ConvergeData | null;
   pattern: PatternData | null;
+  pinnedPatterns: PinnedPattern[];
   measFreqMhz: number;
   sweepRunning: boolean;
   convergeRunning: boolean;
@@ -4318,6 +4420,7 @@ function ViewPanel({
       <FarFieldChart
         result={result}
         pattern={pattern}
+        pinned={pinnedPatterns}
         size={size}
         cut="xy"
         azElevDeg={azElevDeg}
@@ -4330,6 +4433,7 @@ function ViewPanel({
       <FarFieldChart
         result={result}
         pattern={pattern}
+        pinned={pinnedPatterns}
         size={size}
         cut="yz"
         azElevDeg={azElevDeg}
@@ -4356,9 +4460,283 @@ function ViewPanel({
 
 type FarFieldCut = "xy" | "yz";
 
+// Scalar far-field metrics from /pattern_metrics, shown in the compare table.
+type PatternMetrics = {
+  peak_gain_dbi: number;
+  takeoff_deg: number;
+  azimuth_deg: number;
+  front_to_back_db: number;
+  az_beamwidth_deg: number;
+  el_beamwidth_deg: number;
+  measurement_freq_mhz?: number;
+};
+
+// A pinned far-field snapshot: the full solve response (so its cut traces
+// recompute through the same math as the live one, in whatever cut the user is
+// viewing) plus a label, and the metrics fetched for the table. Pins survive
+// design switches, so you can overlay one antenna's pattern on another's.
+type PinnedPattern = {
+  id: string;
+  label: string;
+  result: SolveResponse;
+  metrics: PatternMetrics | null;
+};
+
+function PatternCompareTable({
+  live,
+  liveLabel,
+  pinned,
+  onRemove,
+}: {
+  live: PatternMetrics | null;
+  liveLabel: string;
+  pinned: PinnedPattern[];
+  onRemove: (id: string) => void;
+}) {
+  const fmt = (v: number | undefined, d: number) =>
+    v === undefined || v === null ? "—" : v.toFixed(d);
+  // Live row's swatch reads the lobe CSS var so it matches the orange lobe in
+  // either theme; pinned rows use their fixed canvas ghost colors.
+  const rows = [
+    {
+      key: "live",
+      bg: "rgba(var(--plot-lobe-rgb), 0.95)",
+      label: liveLabel,
+      m: live,
+      onX: undefined as undefined | (() => void),
+    },
+    ...pinned.map((p, i) => {
+      const [r, g, b] = GHOST_COLORS[i % GHOST_COLORS.length];
+      return {
+        key: p.id,
+        bg: `rgba(${r}, ${g}, ${b}, 0.95)`,
+        label: p.label,
+        m: p.metrics,
+        onX: () => onRemove(p.id),
+      };
+    }),
+  ];
+  return (
+    <table className="compare-table">
+      <thead>
+        <tr>
+          <th>design</th>
+          <th>peak</th>
+          <th>takeoff</th>
+          <th>F/B</th>
+          <th>az bw</th>
+          <th />
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.key}>
+            <td className="compare-name">
+              <span className="compare-swatch" style={{ background: row.bg }} />
+              {row.label}
+            </td>
+            <td>{fmt(row.m?.peak_gain_dbi, 1)}</td>
+            <td>{row.m ? `${fmt(row.m.takeoff_deg, 0)}°` : "—"}</td>
+            <td>{fmt(row.m?.front_to_back_db, 1)}</td>
+            <td>{row.m ? `${fmt(row.m.az_beamwidth_deg, 0)}°` : "—"}</td>
+            <td>
+              {row.onX && (
+                <button
+                  type="button"
+                  className="compare-x"
+                  onClick={row.onX}
+                  title="Remove this pinned pattern"
+                >
+                  ✕
+                </button>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// Directions sampled around each polar cut. Module-level so the trace helper
+// and the chart agree.
+const FARFIELD_N_DIR = 180;
+
+// Compute the per-direction gain (dBi) of one solve response along a polar cut,
+// reproducing the live lobe math (moment integral over all segments, PEC image
+// + Fresnel reflection when ground is on). Returns the N_DIR-length dBi samples
+// and the peak, or null when there's nothing to draw. Both the live trace and
+// every pinned ghost go through this, so they're guaranteed consistent.
+function computeCutDbi(
+  result: SolveResponse,
+  cut: FarFieldCut,
+  azElevDeg: number,
+  elevAzDeg: number,
+): { dbi: number[]; peakDbi: number } | null {
+  const azElevRad = (azElevDeg * Math.PI) / 180;
+  const azSinT = Math.cos(azElevRad);
+  const azCosT = Math.sin(azElevRad);
+  const elevAzRad = (elevAzDeg * Math.PI) / 180;
+  const elevAzCos = Math.cos(elevAzRad);
+  const elevAzSin = Math.sin(elevAzRad);
+  const groundOn = !!result.ground;
+  const N_DIR = FARFIELD_N_DIR;
+  const k = result.k_meas_m_inv ?? 0;
+  const epsRe = result.ground_eps_r ?? 1;
+  const epsIm = result.ground_eps_im ?? 0;
+
+  let nSeg = 0;
+  for (const w of result.wires) {
+    const pts = w.sample_positions ?? w.knot_positions;
+    nSeg += pts.length - 1;
+  }
+  if (nSeg === 0) return null;
+  const dx = new Float64Array(nSeg);
+  const dy = new Float64Array(nSeg);
+  const dz = new Float64Array(nSeg);
+  const midx = new Float64Array(nSeg);
+  const midy = new Float64Array(nSeg);
+  const midz = new Float64Array(nSeg);
+  const Ire = new Float64Array(nSeg);
+  const Iim = new Float64Array(nSeg);
+  let off = 0;
+  for (const w of result.wires) {
+    const pts = w.sample_positions ?? w.knot_positions;
+    const cre = w.sample_currents_re ?? w.knot_currents_re;
+    const cim = w.sample_currents_im ?? w.knot_currents_im;
+    for (let n = 0; n < pts.length - 1; n++) {
+      const a = pts[n];
+      const b = pts[n + 1];
+      dx[off] = b[0] - a[0];
+      dy[off] = b[1] - a[1];
+      dz[off] = b[2] - a[2];
+      midx[off] = 0.5 * (a[0] + b[0]);
+      midy[off] = 0.5 * (a[1] + b[1]);
+      midz[off] = 0.5 * (a[2] + b[2]);
+      Ire[off] = 0.5 * (cre[n] + cre[n + 1]);
+      Iim[off] = 0.5 * (cim[n] + cim[n + 1]);
+      off++;
+    }
+  }
+
+  const mag2s = new Array<number>(N_DIR);
+  let maxMag2 = 0;
+  for (let pi = 0; pi < N_DIR; pi++) {
+    const t = (2 * Math.PI * pi) / N_DIR;
+    const ct = Math.cos(t);
+    const st = Math.sin(t);
+    const rx = cut === "xy" ? azSinT * ct : elevAzCos * ct;
+    const ry = cut === "xy" ? azSinT * st : elevAzSin * ct;
+    const rz = cut === "xy" ? azCosT : st;
+    if (groundOn && rz < 0) {
+      mag2s[pi] = 0;
+      continue;
+    }
+    let mxRe = 0, mxIm = 0, myRe = 0, myIm = 0, mzRe = 0, mzIm = 0;
+    let ixRe = 0, ixIm = 0, iyRe = 0, iyIm = 0, izRe = 0, izIm = 0;
+    for (let n = 0; n < nSeg; n++) {
+      const phase = k * (rx * midx[n] + ry * midy[n] + rz * midz[n]);
+      const cph = Math.cos(phase);
+      const sph = Math.sin(phase);
+      const ire = Ire[n] * cph - Iim[n] * sph;
+      const iim = Ire[n] * sph + Iim[n] * cph;
+      mxRe += ire * dx[n];
+      mxIm += iim * dx[n];
+      myRe += ire * dy[n];
+      myIm += iim * dy[n];
+      mzRe += ire * dz[n];
+      mzIm += iim * dz[n];
+      if (groundOn) {
+        const phaseI = k * (rx * midx[n] + ry * midy[n] - rz * midz[n]);
+        const cphI = Math.cos(phaseI);
+        const sphI = Math.sin(phaseI);
+        const ireI = Ire[n] * cphI - Iim[n] * sphI;
+        const iimI = Ire[n] * sphI + Iim[n] * cphI;
+        ixRe += ireI * -dx[n]; ixIm += iimI * -dx[n];
+        iyRe += ireI * -dy[n]; iyIm += iimI * -dy[n];
+        izRe += ireI *  dz[n]; izIm += iimI *  dz[n];
+      }
+    }
+    const mDotRre = mxRe * rx + myRe * ry + mzRe * rz;
+    const mDotRim = mxIm * rx + myIm * ry + mzIm * rz;
+    let pxRe = mxRe - mDotRre * rx;
+    let pxIm = mxIm - mDotRim * rx;
+    let pyRe = myRe - mDotRre * ry;
+    let pyIm = myIm - mDotRim * ry;
+    let pzRe = mzRe - mDotRre * rz;
+    let pzIm = mzIm - mDotRim * rz;
+    if (groundOn) {
+      const iDotRre = ixRe * rx + iyRe * ry + izRe * rz;
+      const iDotRim = ixIm * rx + iyIm * ry + izIm * rz;
+      const qxRe = ixRe - iDotRre * rx;
+      const qxIm = ixIm - iDotRim * rx;
+      const qyRe = iyRe - iDotRre * ry;
+      const qyIm = iyIm - iDotRim * ry;
+      const qzRe = izRe - iDotRre * rz;
+      const qzIm = izIm - iDotRim * rz;
+      const s = Math.sqrt(rx * rx + ry * ry);
+      let hx: number, hy: number, hz: number;
+      let vx: number, vy: number, vz: number;
+      if (s > 1e-9) {
+        hx = -ry / s; hy = rx / s; hz = 0;
+        vx = -rx * rz / s; vy = -ry * rz / s; vz = s;
+      } else {
+        hx = 1; hy = 0; hz = 0;
+        vx = 0; vy = 1; vz = 0;
+      }
+      const qhRe = qxRe * hx + qyRe * hy + qzRe * hz;
+      const qhIm = qxIm * hx + qyIm * hy + qzIm * hz;
+      const qvRe = qxRe * vx + qyRe * vy + qzRe * vz;
+      const qvIm = qxIm * vx + qyIm * vy + qzIm * vz;
+      const cosTi = rz;
+      const sin2Ti = s * s;
+      const aRe = epsRe - sin2Ti;
+      const aIm = epsIm;
+      const aMag = Math.hypot(aRe, aIm);
+      const QRe = Math.sqrt(0.5 * (aMag + aRe));
+      const QIm = Math.sign(aIm || 1) * Math.sqrt(Math.max(0, 0.5 * (aMag - aRe)));
+      const numHRe = cosTi - QRe, numHIm = -QIm;
+      const denHRe = cosTi + QRe, denHIm = QIm;
+      const denH2 = denHRe * denHRe + denHIm * denHIm;
+      const rhoHRe = (numHRe * denHRe + numHIm * denHIm) / denH2;
+      const rhoHIm = (numHIm * denHRe - numHRe * denHIm) / denH2;
+      const ecRe = epsRe * cosTi, ecIm = epsIm * cosTi;
+      const numVRe = ecRe - QRe, numVIm = ecIm - QIm;
+      const denVRe = ecRe + QRe, denVIm = ecIm + QIm;
+      const denV2 = denVRe * denVRe + denVIm * denVIm;
+      const rhoVRe = (numVRe * denVRe + numVIm * denVIm) / denV2;
+      const rhoVIm = (numVIm * denVRe - numVRe * denVIm) / denV2;
+      const rvqRe = rhoVRe * qvRe - rhoVIm * qvIm;
+      const rvqIm = rhoVRe * qvIm + rhoVIm * qvRe;
+      const rhqRe = rhoHRe * qhRe - rhoHIm * qhIm;
+      const rhqIm = rhoHRe * qhIm + rhoHIm * qhRe;
+      pxRe += rvqRe * vx - rhqRe * hx;
+      pxIm += rvqIm * vx - rhqIm * hx;
+      pyRe += rvqRe * vy - rhqRe * hy;
+      pyIm += rvqIm * vy - rhqIm * hy;
+      pzRe += rvqRe * vz - rhqRe * hz;
+      pzIm += rvqIm * vz - rhqIm * hz;
+    }
+    const mag2 =
+      pxRe * pxRe + pxIm * pxIm +
+      pyRe * pyRe + pyIm * pyIm +
+      pzRe * pzRe + pzIm * pzIm;
+    mag2s[pi] = mag2;
+    if (mag2 > maxMag2) maxMag2 = mag2;
+  }
+  if (maxMag2 <= 0) return null;
+  const norm =
+    result.directivity_norm && result.directivity_norm > 0
+      ? result.directivity_norm
+      : 1 / maxMag2;
+  const dbi = mag2s.map((m) => (norm * m > 0 ? 10 * Math.log10(norm * m) : -Infinity));
+  return { dbi, peakDbi: 10 * Math.log10(norm * maxMag2) };
+}
+
 function FarFieldChart({
   result,
   pattern,
+  pinned,
   size,
   cut,
   azElevDeg,
@@ -4366,6 +4744,7 @@ function FarFieldChart({
 }: {
   result: SolveResponse | null;
   pattern: PatternData | null;
+  pinned: PinnedPattern[];
   size: number;
   cut: FarFieldCut;
   azElevDeg: number;
@@ -4396,7 +4775,6 @@ function FarFieldChart({
     const cy = size / 2;
     const R = size / 2 - 14;
 
-    const groundOn = !!result?.ground;
     // Azimuth cut: cone above horizon at elevation azElevDeg. With ground
     // off, the conventional setting is 0° (the xy plane). With ground on,
     // 0° is grazing and Fresnel kills the pattern, so something like 15°
@@ -4477,228 +4855,58 @@ function FarFieldChart({
 
     if (!result) return;
 
-    // Planar cut: r̂(t) = u·cos t + v·sin t, where (u, v) are the two world
-    // basis vectors in the cut plane (xy: (x̂, ŷ); yz: (ŷ, ẑ)). For each
-    // direction compute the moment integral over ALL wires:
-    //   M(r̂) = Σ_segments I_mid · (r_{n+1} − r_n) · exp(jk r̂·r_mid)
-    // and take |M_perp|² (component perpendicular to r̂).
-    //
-    // With a ground plane, also accumulate the PEC-image moment (segments
-    // mirrored through z=0, horizontal current direction flipped) and apply
-    // Fresnel coefficients per ray to get the reflected wave. Above-horizon
-    // only; rays into the ground contribute nothing.
-    const N_DIR = 180;
-    // Wavenumber and complex ground permittivity are precomputed by the
-    // server (`k_meas_m_inv`, `ground_eps_im`) so this renderer stays
-    // free of physics constants. Fallbacks keep older responses working.
-    const k = result.k_meas_m_inv ?? 0;
-    const epsRe = result.ground_eps_r ?? 1;
-    const epsIm = result.ground_eps_im ?? 0;
+    const N_DIR = FARFIELD_N_DIR;
 
-    // Flatten per-segment quantities across every wire. Prefer the finer-
-    // grained sample arrays (knots interleaved with segment midpoints) when
-    // the backend supplies them; that way non-tent bases (B-spline d=2,
-    // sinusoidal three-term) and the B-spline enrichment shape — all of
-    // which carry intra-segment curvature the knot-only samples drop — get
-    // resolved at twice the cadence. PyNEC stays on the knot path.
-    let nSeg = 0;
-    for (const w of result.wires) {
-      const pts = w.sample_positions ?? w.knot_positions;
-      nSeg += pts.length - 1;
-    }
-    const dx = new Float64Array(nSeg);
-    const dy = new Float64Array(nSeg);
-    const dz = new Float64Array(nSeg);
-    const midx = new Float64Array(nSeg);
-    const midy = new Float64Array(nSeg);
-    const midz = new Float64Array(nSeg);
-    const Ire = new Float64Array(nSeg);
-    const Iim = new Float64Array(nSeg);
-    let off = 0;
-    for (const w of result.wires) {
-      const pts = w.sample_positions ?? w.knot_positions;
-      const cre = w.sample_currents_re ?? w.knot_currents_re;
-      const cim = w.sample_currents_im ?? w.knot_currents_im;
-      for (let n = 0; n < pts.length - 1; n++) {
-        const a = pts[n];
-        const b = pts[n + 1];
-        dx[off] = b[0] - a[0];
-        dy[off] = b[1] - a[1];
-        dz[off] = b[2] - a[2];
-        midx[off] = 0.5 * (a[0] + b[0]);
-        midy[off] = 0.5 * (a[1] + b[1]);
-        midz[off] = 0.5 * (a[2] + b[2]);
-        Ire[off] = 0.5 * (cre[n] + cre[n + 1]);
-        Iim[off] = 0.5 * (cim[n] + cim[n + 1]);
-        off++;
+    // Draw one dBi trace around the polar cut. The live lobe closes + fills;
+    // pinned ghosts are an open dashed stroke so the live trace reads on top.
+    const strokeTrace = (
+      dbi: number[],
+      o: { stroke: string; fill?: string; width: number; dash?: number[] },
+    ) => {
+      ctx.beginPath();
+      for (let pi = 0; pi <= N_DIR; pi++) {
+        const t = (2 * Math.PI * pi) / N_DIR;
+        const frac = dbiToFrac(dbi[pi % N_DIR]);
+        const px = cx + Math.cos(t) * frac * R;
+        // Canvas y flips: +y on canvas is down, so we negate to put +y at top.
+        const py = cy - Math.sin(t) * frac * R;
+        if (pi === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
       }
-    }
-
-    const mag2s = new Array<number>(N_DIR);
-    let maxMag2 = 0;
-
-    for (let pi = 0; pi < N_DIR; pi++) {
-      const t = (2 * Math.PI * pi) / N_DIR;
-      const ct = Math.cos(t);
-      const st = Math.sin(t);
-      // xy cut: cone at the chosen elevation. yz cut: vertical great circle
-      // through the chosen azimuth bearing (cos t · (cos φ, sin φ) on the
-      // horizontal plane, plus sin t on z).
-      const rx = cut === "xy" ? azSinT * ct : elevAzCos * ct;
-      const ry = cut === "xy" ? azSinT * st : elevAzSin * ct;
-      const rz = cut === "xy" ? azCosT : st;
-
-      // Rays into the ground (rz < 0) carry no far field.
-      if (groundOn && rz < 0) {
-        mag2s[pi] = 0;
-        continue;
+      ctx.closePath();
+      if (o.fill) {
+        ctx.fillStyle = o.fill;
+        ctx.fill();
       }
+      if (o.dash) ctx.setLineDash(o.dash);
+      ctx.strokeStyle = o.stroke;
+      ctx.lineWidth = o.width;
+      ctx.stroke();
+      if (o.dash) ctx.setLineDash([]);
+    };
 
-      let mxRe = 0, mxIm = 0, myRe = 0, myIm = 0, mzRe = 0, mzIm = 0;
-      // Image moment accumulators (only used when groundOn).
-      let ixRe = 0, ixIm = 0, iyRe = 0, iyIm = 0, izRe = 0, izIm = 0;
-      for (let n = 0; n < nSeg; n++) {
-        const phase = k * (rx * midx[n] + ry * midy[n] + rz * midz[n]);
-        const cph = Math.cos(phase);
-        const sph = Math.sin(phase);
-        // I_mid * exp(jphase)
-        const ire = Ire[n] * cph - Iim[n] * sph;
-        const iim = Ire[n] * sph + Iim[n] * cph;
-        mxRe += ire * dx[n];
-        mxIm += iim * dx[n];
-        myRe += ire * dy[n];
-        myIm += iim * dy[n];
-        mzRe += ire * dz[n];
-        mzIm += iim * dz[n];
+    // Pinned ghosts first (dimmed, dashed), so the live lobe sits on top. Each
+    // recomputes its own cut from its stored solve, so it tracks the cut and
+    // angle sliders just like the live trace.
+    pinned.forEach((p, i) => {
+      const tr = computeCutDbi(p.result, cut, azElevDeg, elevAzDeg);
+      if (!tr) return;
+      const [r, g, b] = GHOST_COLORS[i % GHOST_COLORS.length];
+      strokeTrace(tr.dbi, {
+        stroke: `rgba(${r}, ${g}, ${b}, 0.8)`,
+        width: 1,
+        dash: [5, 3],
+      });
+    });
 
-        if (groundOn) {
-          // Image position: (x, y, -z). Image current dir: (-dx, -dy, +dz).
-          const phaseI = k * (rx * midx[n] + ry * midy[n] - rz * midz[n]);
-          const cphI = Math.cos(phaseI);
-          const sphI = Math.sin(phaseI);
-          const ireI = Ire[n] * cphI - Iim[n] * sphI;
-          const iimI = Ire[n] * sphI + Iim[n] * cphI;
-          ixRe += ireI * -dx[n]; ixIm += iimI * -dx[n];
-          iyRe += ireI * -dy[n]; iyIm += iimI * -dy[n];
-          izRe += ireI *  dz[n]; izIm += iimI *  dz[n];
-        }
-      }
-      // Direct M_perp = M − (M·r̂) r̂
-      const mDotRre = mxRe * rx + myRe * ry + mzRe * rz;
-      const mDotRim = mxIm * rx + myIm * ry + mzIm * rz;
-      let pxRe = mxRe - mDotRre * rx;
-      let pxIm = mxIm - mDotRim * rx;
-      let pyRe = myRe - mDotRre * ry;
-      let pyIm = myIm - mDotRim * ry;
-      let pzRe = mzRe - mDotRre * rz;
-      let pzIm = mzIm - mDotRim * rz;
-
-      if (groundOn) {
-        // Image M_perp.
-        const iDotRre = ixRe * rx + iyRe * ry + izRe * rz;
-        const iDotRim = ixIm * rx + iyIm * ry + izIm * rz;
-        const qxRe = ixRe - iDotRre * rx;
-        const qxIm = ixIm - iDotRim * rx;
-        const qyRe = iyRe - iDotRre * ry;
-        const qyIm = iyIm - iDotRim * ry;
-        const qzRe = izRe - iDotRre * rz;
-        const qzIm = izIm - iDotRim * rz;
-
-        // Polarization basis at r̂. ĥ = ẑ × r̂ / |·|, v̂ = r̂ × ĥ.
-        // Degenerate at the zenith (s≈0); pick arbitrary axes — both pol
-        // coefficients agree there, so the choice doesn't affect the sum.
-        const s = Math.sqrt(rx * rx + ry * ry);
-        let hx: number, hy: number, hz: number;
-        let vx: number, vy: number, vz: number;
-        if (s > 1e-9) {
-          hx = -ry / s; hy = rx / s; hz = 0;
-          vx = -rx * rz / s; vy = -ry * rz / s; vz = s;
-        } else {
-          hx = 1; hy = 0; hz = 0;
-          vx = 0; vy = 1; vz = 0;
-        }
-
-        // Decompose image perp onto (ĥ, v̂) — complex scalars.
-        const qhRe = qxRe * hx + qyRe * hy + qzRe * hz;
-        const qhIm = qxIm * hx + qyIm * hy + qzIm * hz;
-        const qvRe = qxRe * vx + qyRe * vy + qzRe * vz;
-        const qvIm = qxIm * vx + qyIm * vy + qzIm * vz;
-
-        // Fresnel reflection coefficients (complex). cos θᵢ = rz, sin²θᵢ = s².
-        // ε̃ − sin²θᵢ is complex; sqrt of complex follows the principal branch.
-        const cosTi = rz;
-        const sin2Ti = s * s;
-        const aRe = epsRe - sin2Ti;
-        const aIm = epsIm;
-        // Principal-branch √(a + jb)
-        const aMag = Math.hypot(aRe, aIm);
-        const QRe = Math.sqrt(0.5 * (aMag + aRe));
-        const QIm = Math.sign(aIm || 1) * Math.sqrt(Math.max(0, 0.5 * (aMag - aRe)));
-        // ρ_h = (cosTi − Q) / (cosTi + Q)
-        const numHRe = cosTi - QRe, numHIm = -QIm;
-        const denHRe = cosTi + QRe, denHIm = QIm;
-        const denH2 = denHRe * denHRe + denHIm * denHIm;
-        const rhoHRe = (numHRe * denHRe + numHIm * denHIm) / denH2;
-        const rhoHIm = (numHIm * denHRe - numHRe * denHIm) / denH2;
-        // ρ_v = (ε̃·cosTi − Q) / (ε̃·cosTi + Q)
-        const ecRe = epsRe * cosTi, ecIm = epsIm * cosTi;
-        const numVRe = ecRe - QRe, numVIm = ecIm - QIm;
-        const denVRe = ecRe + QRe, denVIm = ecIm + QIm;
-        const denV2 = denVRe * denVRe + denVIm * denVIm;
-        const rhoVRe = (numVRe * denVRe + numVIm * denVIm) / denV2;
-        const rhoVIm = (numVIm * denVRe - numVRe * denVIm) / denV2;
-
-        // Reflected: M_refl = ρ_v · q_v · v̂ − ρ_h · q_h · ĥ.
-        // The (−ρ_h) sign folds the PEC image's pre-applied horizontal flip
-        // back out, so ρ_h=−1 reproduces the PEC reflection exactly.
-        const rvqRe = rhoVRe * qvRe - rhoVIm * qvIm;
-        const rvqIm = rhoVRe * qvIm + rhoVIm * qvRe;
-        const rhqRe = rhoHRe * qhRe - rhoHIm * qhIm;
-        const rhqIm = rhoHRe * qhIm + rhoHIm * qhRe;
-        pxRe += rvqRe * vx - rhqRe * hx;
-        pxIm += rvqIm * vx - rhqIm * hx;
-        pyRe += rvqRe * vy - rhqRe * hy;
-        pyIm += rvqIm * vy - rhqIm * hy;
-        pzRe += rvqRe * vz - rhqRe * hz;
-        pzIm += rvqIm * vz - rhqIm * hz;
-      }
-
-      const mag2 =
-        pxRe * pxRe + pxIm * pxIm +
-        pyRe * pyRe + pyIm * pyIm +
-        pzRe * pzRe + pzIm * pzIm;
-      mag2s[pi] = mag2;
-      if (mag2 > maxMag2) maxMag2 = mag2;
-    }
-
-    if (maxMag2 <= 0) return;
-
-    // Absolute directivity: D(φ) = directivity_norm · |M_perp(π/2, φ)|².
-    // If the server omitted the norm (older response), fall back to a
-    // per-frame relative scale that puts the peak at 0 dBi.
-    const norm =
-      result.directivity_norm && result.directivity_norm > 0
-        ? result.directivity_norm
-        : 1 / maxMag2;
-
-    ctx.beginPath();
-    for (let pi = 0; pi <= N_DIR; pi++) {
-      const t = (2 * Math.PI * pi) / N_DIR;
-      const D = norm * mag2s[pi % N_DIR];
-      const dBi = D > 0 ? 10 * Math.log10(D) : -Infinity;
-      const frac = dbiToFrac(dBi);
-      const px = cx + Math.cos(t) * frac * R;
-      // Canvas y flips: +y on canvas is down, so we negate to put +y at top.
-      const py = cy - Math.sin(t) * frac * R;
-      if (pi === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fillStyle = `rgba(${PC.lobeRgb}, 0.12)`;
-    ctx.fill();
-    ctx.strokeStyle = `rgba(${PC.lobeRgb}, 0.9)`;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    // Live lobe (filled).
+    const live = computeCutDbi(result, cut, azElevDeg, elevAzDeg);
+    if (!live) return;
+    strokeTrace(live.dbi, {
+      stroke: `rgba(${PC.lobeRgb}, 0.9)`,
+      fill: `rgba(${PC.lobeRgb}, 0.12)`,
+      width: 1.5,
+    });
 
     // NEC exact-pattern overlay (dashed cyan line) when available. Bilinear
     // interpolation off the (θ, φ) grid; rays below horizon are skipped so
@@ -4762,13 +4970,13 @@ function FarFieldChart({
     }
 
     // Peak dBi annotation (top-right corner).
-    const peakDbi = 10 * Math.log10(norm * maxMag2);
+    const peakDbi = live.peakDbi;
     ctx.fillStyle = PC.labelStrong;
     ctx.font = "10px ui-monospace, monospace";
     const peakText = `peak ${peakDbi >= 0 ? "+" : ""}${peakDbi.toFixed(1)} dBi`;
     const tw = ctx.measureText(peakText).width;
     ctx.fillText(peakText, size - tw - 6, 14);
-  }, [result, pattern, size, cut, azElevDeg, elevAzDeg, theme]);
+  }, [result, pattern, pinned, size, cut, azElevDeg, elevAzDeg, theme]);
 
   return <canvas ref={canvasRef} className="farfield" />;
 }
@@ -4783,6 +4991,15 @@ const FEED_COLORS: [number, number, number][] = [
   [255, 196, 102],  // amber
   [140, 230, 140],  // green
   [255, 130, 200],  // pink
+];
+
+// Swatch colors for pinned far-field ghost overlays. Distinct from the live
+// lobe (orange) and the NEC overlay (cyan); they wrap past the 4th pin.
+const GHOST_COLORS: [number, number, number][] = [
+  [140, 230, 140],  // green
+  [255, 130, 200],  // pink
+  [180, 160, 255],  // violet
+  [120, 220, 220],  // teal
 ];
 
 function feedColor(i: number, alpha = 0.85): string {
