@@ -11,16 +11,15 @@ from **parameters** (the knobs) to a **list of wires**.
 A design subclasses `AntennaBuilder` and declares its parameters:
 
 ```python
-from types import MappingProxyType
 from antennaknobs import AntennaBuilder
 
 class Builder(AntennaBuilder):
-    default_params = MappingProxyType({
+    default_params = {
         "design_freq": 28.47,
         "freq": 28.47,
         "length": 5.2,
         # ...
-    })
+    }
 
     def build_wires(self):
         ...
