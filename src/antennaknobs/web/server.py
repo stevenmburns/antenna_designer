@@ -787,6 +787,26 @@ async def params_source_endpoint(req: dict):
     return {"geometry": geometry, "available": True, "source": source}
 
 
+@app.post("/pattern_metrics")
+async def pattern_metrics_endpoint(req: dict):
+    """Scalar far-field metrics for the current antenna, for the compare table.
+
+    Reuses the same builder + momwire engine as the live solve, so the metrics
+    match the lobe drawn on screen. Returns ``{available, metrics}`` where
+    metrics carries peak_gain_dbi / takeoff_deg / azimuth_deg /
+    front_to_back_db / az_beamwidth_deg / el_beamwidth_deg (+ the freq).
+    """
+    geometry = req.get("geometry", next(iter(EXAMPLES)))
+    ex = EXAMPLES.get(geometry) or next(iter(EXAMPLES.values()))
+    if ex.far_field_metrics is None:
+        return {"available": False}
+    try:
+        metrics = await run_in_threadpool(ex.far_field_metrics, req)
+    except Exception as exc:  # noqa: BLE001 — a user design's build_wires can raise
+        return {"geometry": geometry, "error": user_designs.format_solve_error(exc)}
+    return {"geometry": geometry, "available": True, "metrics": metrics}
+
+
 @app.post("/geometry")
 async def geometry_endpoint(req: dict):
     """Fast geometry-only snapshot of the selected antenna: wire positions +

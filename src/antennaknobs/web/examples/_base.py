@@ -315,6 +315,11 @@ class AntennaExample:
     # offer a "Copy Python" action that drops straight into a design file.
     # None when the design can't be serialised.
     params_source: Optional[Callable[[dict], str]] = None
+    # Compute scalar far-field metrics (peak gain, takeoff, F/B, beamwidths)
+    # for the request's antenna, so the UI can show a side-by-side table when
+    # comparing pinned patterns. Always the momwire engine (matches the
+    # client-derived lobe on screen). None when the design can't be evaluated.
+    far_field_metrics: Optional[Callable[[dict], dict]] = None
     # When set, pattern() calls this to excite the NEC context (e.g.
     # multi-source drive for bowtie's 1×2 array). When None, pattern()
     # uses the default single-feed excitation reading b["feed_seg"] /

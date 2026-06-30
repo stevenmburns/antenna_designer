@@ -10,6 +10,7 @@ __all__ = [
     "Array1x4GroupedBuilder",
     "plot_patterns",
     "compare_patterns",
+    "pattern_metrics",
     "resolve_range",
     "gen_xs",
     "sweep",
@@ -36,7 +37,13 @@ from .drone import Drone
 from .sim import Antenna
 from .opt import optimize
 from .sweep import sweep, sweep_freq, sweep_gain, sweep_patterns, resolve_range, gen_xs
-from .far_field import compare_patterns, plot_patterns, pattern, pattern3d
+from .far_field import (
+    compare_patterns,
+    pattern_metrics,
+    plot_patterns,
+    pattern,
+    pattern3d,
+)
 from .serialize import params_source, builder_params_source
 from .cli import cli
 

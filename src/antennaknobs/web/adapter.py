@@ -1224,6 +1224,24 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
             wrap="mappingproxy" if req.get("wrap") == "mappingproxy" else "dict",
         )
 
+    def far_field_metrics(req: dict) -> dict:
+        # Scalar metrics for the pattern-compare table. Uses the same builder
+        # setup as momwire_solve and the momwire engine (so the numbers match
+        # the client-derived lobe on screen), then summarises the full grid.
+        from antennaknobs.far_field import pattern_metrics
+
+        design_freq = float(req.get("design_freq_mhz", _design_freq_default(req)))
+        meas_freq = float(req.get("measurement_freq_mhz", design_freq))
+        builder = _build_builder(cls, req)
+        builder.freq = meas_freq
+        if has_design_freq:
+            builder.design_freq = design_freq
+        eng = _make_momwire_engine(req, builder)
+        ff = eng.far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+        metrics = pattern_metrics(ff)
+        metrics["measurement_freq_mhz"] = meas_freq
+        return metrics
+
     def nec_export(req: dict) -> str:
         # Same builder construction as pynec_solve, then serialise to a NEC2
         # card deck. Ground/freq mirror what the live solve uses so the
@@ -1296,6 +1314,7 @@ def _make_example(name: str, cls, *, defer_hints: bool = False) -> AntennaExampl
         pynec_pattern_excite=pynec_pattern_excite,
         nec_export=nec_export,
         params_source=params_source,
+        far_field_metrics=far_field_metrics,
         multi_feed=field_multi_feed,
         param_schema=param_schema,
         bands=bands,
