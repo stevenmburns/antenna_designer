@@ -22,7 +22,7 @@ after L. B. Cebik (W4RNL)'s articles.
 
 ## Loops
 
-The delta loop is the catalog's teaching showpiece — it exists **five ways**, a
+The delta loop is the catalog's teaching showpiece — it exists **six ways**, a
 guided tour of how flexibly geometry can be expressed (see [Many ways to express
 geometry](/concepts/authoring/)):
 
@@ -33,6 +33,7 @@ geometry](/concepts/authoring/)):
 | `loops.delta_loop_marked` | `Drone` + labelled nodes (angle + side, trig-free) |
 | `loops.delta_loop_reflected` | `Drone` point-finder + reflection + `build_path` |
 | `loops.delta_loop_solved` | the reflected build, with the side solved by `brentq` |
+| `loops.delta_loop_plane` | top-down: `Drone.forward_to_plane` finds the feed where the slant crosses `y = eps`, then named nodes + reflection |
 
 Other loops: `loops.delta_loop_slanted`, `loops.inv_delta_loop`,
 `loops.horizontal_loop` (full-wave "loop skywire") and its `Drone` twin
