@@ -4,8 +4,9 @@ description: How to add a design, run the tests, and submit changes.
 ---
 
 antennaknobs is open source on
-[GitHub](https://github.com/stevenmburns/antennaknobs). Contributions — new
-designs especially — are welcome.
+[GitHub](https://github.com/stevenmburns/antennaknobs). Contributions — in the
+form of new feature requests (issues) or new designs and fixes (pull requests) —
+are welcome.
 
 ## Adding a design
 
