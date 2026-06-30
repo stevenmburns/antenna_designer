@@ -59,6 +59,103 @@ def get_elevation(a):
     return ff.rings, ff.max_gain, ff.min_gain, ff.thetas, ff.phis
 
 
+def _beamwidth_wrapped(angles, gains, peak_idx, threshold):
+    """−3 dB-style width through a peak in a *wrapped* cut (azimuth: φ 0→360
+    with a duplicated endpoint). Returns the angular width (deg) where the
+    trace stays at/above `threshold` either side of the peak, the crossings
+    found by linear interpolation between 1° samples. A trace that never drops
+    below threshold (omnidirectional) returns the full 360°."""
+    g = np.asarray(gains[:-1], float)  # drop the duplicated φ=360 sample
+    ang = np.asarray(angles[:-1], float)
+    n = len(g)
+    if n == 0 or np.all(g >= threshold):
+        return 360.0
+    pk = int(peak_idx) % n
+
+    def walk(direction):
+        dist = 0.0
+        i = pk
+        for _ in range(n):
+            j = (i + direction) % n
+            step = ((ang[j] - ang[i]) * direction) % 360.0 or 360.0 / n
+            if g[j] < threshold:
+                frac = (g[i] - threshold) / (g[i] - g[j])
+                return dist + frac * step
+            dist += step
+            i = j
+        return None
+
+    right, left = walk(+1), walk(-1)
+    if right is None or left is None:
+        return 360.0
+    return right + left
+
+
+def _beamwidth_linear(angles, gains, peak_idx, threshold):
+    """−3 dB-style width through a peak in a *non-wrapped* cut (elevation:
+    bounded to the 0°–90° hemisphere). Same interpolation as the wrapped case,
+    but a side that runs into the array edge without crossing returns the
+    distance to the edge, so the result is a lower bound for a lobe that hugs
+    the horizon or zenith."""
+    g = np.asarray(gains, float)
+    ang = np.asarray(angles, float)
+    n = len(g)
+    if n == 0 or np.all(g >= threshold):
+        return abs(float(ang[-1] - ang[0])) if n else 0.0
+
+    def walk(direction):
+        dist = 0.0
+        i = int(peak_idx)
+        while 0 <= i + direction < n:
+            j = i + direction
+            step = abs(float(ang[j] - ang[i]))
+            if g[j] < threshold:
+                frac = (g[i] - threshold) / (g[i] - g[j])
+                return dist + frac * step
+            dist += step
+            i = j
+        return dist  # ran into the edge — truncated lower bound
+
+    return walk(+1) + walk(-1)
+
+
+def pattern_metrics(ff, *, beamwidth_db=3.0):
+    """Summarise a `FarField` into scalar metrics for comparing antennas.
+
+    Returns a dict with:
+      * `peak_gain_dbi`    — maximum gain over the whole pattern (dBi)
+      * `takeoff_deg`      — elevation angle of the peak (90 − θ)
+      * `azimuth_deg`      — azimuth of the peak
+      * `front_to_back_db` — peak minus the gain at the same elevation, 180°
+                             away in azimuth
+      * `az_beamwidth_deg` — −`beamwidth_db` width through the peak in the
+                             azimuth ring at the peak's elevation
+      * `el_beamwidth_deg` — −`beamwidth_db` width through the peak in the
+                             elevation column at the peak's azimuth (a lower
+                             bound when the lobe meets the 0°/90° limit)
+    """
+    rings = np.asarray(ff.rings, float)
+    thetas = np.asarray(ff.thetas, float)
+    phis = np.asarray(ff.phis, float)
+    ti, pi = np.unravel_index(int(np.argmax(rings)), rings.shape)
+    peak = float(rings[ti, pi])
+    ring = rings[ti]
+
+    back_az = (float(phis[pi]) + 180.0) % 360.0
+    bi = int(np.argmin(np.abs(((phis - back_az + 180.0) % 360.0) - 180.0)))
+    front_to_back = peak - float(ring[bi])
+
+    thr = peak - beamwidth_db
+    return {
+        "peak_gain_dbi": peak,
+        "takeoff_deg": float(90.0 - thetas[ti]),
+        "azimuth_deg": float(phis[pi]),
+        "front_to_back_db": front_to_back,
+        "az_beamwidth_deg": _beamwidth_wrapped(phis, ring, pi, thr),
+        "el_beamwidth_deg": _beamwidth_linear(90.0 - thetas, rings[:, pi], ti, thr),
+    }
+
+
 def plot_patterns(
     rings_lst,
     names,
@@ -101,8 +198,6 @@ def plot_patterns(
         azimuth_r += delta_azimuth
         azimuth_r %= n - 1
 
-    print(n, azimuth_f, azimuth_r)
-
     assert 0 <= azimuth_f < n - 1
     assert 0 <= azimuth_r < n - 1
 
@@ -122,6 +217,28 @@ def plot_patterns(
     save_or_show(plt, fn)
 
 
+def _print_metrics_table(names, metrics_lst):
+    """Print an aligned metrics table comparing the antennas, so a
+    `compare_patterns` run (and the optimize before/after) reports the numbers
+    that make the overlaid plot actionable, not just the shapes."""
+    cols = [
+        ("peak dBi", "peak_gain_dbi", "{:.2f}"),
+        ("takeoff°", "takeoff_deg", "{:.0f}"),
+        ("F/B dB", "front_to_back_db", "{:.1f}"),
+        ("az bw°", "az_beamwidth_deg", "{:.0f}"),
+        ("el bw°", "el_beamwidth_deg", "{:.0f}"),
+    ]
+    name_w = max([len("design")] + [len(str(n)) for n in names])
+    header = "design".ljust(name_w) + "  " + "  ".join(h.rjust(8) for h, _, _ in cols)
+    print(header)
+    print("-" * len(header))
+    for nm, m in zip(names, metrics_lst):
+        row = str(nm).ljust(name_w)
+        for _, key, fmt in cols:
+            row += "  " + fmt.format(m[key]).rjust(8)
+        print(row)
+
+
 def compare_patterns(
     builders_or_engines,
     elevation_angle=15,
@@ -129,6 +246,7 @@ def compare_patterns(
     builder_names=None,
     azimuth_f=0,
     azimuth_r=180,
+    show_metrics=True,
 ):
     """Plot azimuth + elevation cuts for a sequence of antennas.
 
@@ -138,15 +256,25 @@ def compare_patterns(
     an explicit `builder_names=[...]` to control legend labels; absent
     that, engine instances get their class name (e.g. "PyNECEngine",
     "MomwireEngine") and bare builders fall back to "Unknown" for
-    backwards compatibility."""
+    backwards compatibility. With `show_metrics` (default) a peak-gain /
+    takeoff / F-B / beamwidth table is printed alongside the plot."""
     if builder_names is None:
         builder_names = [_default_name(b) for b in builders_or_engines]
 
     rings_lst = []
+    metrics_lst = []
+    thetas = phis = None
 
     for item in builders_or_engines:
-        rings, max_gain, min_gain, thetas, phis = get_pattern_rings(item)
-        rings_lst.append(rings)
+        a = _as_engine(item)
+        ff = a.far_field(n_theta=90, n_phi=360, del_theta=1, del_phi=1)
+        del a
+        rings_lst.append(ff.rings)
+        metrics_lst.append(pattern_metrics(ff))
+        thetas, phis = ff.thetas, ff.phis
+
+    if show_metrics:
+        _print_metrics_table(builder_names, metrics_lst)
 
     plot_patterns(
         rings_lst,

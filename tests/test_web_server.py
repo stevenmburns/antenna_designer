@@ -148,6 +148,47 @@ def test_params_source_names_block_after_variant(client: TestClient):
 
 
 # ---------------------------------------------------------------------------
+# /pattern_metrics — scalar far-field metrics for the compare table
+# ---------------------------------------------------------------------------
+
+
+def test_pattern_metrics_returns_expected_keys(client: TestClient):
+    r = client.post(
+        "/pattern_metrics",
+        json={
+            "geometry": "beams.yagi",
+            "variant": "default",
+            "measurement_freq_mhz": 28.4,
+            "design_freq_mhz": 28.4,
+        },
+    )
+    assert r.status_code == 200
+    payload = r.json()
+    assert payload["available"] is True
+    m = payload["metrics"]
+    for key in (
+        "peak_gain_dbi",
+        "takeoff_deg",
+        "azimuth_deg",
+        "front_to_back_db",
+        "az_beamwidth_deg",
+        "el_beamwidth_deg",
+    ):
+        assert key in m and isinstance(m[key], (int, float))
+    # A yagi is a forward-gain beam: positive peak gain and a real F/B.
+    assert m["peak_gain_dbi"] > 0.0
+    assert m["front_to_back_db"] > 0.0
+
+
+def test_pattern_metrics_tracks_the_measurement_frequency(client: TestClient):
+    payload = client.post(
+        "/pattern_metrics",
+        json={"geometry": "beams.yagi", "measurement_freq_mhz": 21.1},
+    ).json()
+    assert payload["metrics"]["measurement_freq_mhz"] == 21.1
+
+
+# ---------------------------------------------------------------------------
 # /examples — schema serialization, used by the frontend on mount
 # ---------------------------------------------------------------------------
 
