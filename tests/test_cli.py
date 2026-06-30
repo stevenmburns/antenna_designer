@@ -100,3 +100,18 @@ def test_cli_engine_flag():
     ant.cli(
         f"sweep --builder {dipole} --npoints 3 --engine momwire --ground free{o}".split()
     )
+
+
+def test_cli_default_engine_works_without_pynec(monkeypatch):
+    """The default engine must be one that's always installed (momwire), so a
+    plain `pip install antennaknobs` (no pynec-accel) has a working CLI. With
+    pynec absent, a command run WITHOUT --engine must still solve, not raise
+    "unknown engine 'pynec'"."""
+    import importlib
+
+    # `antennaknobs.cli` the attribute is the re-exported function; grab the
+    # actual module to reach ENGINE_CLASSES.
+    cli_mod = importlib.import_module("antennaknobs.cli")
+    monkeypatch.delitem(cli_mod.ENGINE_CLASSES, "pynec", raising=False)
+    dipole = "dipoles.invvee:dipole"
+    ant.cli(f"pattern --builder {dipole} --ground free{o}".split())
