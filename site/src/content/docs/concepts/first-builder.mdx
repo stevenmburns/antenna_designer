@@ -1,0 +1,273 @@
+---
+title: Write your first design
+description: Build an AntennaBuilder from scratch — start with one hardcoded wire, find resonance with the freq knob, then add height, proper segmentation, a length parameter, and finally tie it to a band with design_freq — one small change at a time.
+---
+
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+The [authoring tour](/concepts/authoring/) shows the *same* antenna expressed six
+different ways — but it assumes you can already write a design. This page is the
+on-ramp before it: we start from the **smallest Builder that runs** and grow it
+one change at a time. By the end you'll have a tunable dipole and will understand
+every line.
+
+If you haven't yet, skim [The model](/concepts/model/) — the one idea is that an
+antenna is a function from **knobs** to a **list of wires**, returned by
+`build_wires()`.
+
+## 1. The smallest thing that runs
+
+A dipole is just a straight wire fed in the middle. Here it is, hardcoded — one
+wire, no geometry parameters at all:
+
+```python
+from types import MappingProxyType
+from antennaknobs import AntennaBuilder
+
+
+class Builder(AntennaBuilder):
+    default_params = MappingProxyType({"freq": 14.0})  # MHz — the only knob
+
+    def build_wires(self):
+        y = 5.0  # half-length in metres → a 10 m wire, tip to tip
+        return [
+            ((0.0, -y, 0.0), (0.0, y, 0.0), 21, 1 + 0j),
+        ]
+```
+
+That's a complete, loadable design. Drop it in your
+[designs folder](/concepts/authoring-with-claude/#your-designs-folder) as
+`my_dipole.py`, refresh the workbench, and it appears under **Your designs**.
+
+Reading the one wire tuple `((0,-y,0), (0,y,0), 21, 1+0j)` against the
+[`build_wires()` contract](/concepts/model/#the-build_wires-contract):
+
+- **`(0,-y,0)` → `(0,y,0)`** — the two endpoints (metres): a straight wire along
+  the **y** axis from −5 m to +5 m, lying on the ground plane (`z = 0`).
+- **`21`** — mesh this wire into 21 segments (more on that in step 4).
+- **`1 + 0j`** — this wire is the **driven** element; the source sits on it. (A
+  structural, undriven wire would carry `None` here.) Exactly one segment in the
+  whole design carries the feed — here the wire's own centre segment.
+
+<Aside type="note" title="Why the feed has no separate wire">
+  Many catalog designs split a dipole into *three* pieces — a left arm, a short
+  driven gap, a right arm — to place the source on its own one-segment wire. You
+  don't have to. A single driven wire works: the source is dropped on its
+  **centre** segment automatically. We split it out later only when we want
+  explicit control; for now, one wire is plenty.
+</Aside>
+
+## 2. Find resonance with the `freq` knob
+
+Load it and look at the SWR curve and the impedance readout. With `freq` at its
+default 14.0 MHz the antenna is **capacitive** — the reactance reads about
+`X = −55 Ω` (slightly too short for this frequency).
+
+Now turn just the **freq** knob — no code change. As you raise it, watch the
+reactance climb toward zero:
+
+| freq (MHz) | R (Ω) | X (Ω) |
+| --- | --- | --- |
+| 14.0 | 65 | −55 |
+| 14.4 | 69 | −22 |
+| **14.6** | **71** | **≈ 0** |
+| 15.0 | 78 | +44 |
+
+Around **14.6 MHz** the reactance passes through zero: that's **resonance**, and
+the resistance settles near **70 Ω** — the signature of a half-wave dipole. (A
+10 m wire is about a half wavelength at `c / 2L ≈ 15 MHz`; it resonates a touch
+lower because real wire has end effects.)
+
+<Aside type="tip" title="Two ways to hit a band">
+  You just moved the *measurement* frequency to meet a fixed antenna. The other
+  direction — change the antenna to resonate at a frequency you pick — is what
+  the rest of this page builds toward.
+</Aside>
+
+## 3. Add height above ground
+
+Right now the wire sits at `z = 0`, on the ground. Real antennas hang in the air,
+and height changes the pattern and the impedance. Promote the height to a knob —
+add `base` to the params and use it as the `z` coordinate:
+
+```python
+class Builder(AntennaBuilder):
+    default_params = MappingProxyType(
+        {
+            "freq": 14.0,   # MHz — measurement frequency
+            "base": 10.0,   # metres — height above ground
+        }
+    )
+
+    def build_wires(self):
+        y = 5.0
+        z = self.base   # every param is read as self.<name>
+        return [
+            ((0.0, -y, z), (0.0, y, z), 21, 1 + 0j),
+        ]
+```
+
+Every key in `default_params` is now a knob in the panel, read inside the build
+as `self.base`. Slide it and watch the pattern lift off the ground.
+
+## 4. Segment the wire the right way
+
+That `21` we've been carrying is the **segment count** — and it deserves an
+explanation, because it's where antenna *modelling* meets antenna *physics*.
+
+The solver is a [Method of Moments](/reference/solver/) engine: it chops each
+wire into `nsegs` short segments, puts an unknown current on each, and solves a
+linear system for them all at once. So `nsegs` is an **accuracy/cost dial**:
+
+- **too few** segments and the current distribution is too coarse to be
+  trustworthy — the impedance and pattern are wrong;
+- **too many** and the solve is needlessly slow;
+- what matters is that each segment is **short relative to a wavelength**, and
+  that segment length stays roughly **constant across every wire** so no part of
+  the antenna is under-meshed.
+
+Hardcoding `21` breaks that last rule the moment a wire's length changes. The
+framework gives you the right tool — `segs_for(length, ref)`:
+
+```python
+def build_wires(self):
+    wavelength = 299.792458 / self.freq   # metres; c = 299.792458 m·MHz
+    quarter = wavelength / 4.0            # the reference length
+    y = 5.0
+    z = self.base
+    n = self.segs_for(2 * y, quarter)    # segments scaled to the wire's length
+    return [
+        ((0.0, -y, z), (0.0, y, z), n, 1 + 0j),
+    ]
+```
+
+`segs_for` scales the framework's `nominal_nsegs` (default **21**, the count for
+one reference length) by `length / ref`, so a wire twice as long gets twice the
+segments and segment length stays constant:
+
+```text
+n = max(3, round(nominal_nsegs · length / ref))
+```
+
+Our 10 m wire is about two quarter-waves long, so it now meshes into **39**
+segments instead of 21 — finer, and it will *track* the length once we make it a
+parameter.
+
+<Aside type="note" title="You give a count; the solver picks the parity">
+  You might expect the feed to need an **odd** count so a centre-fed wire has a
+  true middle segment — and for some solvers it does. But which parity lands the
+  feed cleanly depends on the basis functions: sinusoidal and PyNEC want odd,
+  while the default dense (triangular) solver wants **even**. So `segs_for`
+  deliberately doesn't force a parity — it returns the natural count, and each
+  solver nudges it by at most one to suit its own basis at solve time. You size
+  the mesh; the solver gets the feed right.
+</Aside>
+
+## 5. Parameterize the length
+
+The last hardcoded number is `y`. Make it a knob and the antenna becomes
+adjustable — slide it longer to drop the resonant frequency, shorter to raise it:
+
+```python
+from types import MappingProxyType
+from antennaknobs import AntennaBuilder
+
+
+class Builder(AntennaBuilder):
+    default_params = MappingProxyType(
+        {
+            "freq": 14.6,          # MHz — measurement frequency
+            "base": 10.0,          # metres — height above ground
+            "half_length": 5.0,    # metres — half the wire, tip to centre
+            "ui_params": MappingProxyType({"default_view": "xz"}),
+        }
+    )
+
+    def build_wires(self):
+        wavelength = 299.792458 / self.freq
+        quarter = wavelength / 4.0
+        y = self.half_length
+        z = self.base
+        n = self.segs_for(2 * y, quarter)
+        return [
+            ((0.0, -y, z), (0.0, y, z), n, 1 + 0j),
+        ]
+```
+
+That `ui_params` block is optional polish — here it just opens the antenna in the
+side-on **xz** view. Now you have two complementary ways to reach resonance:
+move `freq` to meet the antenna, or move `half_length` to tune the antenna to the
+frequency.
+
+## 6. Make it frequency-based
+
+`half_length` in raw metres works, but it **freezes** the antenna at one size:
+pick a different band and you're back to hand-tuning the length. The fix is to
+tie every dimension to the **wavelength of the band you're cutting for**. Add a
+`design_freq` knob and size the wire from it.
+
+A half-wave dipole is two **quarter-wave** arms, so the half-length is one
+quarter wavelength — times a `length_factor` near 1.0 that trims a real wire to
+true resonance:
+
+```python
+from types import MappingProxyType
+from antennaknobs import AntennaBuilder
+
+
+class Builder(AntennaBuilder):
+    default_params = MappingProxyType(
+        {
+            "design_freq": 14.6,    # MHz — the band this antenna is cut for
+            "freq": 14.6,           # MHz — measurement frequency (starts on band)
+            "length_factor": 0.97,  # trims the half-wave to resonance (~97 %)
+            "base": 10.0,           # metres — height above ground
+            "ui_params": MappingProxyType({"default_view": "xz"}),
+        }
+    )
+
+    def build_wires(self):
+        wavelength = 299.792458 / self.design_freq
+        quarter = wavelength / 4.0
+        y = quarter * self.length_factor   # half-length ≈ a quarter wavelength
+        z = self.base
+        n = self.segs_for(2 * y, quarter)
+        return [
+            ((0.0, -y, z), (0.0, y, z), n, 1 + 0j),
+        ]
+```
+
+Two things changed, and they're the whole point:
+
+- **The geometry now scales with the band.** Out of the box this reads
+  `R ≈ 71 Ω, X ≈ −5 Ω` at 14.6 MHz — resonant on the band it's cut for. Change
+  `design_freq` to 21.2 MHz and the half-length rescales from 4.98 m to 3.43 m
+  and it resonates on 15 m too; 28.4 MHz → 2.56 m on 10 m. One knob moves the
+  whole antenna onto a band.
+- **`length_factor` is the fine-tune.** The bare half-wave estimate
+  (`length_factor = 1.0`) lands a little long — real wire resonates around 97 %
+  of it — so `length_factor` is the small dimensionless trim the optimiser trips,
+  leaving `design_freq` to do the coarse band placement.
+
+<Aside type="tip" title="The design_freq rule — resonate across bands, not just one">
+  Sizing dimensions as fractions of `wavelength = 299.792458 / self.design_freq`
+  is the house rule for tunable designs. Skip it — freeze the length in metres —
+  and the geometry won't resize when you pick a different band: you can still
+  *measure* the antenna anywhere (the meas-freq slider reaches any band you
+  select), but a fixed-metre wire only *resonates* on the one band its
+  dimensions happen to suit. Scaling with `design_freq` is what lets a single
+  design resonate across bands. Full write-up in
+  [Writing designs with Claude Code](/concepts/authoring-with-claude/#the-contract-what-claude-follows).
+</Aside>
+
+## Where to go next
+
+You've gone from one hardcoded wire to a band-tunable dipole. From here:
+
+- **[Many ways to express geometry](/concepts/authoring/)** — the same shape
+  written six ways, including flying a [`Drone`](/reference/drone-transform/)
+  instead of computing coordinates by hand.
+- **[Design catalog](/reference/catalog/)** — every built-in is a readable
+  Builder you can copy as a starting point.
+- **[Writing designs with Claude Code](/concepts/authoring-with-claude/)** — let
+  Claude Code write the next one for you from the seeded contract.

@@ -57,5 +57,8 @@ nothing downstream cares *how* you produced it, which is what makes the
 - Segment counts are derived from a wire's length relative to a reference
   (usually a quarter-wavelength) so meshing stays consistent across designs.
 
+Ready to write one? [Write your first design](/concepts/first-builder/) builds a
+tunable dipole from a single hardcoded wire, one change at a time.
+
 <!-- TODO: link to a generated API reference for AntennaBuilder once it exists,
      and document FRAMEWORK_PARAMS / nominal_nsegs precisely. -->

@@ -58,6 +58,7 @@ export default defineConfig({
           label: "Concepts",
           items: [
             { label: "The model", slug: "concepts/model" },
+            { label: "Write your first design", slug: "concepts/first-builder" },
             { label: "Many ways to express geometry", slug: "concepts/authoring" },
             {
               label: "Writing designs with Claude Code",
