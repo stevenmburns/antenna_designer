@@ -21,12 +21,11 @@ A dipole is just a straight wire fed in the middle. Here it is, hardcoded — on
 wire, no geometry parameters at all:
 
 ```python
-from types import MappingProxyType
 from antennaknobs import AntennaBuilder
 
 
 class Builder(AntennaBuilder):
-    default_params = MappingProxyType({"freq": 14.0})  # MHz — the only knob
+    default_params = {"freq": 14.0}  # MHz — the only knob
 
     def build_wires(self):
         y = 5.0  # half-length in metres → a 10 m wire, tip to tip
@@ -92,12 +91,10 @@ add `base` to the params and use it as the `z` coordinate:
 
 ```python
 class Builder(AntennaBuilder):
-    default_params = MappingProxyType(
-        {
-            "freq": 14.0,   # MHz — measurement frequency
-            "base": 10.0,   # metres — height above ground
-        }
-    )
+    default_params = {
+        "freq": 14.0,   # MHz — measurement frequency
+        "base": 10.0,   # metres — height above ground
+    }
 
     def build_wires(self):
         y = 5.0
@@ -169,19 +166,16 @@ The last hardcoded number is `y`. Make it a knob and the antenna becomes
 adjustable — slide it longer to drop the resonant frequency, shorter to raise it:
 
 ```python
-from types import MappingProxyType
 from antennaknobs import AntennaBuilder
 
 
 class Builder(AntennaBuilder):
-    default_params = MappingProxyType(
-        {
-            "freq": 14.6,          # MHz — measurement frequency
-            "base": 10.0,          # metres — height above ground
-            "half_length": 5.0,    # metres — half the wire, tip to centre
-            "ui_params": MappingProxyType({"default_view": "xz"}),
-        }
-    )
+    default_params = {
+        "freq": 14.6,          # MHz — measurement frequency
+        "base": 10.0,          # metres — height above ground
+        "half_length": 5.0,    # metres — half the wire, tip to centre
+        "ui_params": {"default_view": "xz"},
+    }
 
     def build_wires(self):
         wavelength = 299.792458 / self.freq
@@ -211,20 +205,17 @@ quarter wavelength — times a `length_factor` near 1.0 that trims a real wire t
 true resonance:
 
 ```python
-from types import MappingProxyType
 from antennaknobs import AntennaBuilder
 
 
 class Builder(AntennaBuilder):
-    default_params = MappingProxyType(
-        {
-            "design_freq": 14.6,    # MHz — the band this antenna is cut for
-            "freq": 14.6,           # MHz — measurement frequency (starts on band)
-            "length_factor": 0.97,  # trims the half-wave to resonance (~97 %)
-            "base": 10.0,           # metres — height above ground
-            "ui_params": MappingProxyType({"default_view": "xz"}),
-        }
-    )
+    default_params = {
+        "design_freq": 14.6,    # MHz — the band this antenna is cut for
+        "freq": 14.6,           # MHz — measurement frequency (starts on band)
+        "length_factor": 0.97,  # trims the half-wave to resonance (~97 %)
+        "base": 10.0,           # metres — height above ground
+        "ui_params": {"default_view": "xz"},
+    }
 
     def build_wires(self):
         wavelength = 299.792458 / self.design_freq

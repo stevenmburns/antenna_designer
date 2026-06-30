@@ -61,20 +61,17 @@ The seeded `CLAUDE.md` is authoritative; in brief, a design file must:
 - Import only from `antennaknobs` and the standard library.
 
 ```python
-from types import MappingProxyType
 from antennaknobs import AntennaBuilder
 
 
 class Builder(AntennaBuilder):
-    default_params = MappingProxyType(
-        {
-            "design_freq": 14.1,   # MHz — the band this is cut for
-            "freq": 14.1,          # MHz — measurement frequency
-            "length_factor": 0.96,
-            "height": 10.0,        # metres
-            "ui_params": MappingProxyType({"default_view": "xz"}),
-        }
-    )
+    default_params = {
+        "design_freq": 14.1,   # MHz — the band this is cut for
+        "freq": 14.1,          # MHz — measurement frequency
+        "length_factor": 0.96,
+        "height": 10.0,        # metres
+        "ui_params": {"default_view": "xz"},
+    }
 
     def build_wires(self):
         wavelength = 299.792458 / self.design_freq
