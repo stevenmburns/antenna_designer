@@ -1408,6 +1408,74 @@ input[type=checkbox] {
   font-variant-numeric: tabular-nums;
 }
 
+/* A/B live-compare: toggle + tab switch in the sidebar, and the slot-B editor. */
+.compare-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-2) 0 var(--space-3);
+}
+.compare-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--fg);
+  cursor: pointer;
+}
+.compare-tabs {
+  display: flex;
+  gap: 2px;
+}
+.compare-tabs button {
+  min-width: 28px;
+  font-size: var(--text-sm);
+  padding: 2px var(--space-3);
+  color: var(--muted-1);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.compare-tabs button.active {
+  color: var(--fg);
+  border-color: var(--muted-2);
+  font-weight: 600;
+}
+/* Tab B is drawn in the compare-B blue so the tab, its lobe, and its table
+   row all read as the same trace. */
+.compare-tabs button:last-child.active {
+  color: rgb(110, 200, 255);
+  border-color: rgb(110, 200, 255);
+}
+.slot-b-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.slot-b-freqs {
+  display: flex;
+  gap: var(--space-3);
+}
+.slot-b-freqs label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--text-xs);
+  color: var(--muted-2);
+}
+.slot-b-freqs input {
+  width: 7ch;
+  font-size: var(--text-sm);
+  padding: 2px var(--space-2);
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Pattern-compare controls, overlaid top-left on the far-field plots: a Pin
    button plus the side-by-side metrics table of the live + pinned antennas. */
 .compare-overlay {

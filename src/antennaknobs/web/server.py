@@ -1000,6 +1000,24 @@ def examples_endpoint():
     return {"examples": out, "errors": load_errors}
 
 
+@app.post("/solve")
+async def solve_endpoint(req: dict):
+    """One-shot solve of a request — same computation and cache as the /ws live
+    channel, but request/response instead of a persistent socket.
+
+    Used by the A/B compare panel to solve the secondary (B) config on demand
+    without contending for slot A's live websocket. Errors are returned in-band
+    (like /ws) so a broken user design surfaces a message rather than a 500.
+    """
+    try:
+        return await run_in_threadpool(solve, req)
+    except Exception as exc:  # noqa: BLE001 — a user design's build_wires can raise
+        return {
+            "geometry": req.get("geometry"),
+            "error": user_designs.format_solve_error(exc),
+        }
+
+
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
