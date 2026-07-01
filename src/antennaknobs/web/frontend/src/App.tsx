@@ -1981,6 +1981,13 @@ export function App() {
   const [pinnedPatterns, setPinnedPatterns] = useState<PinnedPattern[]>([]);
   const [liveMetrics, setLiveMetrics] = useState<PatternMetrics | null>(null);
   const pinSeq = useRef(0);
+  // A/B live compare: an optional second antenna (slot B) edited in its own
+  // tab and solved via POST /solve, overlaid live on the pattern plots. Slot A
+  // is the existing app; only these few pieces of state are added.
+  const [compareOn, setCompareOn] = useState(false);
+  const [compareTab, setCompareTab] = useState<"A" | "B">("A");
+  const [resultB, setResultB] = useState<SolveResponse | null>(null);
+  const [metricsB, setMetricsB] = useState<PatternMetrics | null>(null);
   const [view, setView] = useState<View>("antenna");
   const [cameraProjection, setCameraProjection] = useState<Projection>("xy");
   // When the user switches antennas, reset the camera to that example's
@@ -2487,7 +2494,8 @@ export function App() {
   // need a full far-field solve, so don't pay for it otherwise. Debounced so it
   // doesn't fire on every knob tick.
   const pinCount = pinnedPatterns.length;
-  const comparing = pinCount > 0 && (view === "azimuth" || view === "elevation");
+  const comparing =
+    (pinCount > 0 || compareOn) && (view === "azimuth" || view === "elevation");
   useEffect(() => {
     if (!comparing || !result) {
       setLiveMetrics(null);
@@ -2505,6 +2513,43 @@ export function App() {
     };
     // result identity changes per solve; that's the cue to refresh.
   }, [comparing, result]);
+
+  // Shared solver + ground fields slot B inherits, so the A/B comparison is
+  // apples-to-apples (same backend, segmentation, ground) and B's editor only
+  // has to carry geometry / variant / knobs / freqs.
+  const solveBaseForCompare = useMemo(() => {
+    const groundActive = groundEnabled && backendSupportsGround(backend);
+    const base: Partial<SolveRequest> = {
+      solver: backend === "pynec" ? "pynec" : "momwire",
+      n_per_wire: nPerWire,
+      wire_radius: wireRadius,
+      ground: groundActive,
+      ground_fast: groundActive && groundFast,
+    };
+    if (backend !== "pynec") {
+      base.momwire_model = backend;
+      const opts = modelOptionsForRequest(backend, currentOpts);
+      if (isBSplineFamily(backend) && groundActive) {
+        (opts as Record<string, unknown>).use_singular_enrichment = false;
+      }
+      base.model_options = opts;
+    }
+    return base;
+  }, [backend, nPerWire, wireRadius, groundEnabled, groundFast, currentOpts]);
+
+  function toggleCompare(on: boolean) {
+    setCompareOn(on);
+    if (on) {
+      setCompareTab("B");
+      // The B overlay only shows on the pattern cuts — jump there so the user
+      // sees the comparison immediately.
+      if (view !== "azimuth" && view !== "elevation") setView("azimuth");
+    } else {
+      setCompareTab("A");
+      setResultB(null);
+      setMetricsB(null);
+    }
+  }
 
   // Reset the "solve anyway" approval whenever the design or solver changes, so
   // an inappropriate combo is re-evaluated (and re-warned) rather than riding a
@@ -3165,6 +3210,59 @@ export function App() {
           </div>
         </div>
 
+        {/* A/B live-compare toggle + tab switch. Slot B is a second antenna
+            edited in its own tab and overlaid live on the pattern plots. */}
+        <div className="compare-bar">
+          <label className="compare-toggle">
+            <input
+              type="checkbox"
+              checked={compareOn}
+              onChange={(e) => toggleCompare(e.target.checked)}
+            />
+            Compare A/B
+          </label>
+          {compareOn && (
+            <div className="compare-tabs" role="tablist">
+              <button
+                type="button"
+                className={compareTab === "A" ? "active" : ""}
+                onClick={() => setCompareTab("A")}
+              >
+                A
+              </button>
+              <button
+                type="button"
+                className={compareTab === "B" ? "active" : ""}
+                onClick={() => setCompareTab("B")}
+              >
+                B
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Slot B editor — mounted whenever compare is on (so B keeps solving
+            while you're on tab A), hidden unless tab B is active. */}
+        {compareOn && (
+          <div style={compareTab === "A" ? { display: "none" } : undefined}>
+            <SlotBEditor
+              examples={examples}
+              solveBase={solveBaseForCompare}
+              initial={{
+                geometry,
+                variant: currentVariant,
+                values: currentValues,
+                measFreq,
+                designFreq,
+              }}
+              onResult={setResultB}
+              onMetrics={setMetricsB}
+            />
+          </div>
+        )}
+
+        {/* Slot A editor (the existing sidebar body), hidden while editing B. */}
+        <div style={compareOn && compareTab === "B" ? { display: "none" } : undefined}>
         <div className="antenna-row">
           <GeometryCombobox
             groups={geomGroups}
@@ -3643,6 +3741,7 @@ export function App() {
             onClose={() => setGearOpen(null)}
           />
         )}
+        </div>
       </aside>
 
       <main className="stage" aria-label="Antenna output views">
@@ -3727,6 +3826,7 @@ export function App() {
                   converge={converge}
                   pattern={pattern}
                   pinnedPatterns={[]}
+                  compareResult={null}
                   measFreqMhz={measFreq}
                   sweepRunning={sweepRunning}
                   convergeRunning={convergeRunning}
@@ -3888,19 +3988,31 @@ export function App() {
               >
                 📌 Pin pattern
               </button>
-              {pinnedPatterns.length > 0 && (
+              {(pinnedPatterns.length > 0 || compareOn) && (
                 <>
-                  <button
-                    type="button"
-                    className="pin-clear"
-                    onClick={() => setPinnedPatterns([])}
-                    title="Remove all pinned patterns"
-                  >
-                    clear
-                  </button>
+                  {pinnedPatterns.length > 0 && (
+                    <button
+                      type="button"
+                      className="pin-clear"
+                      onClick={() => setPinnedPatterns([])}
+                      title="Remove all pinned patterns"
+                    >
+                      clear
+                    </button>
+                  )}
                   <PatternCompareTable
                     live={liveMetrics}
                     liveLabel={`${currentExample?.label ?? geometry} @ ${measFreq.toFixed(2)} MHz`}
+                    compareB={
+                      compareOn
+                        ? {
+                            label: resultB
+                              ? `${resultB.geometry} @ ${resultB.measurement_freq_mhz.toFixed(2)} MHz`
+                              : "…",
+                            metrics: metricsB,
+                          }
+                        : null
+                    }
                     pinned={pinnedPatterns}
                     onRemove={removePin}
                   />
@@ -3918,6 +4030,7 @@ export function App() {
             converge={converge}
             pattern={pattern}
             pinnedPatterns={pinnedPatterns}
+            compareResult={compareOn ? resultB : null}
             measFreqMhz={measFreq}
             sweepRunning={sweepRunning}
             convergeRunning={convergeRunning}
@@ -4363,6 +4476,7 @@ function ViewPanel({
   converge,
   pattern,
   pinnedPatterns,
+  compareResult,
   measFreqMhz,
   sweepRunning,
   convergeRunning,
@@ -4384,6 +4498,7 @@ function ViewPanel({
   converge: ConvergeData | null;
   pattern: PatternData | null;
   pinnedPatterns: PinnedPattern[];
+  compareResult: SolveResponse | null;
   measFreqMhz: number;
   sweepRunning: boolean;
   convergeRunning: boolean;
@@ -4421,6 +4536,7 @@ function ViewPanel({
         result={result}
         pattern={pattern}
         pinned={pinnedPatterns}
+        compare={compareResult}
         size={size}
         cut="xy"
         azElevDeg={azElevDeg}
@@ -4434,6 +4550,7 @@ function ViewPanel({
         result={result}
         pattern={pattern}
         pinned={pinnedPatterns}
+        compare={compareResult}
         size={size}
         cut="yz"
         azElevDeg={azElevDeg}
@@ -4485,26 +4602,40 @@ type PinnedPattern = {
 function PatternCompareTable({
   live,
   liveLabel,
+  compareB,
   pinned,
   onRemove,
 }: {
   live: PatternMetrics | null;
   liveLabel: string;
+  compareB: { label: string; metrics: PatternMetrics | null } | null;
   pinned: PinnedPattern[];
   onRemove: (id: string) => void;
 }) {
   const fmt = (v: number | undefined, d: number) =>
     v === undefined || v === null ? "—" : v.toFixed(d);
-  // Live row's swatch reads the lobe CSS var so it matches the orange lobe in
-  // either theme; pinned rows use their fixed canvas ghost colors.
+  // Live (A) row's swatch reads the lobe CSS var so it matches the orange lobe
+  // in either theme; the live B row uses its fixed blue; pinned rows use their
+  // fixed canvas ghost colors.
   const rows = [
     {
       key: "live",
       bg: "rgba(var(--plot-lobe-rgb), 0.95)",
-      label: liveLabel,
+      label: compareB ? `A · ${liveLabel}` : liveLabel,
       m: live,
       onX: undefined as undefined | (() => void),
     },
+    ...(compareB
+      ? [
+          {
+            key: "compareB",
+            bg: `rgba(${COMPARE_B_RGB}, 0.95)`,
+            label: `B · ${compareB.label}`,
+            m: compareB.metrics,
+            onX: undefined as undefined | (() => void),
+          },
+        ]
+      : []),
     ...pinned.map((p, i) => {
       const [r, g, b] = GHOST_COLORS[i % GHOST_COLORS.length];
       return {
@@ -4561,6 +4692,227 @@ function PatternCompareTable({
 // Directions sampled around each polar cut. Module-level so the trace helper
 // and the chart agree.
 const FARFIELD_N_DIR = 180;
+
+// Trace color for the live "B" config in A/B compare (a blue, distinct from
+// the orange live lobe and the green/pink pinned ghosts).
+const COMPARE_B_RGB = "110, 200, 255";
+
+// Self-contained editor for the second ("B") antenna in A/B live compare. Holds
+// its own geometry / variant / knob values / freqs (independent of slot A, so
+// two tunings of the *same* design can be compared), inherits A's solver +
+// ground via `solveBase`, and solves through the one-shot POST /solve endpoint
+// so it never contends for slot A's live websocket. Reports its result and
+// metrics up via callbacks; the parent overlays them on the pattern plots.
+function SlotBEditor({
+  examples,
+  solveBase,
+  initial,
+  onResult,
+  onMetrics,
+}: {
+  examples: ExampleDescriptor[];
+  solveBase: Partial<SolveRequest>;
+  initial: {
+    geometry: string;
+    variant: string;
+    values: ParamValueBag;
+    measFreq: number;
+    designFreq: number;
+  };
+  onResult: (r: SolveResponse | null) => void;
+  onMetrics: (m: PatternMetrics | null) => void;
+}) {
+  const [geometry, setGeometry] = useState(initial.geometry);
+  const [variantByGeom, setVariantByGeom] = useState<Record<string, string>>({
+    [initial.geometry]: initial.variant,
+  });
+  const [valuesByGeom, setValuesByGeom] = useState<
+    Record<string, ParamValueBag>
+  >({ [initial.geometry]: initial.values });
+  const [measFreq, setMeasFreq] = useState(initial.measFreq);
+  const [designFreq, setDesignFreq] = useState(initial.designFreq);
+  const [geomFilter, setGeomFilter] = useState("");
+
+  const ex = examples.find((e) => e.name === geometry);
+  const variant = variantByGeom[geometry] ?? "default";
+  const values = valuesByGeom[geometry] ?? (ex ? seedDefaults(ex.param_schema) : {});
+
+  // Build the combobox's grouped list from B's OWN filter text (the parent's
+  // geomGroups are filtered by slot A's query, so B must group + filter itself).
+  const geomGroups = useMemo(() => {
+    const q = geomFilter.trim().toLowerCase();
+    const visible = examples.filter((e) => e.name === geometry || matchesQuery(e, q));
+    const byFam = new Map<string, ExampleDescriptor[]>();
+    for (const e of visible) {
+      const fam = familyOf(e.name);
+      (byFam.get(fam) ?? byFam.set(fam, []).get(fam)!).push(e);
+    }
+    return [...byFam.entries()]
+      .map(([fam, items]) => ({
+        fam,
+        label: FAMILY_LABELS[fam] ?? fam,
+        items: items.sort((a, b) => a.label.localeCompare(b.label)),
+      }))
+      .sort((a, b) => familyRank(a.fam) - familyRank(b.fam));
+  }, [examples, geometry, geomFilter]);
+
+  function selectGeometry(name: string) {
+    const nextEx = examples.find((e) => e.name === name);
+    setGeometry(name);
+    if (!nextEx) return;
+    setValuesByGeom((prev) =>
+      name in prev ? prev : { ...prev, [name]: seedDefaults(nextEx.param_schema) },
+    );
+    if (typeof nextEx.default_freq_mhz === "number") {
+      setDesignFreq(nextEx.default_freq_mhz);
+      setMeasFreq(nextEx.default_freq_mhz);
+    }
+  }
+
+  function selectVariant(next: string) {
+    if (!ex) return;
+    setVariantByGeom((prev) => ({ ...prev, [geometry]: next }));
+    const vv = ex.variant_values?.[next];
+    if (!vv) return;
+    setValuesByGeom((prev) => {
+      const base = seedDefaults(ex.param_schema);
+      for (const k of Object.keys(base)) if (k in vv) base[k] = vv[k] as never;
+      return { ...prev, [geometry]: base };
+    });
+    if (typeof vv.freq === "number") {
+      setDesignFreq(vv.freq);
+      setMeasFreq(vv.freq);
+    }
+  }
+
+  function handleParamChange(
+    path: (string | number)[],
+    value: number | string | boolean,
+  ) {
+    const setIn = (node: unknown, ps: (string | number)[]): unknown => {
+      if (ps.length === 0) return value;
+      const [head, ...rest] = ps;
+      if (typeof head === "number") {
+        const arr = ((node as unknown[]) ?? []).slice();
+        arr[head] = setIn(arr[head], rest);
+        return arr;
+      }
+      const obj = { ...((node as Record<string, unknown>) ?? {}) };
+      obj[head] = setIn(obj[head], rest);
+      return obj;
+    };
+    setValuesByGeom((prev) => ({
+      ...prev,
+      [geometry]: setIn(prev[geometry] ?? {}, path) as ParamValueBag,
+    }));
+  }
+
+  // Serialise B's request; solving keys off this string so it re-solves only
+  // when something actually changed.
+  const reqKey = useMemo(() => {
+    const base = {
+      ...(solveBase as SolveRequest),
+      geometry,
+      variant,
+      design_freq_mhz: designFreq,
+      measurement_freq_mhz: measFreq,
+    } as SolveRequest;
+    Object.assign(base, values);
+    if (base.solver !== "pynec" && "daisy_chain" in base) {
+      (base as Record<string, unknown>).daisy_chain = false;
+    }
+    return JSON.stringify(base);
+  }, [solveBase, geometry, variant, designFreq, measFreq, values]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const h = window.setTimeout(async () => {
+      const headers = { "Content-Type": "application/json" };
+      try {
+        const resp = await fetch("/solve", { method: "POST", headers, body: reqKey });
+        const data = await resp.json();
+        if (!cancelled) onResult(data && !data.error ? (data as SolveResponse) : null);
+      } catch {
+        if (!cancelled) onResult(null);
+      }
+      try {
+        const resp = await fetch("/pattern_metrics", {
+          method: "POST",
+          headers,
+          body: reqKey,
+        });
+        const d = await resp.json();
+        if (!cancelled) onMetrics(d.available ? (d.metrics as PatternMetrics) : null);
+      } catch {
+        if (!cancelled) onMetrics(null);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(h);
+    };
+    // onResult/onMetrics are stable setters; keying on reqKey alone avoids a
+    // re-solve loop from inline callback identities.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reqKey]);
+
+  if (!ex) return null;
+  return (
+    <div className="slot-b-editor">
+      <div className="antenna-row">
+        <GeometryCombobox
+          groups={geomGroups}
+          selected={geometry}
+          currentLabel={ex.label}
+          filter={geomFilter}
+          setFilter={setGeomFilter}
+          onSelect={selectGeometry}
+        />
+        {ex.variants.length > 1 && (
+          <select
+            className="geometry-select variant-select"
+            value={variant}
+            onChange={(e) => selectVariant(e.target.value)}
+            aria-label="variant (B)"
+          >
+            {ex.variants.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      <div className="slot-b-freqs">
+        {ex.has_design_freq && (
+          <label>
+            design MHz
+            <input
+              type="number"
+              step="0.1"
+              value={designFreq}
+              onChange={(e) => setDesignFreq(Number(e.target.value))}
+            />
+          </label>
+        )}
+        <label>
+          meas MHz
+          <input
+            type="number"
+            step="0.1"
+            value={measFreq}
+            onChange={(e) => setMeasFreq(Number(e.target.value))}
+          />
+        </label>
+      </div>
+      <ParamForm
+        schema={ex.param_schema}
+        values={values}
+        onChange={handleParamChange}
+      />
+    </div>
+  );
+}
 
 // Compute the per-direction gain (dBi) of one solve response along a polar cut,
 // reproducing the live lobe math (moment integral over all segments, PEC image
@@ -4737,6 +5089,7 @@ function FarFieldChart({
   result,
   pattern,
   pinned,
+  compare,
   size,
   cut,
   azElevDeg,
@@ -4745,6 +5098,7 @@ function FarFieldChart({
   result: SolveResponse | null;
   pattern: PatternData | null;
   pinned: PinnedPattern[];
+  compare: SolveResponse | null;
   size: number;
   cut: FarFieldCut;
   azElevDeg: number;
@@ -4899,7 +5253,20 @@ function FarFieldChart({
       });
     });
 
-    // Live lobe (filled).
+    // A/B compare: the live "B" antenna, filled in its own color, under the
+    // primary (A) lobe so A stays the focus.
+    if (compare) {
+      const cb = computeCutDbi(compare, cut, azElevDeg, elevAzDeg);
+      if (cb) {
+        strokeTrace(cb.dbi, {
+          stroke: `rgba(${COMPARE_B_RGB}, 0.95)`,
+          fill: `rgba(${COMPARE_B_RGB}, 0.10)`,
+          width: 1.5,
+        });
+      }
+    }
+
+    // Live lobe (filled). This is slot A when comparing, else the sole antenna.
     const live = computeCutDbi(result, cut, azElevDeg, elevAzDeg);
     if (!live) return;
     strokeTrace(live.dbi, {
@@ -4976,7 +5343,7 @@ function FarFieldChart({
     const peakText = `peak ${peakDbi >= 0 ? "+" : ""}${peakDbi.toFixed(1)} dBi`;
     const tw = ctx.measureText(peakText).width;
     ctx.fillText(peakText, size - tw - 6, 14);
-  }, [result, pattern, pinned, size, cut, azElevDeg, elevAzDeg, theme]);
+  }, [result, pattern, pinned, compare, size, cut, azElevDeg, elevAzDeg, theme]);
 
   return <canvas ref={canvasRef} className="farfield" />;
 }

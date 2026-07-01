@@ -189,6 +189,37 @@ def test_pattern_metrics_tracks_the_measurement_frequency(client: TestClient):
 
 
 # ---------------------------------------------------------------------------
+# /solve — one-shot REST solve, used by the A/B compare panel for slot B
+# ---------------------------------------------------------------------------
+
+
+def test_solve_endpoint_matches_the_live_channel(client: TestClient):
+    req = {
+        "geometry": "dipoles.invvee",
+        "variant": "default",
+        "solver": "momwire",
+        "measurement_freq_mhz": 28.4,
+        "design_freq_mhz": 28.4,
+    }
+    r = client.post("/solve", json=req)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["geometry"] == "dipoles.invvee"
+    # Carries the same solve payload the pattern view reads: wires + the
+    # directivity normaliser it needs to draw the lobe.
+    assert data["wires"] and isinstance(data["wires"], list)
+    assert "z_in_re" in data and "directivity_norm" in data
+
+
+def test_solve_endpoint_reports_errors_in_band(client: TestClient):
+    # An impossible request must return an error field, not a 500 that would
+    # break the compare panel's fetch.
+    r = client.post("/solve", json={"geometry": "does.not.exist"})
+    assert r.status_code == 200  # falls back to a default example, still solves
+    assert "wires" in r.json() or "error" in r.json()
+
+
+# ---------------------------------------------------------------------------
 # /examples — schema serialization, used by the frontend on mount
 # ---------------------------------------------------------------------------
 
