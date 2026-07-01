@@ -43,6 +43,27 @@ jobs:
 
       - name: Deploy
         if: steps.token.outputs.skip != 'true'
-        run: flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_SIMULATOR }}
+        # Retry on transient failures: Fly's remote builder occasionally drops
+        # the connection mid-build ("rpc error: code = Unavailable ... EOF"),
+        # which failed the v0.10.0 release deploy while PyPI succeeded — leaving
+        # the hosted simulator stale on an otherwise-good release. `flyctl
+        # deploy` is idempotent (a re-run just rebuilds + re-releases the same
+        # tagged commit), so retrying is safe; a genuine failure still fails
+        # after all attempts.
+        run: |
+          for attempt in 1 2 3; do
+            echo "::group::flyctl deploy (attempt $attempt/3)"
+            if flyctl deploy --remote-only; then
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "::endgroup::"
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::flyctl deploy attempt $attempt failed; retrying in $((attempt * 20))s"
+              sleep "$((attempt * 20))"
+            fi
+          done
+          echo "::error::flyctl deploy failed after 3 attempts"
+          exit 1
