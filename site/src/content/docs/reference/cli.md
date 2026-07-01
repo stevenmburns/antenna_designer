@@ -1,12 +1,12 @@
 ---
 title: Command line
-description: Driving antennaknobs from the terminal — list, draw, sweep, pattern, optimize, compare, and .nec export.
+description: Driving antennaknobs from the terminal — list, draw, sweep, pattern, optimize, compare, params, and .nec export.
 ---
 
 antennaknobs has a command-line interface for batch work. The subcommands:
 
 ```text
-python -m antennaknobs {draw,sweep,optimize,pattern,compare_patterns,export,list}
+python -m antennaknobs {draw,sweep,optimize,pattern,compare_patterns,params,export,list}
 ```
 
 | Command | What it does |
@@ -17,6 +17,7 @@ python -m antennaknobs {draw,sweep,optimize,pattern,compare_patterns,export,list
 | `pattern` | Plot the far-field pattern |
 | `compare_patterns` | Overlay the patterns of several antennas / engines |
 | `optimize` | Optimize an antenna's parameters |
+| `params` | Print a design's knob values as paste-ready Python |
 | `export` | Export the design to a NEC-2 `.nec` card deck |
 
 ## Naming a design
@@ -67,6 +68,34 @@ python -m antennaknobs compare_patterns \
   --builders beams.moxon beams.moxon \
   --engines pynec momwire:bspline --fn check.png
 ```
+
+Alongside the overlaid plot, `compare_patterns` prints a metrics table — peak
+gain (dBi), takeoff angle, front-to-back, and −3 dB azimuth/elevation
+beamwidths — one row per antenna, so the comparison comes with numbers, not just
+shapes:
+
+```text
+design            peak dBi  takeoff°    F/B dB    az bw°    el bw°
+----------------------------------------------------------------
+dipoles.invvee        1.93         1       0.0        85        89
+beams.yagi            8.89         1       8.2        60        42
+```
+
+## Copying params back to code
+
+After tuning — in the workbench or with `optimize` — turn the knob values back
+into source you can paste into a design file. `params` prints a design's (or a
+`name:variant`'s) current values as a `default_params = {...}` block:
+
+```bash
+python -m antennaknobs params --builder beams.yagi
+python -m antennaknobs params --builder specialty.hentenna:z100 --wrap mappingproxy
+```
+
+Useful flags: `--name <var>` (name the emitted block), `--no-ui` (knob values
+only, drop the `ui_params` block), and `--wrap mappingproxy` (match the
+catalog's frozen-params style). An `optimize` run ends by printing the same
+paste-ready block for its result, so the tuned values go straight into code.
 
 ## Exporting to NEC
 

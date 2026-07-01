@@ -109,6 +109,35 @@ current antenna across a range of N values and plots the resulting feed-point
 impedance, so you can see where the curve flattens out. Details and how to read
 it: [Segments & convergence](/reference/solver/#segments--convergence).
 
+## Comparing patterns
+
+On the **azimuth** and **elevation** pattern views a **📌 Pin pattern** button
+(top-left of the plot) freezes the current radiation pattern as a dimmed,
+dashed **ghost** overlaid on the live one. Pin it, then change knobs — or switch
+to a completely different design — and the live lobe redraws over the pinned
+ghost so you can see the effect directly.
+
+- **Pins survive a design switch**, so you can overlay one antenna's pattern on
+  another's — a Yagi's beam against a dipole's figure-8, say — not just two
+  tunings of the same design.
+- Each pinned trace recomputes for whichever cut (azimuth or elevation) and
+  cut-angle you're viewing, so it always shares the live plot's geometry.
+- A **compare table** appears alongside with a row per pattern — peak gain
+  (dBi), takeoff angle, front-to-back, and −3 dB azimuth beamwidth — so the
+  overlaid shapes come with the numbers that matter. **clear** removes all
+  pins; the **✕** on a row removes one.
+
+## Copying params back to code
+
+The **gear menu** (⚙, top of the sidebar) has **Copy params (Python)**, which
+copies the current knob values to the clipboard as a paste-ready
+`default_params = {...}` block (a `<variant>_params` block when you're on a
+named variant). Drop it straight into a design file to bake in whatever you
+dialed in — no more transcribing values off the screen by hand.
+
+The same gear menu also has **Download .nec deck**, which exports the design as
+a NEC-2 card deck for xnec2c / 4nec2 / EZNEC.
+
 ## How a knob turn works
 
 A knob change sends one message over the `/ws` WebSocket; the server re-solves in
