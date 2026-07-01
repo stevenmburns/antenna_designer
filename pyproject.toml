@@ -69,6 +69,14 @@ web = ["fastapi", "uvicorn[standard]", "websockets", "psutil"]
 #     the pynec-backed tests skip when it's absent.
 test = ["antennaknobs[web]", "pytest", "coverage", "httpx2"]
 
+# Local developer tooling — install with `pip install -e ".[dev]"`.
+#   - ruff is the linter/formatter, configured under [tool.ruff] below. It is a
+#     purely local convenience: CI lints via astral-sh/ruff-action (.github/
+#     workflows/ruff.yml), which installs its own ruff, so ruff is deliberately
+#     NOT in [project] or the runtime/test extras — end users and the `.[test]`
+#     CI install never pull it in.
+dev = ["ruff"]
+
 [project.urls]
 Homepage = "https://github.com/stevenmburns/antennaknobs"
 Issues = "https://github.com/stevenmburns/antennaknobs/issues"
