@@ -44,6 +44,21 @@ export default defineConfig({
             href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap",
           },
         },
+        // Cloudflare Web Analytics beacon. The apex zones antennaknobs.dev and
+        // antennaknobs.com serve this one docs build, so a single token rolls
+        // both domains' traffic into one dashboard. The token is a public
+        // client-side id (ships in every page), not a secret. It lives here in
+        // the site <head> — rather than being auto-injected by Cloudflare —
+        // because the Fly DNS records are grey-cloud (DNS-only, required for
+        // Fly's TLS/SNI routing), so CF never proxies the request to inject it.
+        {
+          tag: "script",
+          attrs: {
+            defer: true,
+            src: "https://static.cloudflareinsights.com/beacon.min.js",
+            "data-cf-beacon": '{"token": "a7ed2b6512b5461fbd0beac3d6e13d71"}',
+          },
+        },
       ],
       sidebar: [
         {
